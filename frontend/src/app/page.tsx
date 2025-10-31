@@ -2,16 +2,17 @@
 
 import { motion, useScroll, useTransform } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import Navbar from "@/components/layout/navbar";
+import Navbar from "@/components/layout/navbar"; 
 import Footer from "@/components/layout/footer";
 import { GraduationCap, BarChart3, Building2 } from "lucide-react";
 import Link from "next/link";
 import { ReactLenis } from "@studio-freight/react-lenis";
 import { useRef } from "react";
 import ParticlesContainer from "@/components/layout/ParticlesContainer";
+import { ChartIllustration3D as ChartIllustration } from "@/components/ui/charts";
 
-// ✨ 3D Chart Illustrasyonumuzu içe aktarıyoruz
-import { ChartIllustration3D as ChartIllustration } from "@/components/ui/charts"; 
+// ✨ YENİ: Merkezi tema renkleri hook'unu import ediyoruz
+import { useThemeColors } from "@/hooks/useThemeColors"; 
 
 // TypeScript Interface Tanımı
 interface Feature {
@@ -30,9 +31,27 @@ const lenisOptions = {
 export default function HomePage() {
   const mainRef = useRef(null);
 
+  // ✨ HOOK KULLANIMI: Tema renklerini alıyoruz
+  const { 
+    isDark, 
+    themeClasses, 
+    accentGradientClass, 
+    accentStart, // HEX kodlarına da ihtiyacımız olabilir (Örn: hover gölgeleri)
+    accentEnd 
+  } = useThemeColors();
+
   // Parallax efekti için scroll verisini alıyoruz
   const { scrollYProgress } = useScroll({ target: mainRef });
   const yParallax = useTransform(scrollYProgress, [0, 1], ["0px", "200px"]);
+
+  // Dinamik olarak değişen Blur rengi sınıfı
+  const blurColorClass = isDark ? 'dark:bg-purple-900/20' : 'bg-indigo-200/50';
+  
+  // Feature Card Hover Gölge Stilleri (HEX kodlarına ihtiyacımız olduğu için dinamik stil)
+  // Bu gölgeyi Tailwind yerine inline style ile veriyoruz.
+  const hoverShadowStyle = {
+    '--shadow-color': isDark ? 'rgba(109,40,217,0.2)' : 'rgba(79,70,229,0.2)',
+  };
 
   return (
     <ReactLenis root options={lenisOptions}>
@@ -40,8 +59,10 @@ export default function HomePage() {
 
       <main
         ref={mainRef}
-        // DÜZELTME: bg-gradient-to-br -> bg-linear-to-br
-        className="relative flex flex-col items-center justify-start overflow-x-hidden bg-linear-to-br from-white via-slate-50 to-blue-100 dark:from-slate-950 dark:via-slate-900 dark:to-blue-950 text-center selection:bg-blue-600/10 selection:text-blue-700"
+        // ✅ GÜNCELLEME 1: Arka plan gradient sınıfı hook'tan alındı.
+        className={`relative flex flex-col items-center justify-start overflow-x-hidden 
+                   bg-gradient-to-br ${themeClasses.background} 
+                   text-center selection:bg-indigo-600/10 dark:selection:text-indigo-300 dark:text-white`}
       >
         {/* === BACKGROUND LAYERS === */}
         <ParticlesContainer />
@@ -49,14 +70,16 @@ export default function HomePage() {
         {/* Blur Circle (Parallax) */}
         <motion.div
           style={{ y: yParallax }}
-          className="absolute -top-48 left-1/2 -translate-x-1/2 w-[900px] h-[900px] bg-blue-200/40 dark:bg-blue-900/20 blur-[160px] rounded-full opacity-70 z-10"
+          // ✅ GÜNCELLEME 2: Blur rengi, dinamik değişkene atandı.
+          className={`absolute -top-48 left-1/2 -translate-x-1/2 w-[900px] h-[900px] 
+                     ${blurColorClass} blur-[160px] rounded-full opacity-70 z-10`}
         />
 
         {/* === HERO SECTION (Giriş) === */}
         <section 
           className="relative z-20 w-full flex flex-col items-center justify-center 
                      min-h-[calc(100vh-80px)] py-28 md:py-36 px-6 max-w-7xl 
-                     md:flex-row gap-16 md:gap-24 text-center md:text-left" // Dikey boşluklar (py-28/36) artırılarak Navbar'dan uzaklaştırıldı
+                     md:flex-row gap-16 md:gap-24 text-center md:text-left"
         >
           {/* TEXT BLOCK */}
           <div className="flex-1 max-w-2xl">
@@ -64,10 +87,11 @@ export default function HomePage() {
               initial={{ opacity: 0, y: 60 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, ease: "easeOut" }}
-              className="text-6xl md:text-7xl font-extrabold text-slate-900 dark:text-white mb-6 tracking-tight leading-snug"
+              className="text-6xl md:text-7xl font-extrabold mb-6 tracking-tight leading-snug"
             >
               Transforming{" "}
-              <span className="text-blue-700 dark:text-blue-400">
+              {/* ✅ GÜNCELLEME 3: Ana başlık gradienti sabit kalabilir. */}
+              <span className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 bg-clip-text text-transparent">
                 Academic Data
               </span>{" "}
               into Clarity
@@ -77,7 +101,8 @@ export default function HomePage() {
               initial={{ opacity: 0, y: 25 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.15, duration: 0.8 }}
-              className="text-xl md:text-2xl text-slate-600 dark:text-slate-400 max-w-2xl mx-auto md:mx-0 mb-12 leading-relaxed"
+              // ✅ GÜNCELLEME 4: Metin rengi sınıfları korundu, zaten dark/light uyumlu.
+              className="text-xl md:text-2xl text-slate-500 dark:text-slate-400 max-w-2xl mx-auto md:mx-0 mb-12 leading-relaxed"
             >
               AcuRate empowers institutions, teachers, and students to analyze,
               visualize, and improve academic performance — all through
@@ -93,7 +118,8 @@ export default function HomePage() {
               <Link href="/login">
                 <Button
                   size="lg"
-                  className="px-10 py-6 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-base rounded-2xl shadow-lg shadow-blue-600/20 transition-all"
+                  // ✅ GÜNCELLEME 5: Ana CTA butonu için gradient sınıfı hook'tan alındı.
+                  className={`px-10 py-6 bg-gradient-to-r ${accentGradientClass} hover:from-indigo-500 hover:to-purple-500 text-white font-semibold text-base rounded-2xl shadow-lg shadow-indigo-600/30 transition-all`}
                 >
                   Get Started →
                 </Button>
@@ -102,6 +128,7 @@ export default function HomePage() {
                 <Button
                   size="lg"
                   variant="outline"
+                  // ✅ GÜNCELLEME 6: Outline butonu sınıfları korundu.
                   className="px-10 py-6 border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-2xl font-medium transition-all"
                 >
                   Learn More
@@ -117,7 +144,7 @@ export default function HomePage() {
             transition={{ delay: 0.4, duration: 0.8, ease: "easeOut" }}
             className="flex-1 flex justify-center md:justify-end max-w-lg w-full"
           >
-            <div className="relative w-full max-w-[600px] h-[500px] overflow-hidden"> {/* Genişlik ve yükseklik artırıldı */}
+            <div className="relative w-full max-w-[600px] h-[500px] overflow-hidden">
               <ChartIllustration />
             </div>
           </motion.div>
@@ -132,22 +159,23 @@ export default function HomePage() {
           {(
             [
               {
+                // ✅ GÜNCELLEME 7: İkon rengi korundu.
                 icon: (
-                  <GraduationCap className="w-12 h-12 text-blue-600 dark:text-blue-400 mb-5" />
+                  <GraduationCap className="w-12 h-12 text-indigo-600 dark:text-indigo-400 mb-5" />
                 ),
                 title: "For Students",
                 text: "Visualize your academic growth, track your performance, and receive personalized insights that help you excel.",
               },
               {
                 icon: (
-                  <BarChart3 className="w-12 h-12 text-blue-600 dark:text-blue-400 mb-5" />
+                  <BarChart3 className="w-12 h-12 text-indigo-600 dark:text-indigo-400 mb-5" />
                 ),
                 title: "For Teachers",
                 text: "Capture results efficiently, identify patterns in student performance, and refine teaching methods with precision analytics.",
               },
               {
                 icon: (
-                  <Building2 className="w-12 h-12 text-blue-600 dark:text-blue-400 mb-5" />
+                  <Building2 className="w-12 h-12 text-indigo-600 dark:text-indigo-400 mb-5" />
                 ),
                 title: "For Institutions",
                 text: "Oversee outcomes across programs, enhance course effectiveness, and make strategic decisions backed by solid data.",
@@ -160,13 +188,21 @@ export default function HomePage() {
               whileInView={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: idx * 0.2 }}
               viewport={{ once: true, amount: 0.3 }}
+              // ✅ GÜNCELLEME 8: Hover gölgesini inline style ile dinamikleştirmek için style özelliği eklendi.
+              style={
+                { 
+                  '--shadow-color': isDark ? 'rgba(109,40,217,0.2)' : 'rgba(79,70,229,0.2)',
+                  '--shadow-x-y': '0_10px_45px_var(--shadow-color)',
+                  boxShadow: `0 10px 45px ${isDark ? 'rgba(109,40,217,0.2)' : 'rgba(79,70,229,0.2)'}`
+                } as React.CSSProperties
+              }
               className="relative z-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-10 text-left 
-              shadow-xl shadow-blue-500/10 dark:shadow-blue-900/10 
-              hover:shadow-[0_10px_45px_rgba(37,99,235,0.2)] hover:-translate-y-2 transition-all duration-500" // Daha keskin ve profesyonel gölge eklendi
+              shadow-xl 
+              hover:-translate-y-2 transition-all duration-500" // Mevcut Tailwind gölge sınıfları kaldırılıp inline stil ile dinamikleştirildi
             >
               <div 
-                // DÜZELTME: bg-gradient-to-br -> bg-linear-to-br
-                className="absolute inset-0 rounded-3xl bg-linear-to-br from-blue-500/5 to-blue-200/5 dark:from-blue-900/5 dark:to-blue-950/5 pointer-events-none" 
+                // ✅ GÜNCELLEME 9: Kart iç gradienti korundu.
+                className="absolute inset-0 rounded-3xl bg-gradient-to-br from-indigo-500/5 to-purple-200/5 dark:from-indigo-900/5 dark:to-purple-950/5 pointer-events-none" 
               />
               {feature.icon}
               <h3 className="text-2xl font-bold mb-3 text-slate-900 dark:text-white">
@@ -186,20 +222,23 @@ export default function HomePage() {
           whileInView={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8 }}
           viewport={{ once: true }}
-          // DÜZELTME: bg-gradient-to-br -> bg-linear-to-br
-          className="relative z-20 max-w-5xl text-center my-32 bg-linear-to-br from-blue-600 to-blue-700 text-white rounded-3xl shadow-2xl shadow-blue-600/40 p-16" // CTA gölgesi güçlendirildi
+          // ✅ GÜNCELLEME 10: CTA arkaplanı için gradient sınıfı hook'tan alındı.
+          className={`relative z-20 max-w-5xl text-center my-32 
+                     bg-gradient-to-r ${accentGradientClass} text-white 
+                     rounded-3xl shadow-2xl shadow-indigo-600/40 p-16`}
         >
           <h2 className="text-3xl md:text-4xl font-extrabold mb-4">
             Start Measuring What Matters
           </h2>
-          <p className="text-blue-100 mb-8 text-lg max-w-2xl mx-auto">
+          <p className="text-indigo-100 mb-8 text-lg max-w-2xl mx-auto">
             Bring transparency and intelligence to academic performance. AcuRate
             turns your data into actionable insights that drive success.
           </p>
           <Link href="/login">
             <Button
               size="lg"
-              className="bg-white text-blue-700 hover:bg-blue-100 rounded-xl font-semibold text-base px-10 py-5"
+              // ✅ GÜNCELLEME 11: CTA butonu korundu.
+              className="bg-white text-indigo-700 hover:bg-indigo-50 rounded-xl font-semibold text-base px-10 py-5"
             >
               Launch Dashboard →
             </Button>

@@ -1,55 +1,50 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Building2, Users, BookOpen, TrendingUp, Filter, FileText, AlertTriangle, CheckCircle2, Trophy, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { Building2, Users, BookOpen, TrendingUp, Filter, FileText, AlertTriangle, CheckCircle2, Trophy, ArrowUpRight, ArrowDownRight, Moon, Sun } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useTheme } from 'next-themes'; 
 
-export default function InstitutionDashboard() {
-  const [selectedDepartment, setSelectedDepartment] = useState('all');
-  const [selectedSemester, setSelectedSemester] = useState('fall-2024');
-  const [mounted, setMounted] = useState(false);
+// 🎨 DİNAMİK TEMA KANCASI BURAYA MİRAS ALINDI
+import { useThemeColors } from '../../hooks/useThemeColors'; 
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+// Mevcut statik mock verileri (DEĞİŞTİRİLMEDİ)
+const stats = [
+  {
+    title: 'Total Students',
+    value: '1,250',
+    change: '+12%',
+    trend: 'up',
+    icon: Users,
+    color: 'from-blue-500 to-cyan-500' 
+  },
+  {
+    title: 'Faculty Members',
+    value: '85',
+    change: '+5%',
+    trend: 'up',
+    icon: Users,
+    color: 'from-purple-500 to-pink-500'
+  },
+  {
+    title: 'Active Courses',
+    value: '156',
+    change: '+8%',
+    trend: 'up',
+    icon: BookOpen,
+    color: 'from-orange-500 to-red-500'
+  },
+  {
+    title: 'Avg Performance',
+    value: '76.5%',
+    change: '+2.3%',
+    trend: 'up',
+    icon: TrendingUp,
+    color: 'from-green-500 to-emerald-500'
+  }
+];
 
-  // Mock data - will be replaced with API calls
-  const stats = [
-    {
-      title: 'Total Students',
-      value: '1,250',
-      change: '+12%',
-      trend: 'up',
-      icon: Users,
-      color: 'from-blue-500 to-cyan-500'
-    },
-    {
-      title: 'Faculty Members',
-      value: '85',
-      change: '+5%',
-      trend: 'up',
-      icon: Users,
-      color: 'from-purple-500 to-pink-500'
-    },
-    {
-      title: 'Active Courses',
-      value: '156',
-      change: '+8%',
-      trend: 'up',
-      icon: BookOpen,
-      color: 'from-orange-500 to-red-500'
-    },
-    {
-      title: 'Avg Performance',
-      value: '76.5%',
-      change: '+2.3%',
-      trend: 'up',
-      icon: TrendingUp,
-      color: 'from-green-500 to-emerald-500'
-    }
-  ];
-
-  const departments = [
+const departments = [
     {
       name: 'Computer Science',
       students: 450,
@@ -88,7 +83,7 @@ export default function InstitutionDashboard() {
     }
   ];
 
-  const programOutcomes = [
+const programOutcomes = [
     { code: 'PO1', title: 'Engineering Knowledge', current: 78.5, target: 70, status: 'achieved' },
     { code: 'PO2', title: 'Problem Analysis', current: 82.3, target: 75, status: 'excellent' },
     { code: 'PO3', title: 'Design/Development', current: 75.8, target: 70, status: 'achieved' },
@@ -96,7 +91,7 @@ export default function InstitutionDashboard() {
     { code: 'PO5', title: 'Modern Tool Usage', current: 68.5, target: 65, status: 'achieved' }
   ];
 
-  const recentAlerts = [
+const recentAlerts = [
     {
       type: 'warning',
       title: 'Civil Engineering - PO2 Below Target',
@@ -117,7 +112,19 @@ export default function InstitutionDashboard() {
     }
   ];
 
-  const container = {
+// Statik sınıf stringlerini renk kodlarına çeviren yardımcı fonksiyon
+// 🚩 TypeScript Hatası Düzeltildi: colorClass parametresine 'string' türü eklendi.
+const getGradientColors = (colorClass: string) => {
+    switch (colorClass) {
+        case 'from-blue-500 to-cyan-500': return { start: '#3B82F6', end: '#06B6D4' };
+        case 'from-purple-500 to-pink-500': return { start: '#A855F7', end: '#EC4899' };
+        case 'from-orange-500 to-red-500': return { start: '#F97316', end: '#EF4444' };
+        case 'from-green-500 to-emerald-500': return { start: '#10B981', end: '#059669' };
+        default: return { start: '#6366F1', end: '#9333EA' }; // Varsayılan İndigo/Mor
+    }
+};
+
+const container = {
     hidden: { opacity: 0 },
     show: {
       opacity: 1,
@@ -125,60 +132,79 @@ export default function InstitutionDashboard() {
         staggerChildren: 0.1
       }
     }
-  };
+};
 
-  const item = {
+const item = {
     hidden: { opacity: 0, y: 20 },
     show: { opacity: 1, y: 0 }
-  };
+};
 
-  if (!mounted) {
+
+export default function InstitutionDashboard() {
+  const [selectedDepartment, setSelectedDepartment] = useState('all');
+  const [selectedSemester, setSelectedSemester] = useState('fall-2024');
+  const [mounted, setMounted] = useState(false); 
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // 1. Kancadan Dinamik Tema Değerlerini Alma
+  const { 
+    isDark, 
+    mounted: themeMounted, 
+    accentStart, 
+    accentEnd, 
+    themeClasses, 
+    mutedText, 
+  } = useThemeColors();
+
+  // Temayı değiştirmek için next-themes hook'unu kullanma
+  const { setTheme } = useTheme();
+
+  // Yüklenme Kontrolü
+  // Sunucu renderı ile istemci hidrasyonu arasındaki uyuşmazlığı engeller.
+  if (!mounted || !themeMounted) {
+    // Statik başlangıç değerlerini kullanın (Sunucu renderına en yakın değerler)
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-950 flex items-center justify-center">
         <div className="text-white text-xl">Loading...</div>
       </div>
     );
   }
+  
+  // Aydınlık/Karanlık moda göre metin ve ikon renkleri
+  const whiteTextClass = isDark ? 'text-white' : 'text-gray-900';
+  const accentIconClass = isDark ? 'text-indigo-400' : 'text-indigo-600';
+  const secondaryTextClass = isDark ? 'text-gray-400' : 'text-gray-600';
+
+  // Tema değiştirme fonksiyonu
+  const toggleTheme = () => {
+    setTheme(isDark ? 'light' : 'dark');
+  };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-950 relative overflow-hidden">
-      {/* Animated Background Orbs */}
+    // 2. ANA ARKA PLAN: Dinamik Sınıf Kullanımı
+    <div className={`min-h-screen bg-gradient-to-br ${themeClasses.background} relative overflow-hidden`}>
+      {/* Animated Background Orbs (Dinamik Renk Kullanımı) */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <motion.div
-          className="absolute top-0 left-0 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl"
-          animate={{
-            scale: [1, 1.2, 1],
-            opacity: [0.3, 0.5, 0.3],
-          }}
-          transition={{
-            duration: 8,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
+          className={`absolute top-0 left-0 w-96 h-96 rounded-full blur-3xl`}
+          style={{ backgroundColor: `${accentStart}20` }}
+          animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.5, 0.3] }}
+          transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
         />
         <motion.div
-          className="absolute bottom-0 right-0 w-96 h-96 bg-indigo-500/20 rounded-full blur-3xl"
-          animate={{
-            scale: [1.2, 1, 1.2],
-            opacity: [0.4, 0.6, 0.4],
-          }}
-          transition={{
-            duration: 10,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
+          className={`absolute bottom-0 right-0 w-96 h-96 rounded-full blur-3xl`}
+          style={{ backgroundColor: `${accentEnd}30` }}
+          animate={{ scale: [1.2, 1, 1.2], opacity: [0.4, 0.6, 0.4] }}
+          transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
         />
         <motion.div
-          className="absolute top-1/2 left-1/2 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl"
-          animate={{
-            scale: [1, 1.3, 1],
-            opacity: [0.2, 0.4, 0.2],
-          }}
-          transition={{
-            duration: 12,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
+          className={`absolute top-1/2 left-1/2 w-96 h-96 rounded-full blur-3xl`}
+          style={{ backgroundColor: `${accentStart}20` }}
+          animate={{ scale: [1, 1.3, 1], opacity: [0.2, 0.4, 0.2] }}
+          transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
         />
       </div>
 
@@ -188,13 +214,16 @@ export default function InstitutionDashboard() {
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-8 backdrop-blur-xl bg-white/5 rounded-2xl border border-white/10 p-6 shadow-2xl"
+          // 3. HEADER KARTI: Dinamik Sınıf Kullanımı
+          className={`mb-8 backdrop-blur-xl ${themeClasses.card} rounded-2xl p-6 shadow-2xl`}
         >
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div className="flex items-center gap-4">
+              {/* Logo/İkon Arka Planı (Dinamik Gradient) */}
               <motion.div
                 whileHover={{ scale: 1.1, rotate: 5 }}
-                className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/50"
+                style={{ backgroundImage: `linear-gradient(to bottom right, ${accentStart}, ${accentEnd})` }}
+                className="w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/50"
               >
                 <Building2 className="w-8 h-8 text-white" />
               </motion.div>
@@ -202,22 +231,40 @@ export default function InstitutionDashboard() {
                 <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400 bg-clip-text text-transparent">
                   Institution Dashboard
                 </h1>
-                <p className="text-gray-400 text-sm">Academic Performance Overview</p>
+                {/* Metin Rengi: Dinamik mutedText kullanıldı */}
+                <p className={`${secondaryTextClass} text-sm`}>Academic Performance Overview</p>
               </div>
             </div>
             <div className="flex gap-3">
+              {/* 🌙 TEMA DEĞİŞTİRME DÜĞMESİ (Sadece Emoji) */}
+              <motion.button
+                onClick={toggleTheme}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                // Temel kart stiline uyumlu, border rengini temaya göre değiştir
+                className={`px-4 py-2 rounded-xl ${themeClasses.card.replace('shadow-2xl', '').replace('border-white/10', isDark ? 'border-white/10' : 'border-gray-300')} ${isDark ? 'text-white hover:bg-white/10' : 'text-gray-700 bg-white/70 hover:bg-gray-100'} flex items-center justify-center gap-2 transition-all backdrop-blur-xl`}
+                // Emojinin erişilebilirlik adını ekleyelim
+                aria-label={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
+              >
+                {isDark ? <Sun className="w-4 h-4 text-yellow-400" /> : <Moon className="w-4 h-4 text-gray-700" />}
+              </motion.button>
+
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-white flex items-center gap-2 transition-all backdrop-blur-xl"
+                // Filtre Butonu: Dinamik Sınıf Kullanımı (Temel kart stiline uyumlu)
+                className={`px-4 py-2 rounded-xl ${themeClasses.card.replace('shadow-2xl', '').replace('rounded-2xl', 'rounded-xl')} ${isDark ? 'hover:bg-white/10 text-white' : 'hover:bg-gray-100 text-gray-700'} flex items-center gap-2 transition-all backdrop-blur-xl`}
               >
                 <Filter className="w-4 h-4" />
                 Filters
               </motion.button>
+              
+              {/* Rapor Butonu (Dinamik Gradient) */}
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                className="px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white flex items-center gap-2 transition-all shadow-lg shadow-indigo-500/30"
+                style={{ backgroundImage: `linear-gradient(to right, ${accentStart}, ${accentEnd})` }}
+                className="px-4 py-2 rounded-xl text-white flex items-center gap-2 transition-all shadow-lg shadow-indigo-500/30"
               >
                 <FileText className="w-4 h-4" />
                 Export Report
@@ -233,26 +280,36 @@ export default function InstitutionDashboard() {
           animate="show"
           className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8"
         >
-          {stats.map((stat, index) => (
-            <motion.div
-              key={index}
-              variants={item}
-              whileHover={{ scale: 1.05, y: -5 }}
-              className="backdrop-blur-xl bg-white/5 rounded-2xl border border-white/10 p-6 shadow-2xl hover:shadow-indigo-500/20 transition-all"
-            >
-              <div className="flex items-start justify-between mb-4">
-                <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${stat.color} flex items-center justify-center shadow-lg`}>
-                  <stat.icon className="w-6 h-6 text-white" />
+          {stats.map((stat, index) => {
+            const { start, end } = getGradientColors(stat.color); // Mock veriden renkleri al
+            return (
+              <motion.div
+                key={index}
+                variants={item}
+                whileHover={{ scale: 1.05, y: -5 }}
+                // 4. STAT KARTLARI: Dinamik Sınıf Kullanımı
+                className={`backdrop-blur-xl ${themeClasses.card} p-6 shadow-2xl hover:shadow-indigo-500/20 transition-all`}
+              >
+                <div className="flex items-start justify-between mb-4">
+                  {/* İkon Arka Planı (Dinamik Gradient) */}
+                  <div
+                    style={{ backgroundImage: `linear-gradient(to bottom right, ${start}, ${end})` }}
+                    className={`w-12 h-12 rounded-xl bg-gradient-to-br flex items-center justify-center shadow-lg`}
+                  >
+                    <stat.icon className="w-6 h-6 text-white" />
+                  </div>
+                  <div className={`flex items-center gap-1 text-sm font-medium ${stat.trend === 'up' ? 'text-green-500' : 'text-red-500'}`}>
+                    {stat.trend === 'up' ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
+                    {stat.change}
+                  </div>
                 </div>
-                <div className={`flex items-center gap-1 text-sm font-medium ${stat.trend === 'up' ? 'text-green-400' : 'text-red-400'}`}>
-                  {stat.trend === 'up' ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
-                  {stat.change}
-                </div>
-              </div>
-              <h3 className="text-gray-400 text-sm mb-1">{stat.title}</h3>
-              <p className="text-3xl font-bold text-white">{stat.value}</p>
-            </motion.div>
-          ))}
+                {/* Metin Rengi: Dinamik mutedText kullanıldı */}
+                <h3 className={`${secondaryTextClass} text-sm mb-1`}>{stat.title}</h3>
+                {/* Metin Rengi: Statik text-white yerine dinamik whiteTextClass kullanıldı */}
+                <p className={`text-3xl font-bold ${whiteTextClass}`}>{stat.value}</p>
+              </motion.div>
+            );
+          })}
         </motion.div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -262,10 +319,11 @@ export default function InstitutionDashboard() {
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.2 }}
-              className="backdrop-blur-xl bg-white/5 rounded-2xl border border-white/10 p-6 shadow-2xl"
+              // 5. DEPARTMENT KARTI: Dinamik Sınıf Kullanımı
+              className={`backdrop-blur-xl ${themeClasses.card} p-6 shadow-2xl`}
             >
-              <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-                <Building2 className="w-5 h-5 text-indigo-400" />
+              <h2 className={`text-xl font-bold ${whiteTextClass} mb-6 flex items-center gap-2`}>
+                <Building2 className={`w-5 h-5 ${accentIconClass}`} />
                 Department Performance
               </h2>
               <div className="space-y-4">
@@ -276,22 +334,25 @@ export default function InstitutionDashboard() {
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.3 + index * 0.1 }}
                     whileHover={{ scale: 1.02 }}
-                    className="backdrop-blur-xl bg-white/5 rounded-xl border border-white/10 p-5 hover:bg-white/10 transition-all"
+                    // 6. DEPT ALT KARTLARI: Dinamik Sınıf Kullanımı
+                    className={`backdrop-blur-xl ${themeClasses.card.replace('shadow-2xl', '').replace('rounded-2xl', 'rounded-xl')} p-5 ${isDark ? 'hover:bg-white/10' : 'hover:bg-gray-100'} transition-all`}
                   >
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
-                          <h3 className="text-white font-semibold">{dept.name}</h3>
+                          {/* Metin Rengi: Statik text-white yerine dinamik whiteTextClass kullanıldı */}
+                          <h3 className={`font-semibold ${whiteTextClass}`}>{dept.name}</h3>
                           <span className={`text-xs px-3 py-1 rounded-full font-medium ${
-                            dept.status === 'excellent' ? 'bg-green-500/20 text-green-300 border border-green-500/30' :
-                            dept.status === 'good' ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' :
-                            'bg-orange-500/20 text-orange-300 border border-orange-500/30'
+                            dept.status === 'excellent' ? 'bg-green-500/20 text-green-700 border border-green-500/30 dark:text-green-300' :
+                            dept.status === 'good' ? 'bg-blue-500/20 text-blue-700 border border-blue-500/30 dark:text-blue-300' :
+                            'bg-orange-500/20 text-orange-700 border border-orange-500/30 dark:text-orange-300'
                           }`}>
                             {dept.status === 'excellent' ? '🏆 Excellent' : 
                              dept.status === 'good' ? '✓ Good' : '⚠ Needs Attention'}
                           </span>
                         </div>
-                        <div className="flex gap-4 text-sm text-gray-400">
+                        {/* Metin Rengi: Dinamik mutedText kullanıldı */}
+                        <div className={`flex gap-4 text-sm ${mutedText}`}>
                           <span>{dept.students} students</span>
                           <span>•</span>
                           <span>{dept.courses} courses</span>
@@ -302,35 +363,43 @@ export default function InstitutionDashboard() {
                     </div>
                     
                     <div className="grid grid-cols-2 gap-4">
+                      {/* Avg Grade Barı */}
                       <div>
                         <div className="flex items-center justify-between text-sm mb-1">
-                          <span className="text-gray-400">Avg Grade</span>
-                          <span className="text-white font-semibold">{dept.avgGrade}%</span>
+                          <span className={`${mutedText}`}>Avg Grade</span>
+                          <span className={`font-semibold ${whiteTextClass}`}>{dept.avgGrade}%</span>
                         </div>
-                        <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                        {/* Bar Arka Planı: Aydınlık mod uyumu için dinamik bg */}
+                        <div className={`h-2 ${isDark ? 'bg-white/10' : 'bg-gray-200'} rounded-full overflow-hidden`}>
                           <motion.div
                             initial={{ width: 0 }}
                             animate={{ width: `${dept.avgGrade}%` }}
                             transition={{ duration: 1, delay: 0.5 + index * 0.1 }}
-                            className="h-full bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full"
+                            style={{ backgroundImage: `linear-gradient(to right, #3B82F6, #06B6D4)` }}
+                            className="h-full rounded-full"
                           />
                         </div>
                       </div>
+                      {/* PO Achievement Barı */}
                       <div>
                         <div className="flex items-center justify-between text-sm mb-1">
-                          <span className="text-gray-400">PO Achievement</span>
-                          <span className="text-white font-semibold">{dept.poAchievement}%</span>
+                          <span className={`${mutedText}`}>PO Achievement</span>
+                          <span className={`font-semibold ${whiteTextClass}`}>{dept.poAchievement}%</span>
                         </div>
-                        <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                        {/* Bar Arka Planı: Aydınlık mod uyumu için dinamik bg */}
+                        <div className={`h-2 ${isDark ? 'bg-white/10' : 'bg-gray-200'} rounded-full overflow-hidden`}>
                           <motion.div
                             initial={{ width: 0 }}
                             animate={{ width: `${dept.poAchievement}%` }}
                             transition={{ duration: 1, delay: 0.5 + index * 0.1 }}
-                            className={`h-full rounded-full ${
-                              dept.poAchievement >= 80 ? 'bg-gradient-to-r from-green-500 to-emerald-500' :
-                              dept.poAchievement >= 70 ? 'bg-gradient-to-r from-blue-500 to-cyan-500' :
-                              'bg-gradient-to-r from-orange-500 to-red-500'
-                            }`}
+                            // Koşullu Renkler için Inline Style
+                            style={{
+                              backgroundImage: `linear-gradient(to right, 
+                                ${dept.poAchievement >= 80 ? '#10B981' : dept.poAchievement >= 70 ? '#3B82F6' : '#F97316'}, 
+                                ${dept.poAchievement >= 80 ? '#059669' : dept.poAchievement >= 70 ? '#06B6D4' : '#EF4444'}
+                              )` 
+                            }}
+                            className={`h-full rounded-full`}
                           />
                         </div>
                       </div>
@@ -345,10 +414,11 @@ export default function InstitutionDashboard() {
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.4 }}
-              className="backdrop-blur-xl bg-white/5 rounded-2xl border border-white/10 p-6 shadow-2xl mt-6"
+              // 7. PO KARTI: Dinamik Sınıf Kullanımı
+              className={`backdrop-blur-xl ${themeClasses.card} p-6 shadow-2xl mt-6`}
             >
-              <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-                <Trophy className="w-5 h-5 text-yellow-400" />
+              <h2 className={`text-xl font-bold ${whiteTextClass} mb-6 flex items-center gap-2`}>
+                <Trophy className="w-5 h-5 text-yellow-500" />
                 Program Outcomes Overview
               </h2>
               <div className="space-y-4">
@@ -358,39 +428,45 @@ export default function InstitutionDashboard() {
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.5 + index * 0.1 }}
-                    className="backdrop-blur-xl bg-white/5 rounded-xl border border-white/10 p-4 hover:bg-white/10 transition-all"
+                    // 8. PO ALT KARTLARI: Dinamik Sınıf Kullanımı
+                    className={`backdrop-blur-xl ${themeClasses.card.replace('shadow-2xl', '').replace('rounded-2xl', 'rounded-xl')} p-4 ${isDark ? 'hover:bg-white/10' : 'hover:bg-gray-100'} transition-all`}
                   >
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-3">
-                        <span className="text-indigo-400 font-bold text-sm">{po.code}</span>
-                        <span className="text-white font-medium">{po.title}</span>
+                        <span className={`${accentIconClass} font-bold text-sm`}>{po.code}</span>
+                        <span className={`font-medium ${whiteTextClass}`}>{po.title}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className={`text-sm font-semibold ${
-                          po.status === 'excellent' ? 'text-green-400' : 'text-blue-400'
+                          po.status === 'excellent' ? 'text-green-500' : 'text-blue-500'
                         }`}>
                           {po.current}%
                         </span>
                         {po.status === 'excellent' ? (
-                          <Trophy className="w-4 h-4 text-yellow-400" />
+                          <Trophy className="w-4 h-4 text-yellow-500" />
                         ) : (
-                          <CheckCircle2 className="w-4 h-4 text-green-400" />
+                          <CheckCircle2 className="w-4 h-4 text-green-500" />
                         )}
                       </div>
                     </div>
                     <div className="flex items-center gap-2 mb-2">
-                      <div className="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
+                      {/* Bar Arka Planı: Aydınlık mod uyumu için dinamik bg */}
+                      <div className={`flex-1 h-2 ${isDark ? 'bg-white/10' : 'bg-gray-200'} rounded-full overflow-hidden`}>
                         <motion.div
                           initial={{ width: 0 }}
                           animate={{ width: `${(po.current / 100) * 100}%` }}
                           transition={{ duration: 1, delay: 0.6 + index * 0.1 }}
-                          className={`h-full rounded-full ${
-                            po.status === 'excellent' ? 'bg-gradient-to-r from-green-500 to-emerald-500' :
-                            'bg-gradient-to-r from-blue-500 to-cyan-500'
-                          }`}
+                          style={{
+                            backgroundImage: `linear-gradient(to right, 
+                              ${po.status === 'excellent' ? '#10B981' : '#3B82F6'}, 
+                              ${po.status === 'excellent' ? '#059669' : '#06B6D4'}
+                            )` 
+                          }}
+                          className={`h-full rounded-full`}
                         />
                       </div>
-                      <span className="text-xs text-gray-400 w-16">Target: {po.target}%</span>
+                      {/* Metin Rengi: Dinamik mutedText kullanıldı */}
+                      <span className={`${mutedText} text-xs w-16`}>Target: {po.target}%</span>
                     </div>
                   </motion.div>
                 ))}
@@ -405,10 +481,11 @@ export default function InstitutionDashboard() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.3 }}
-              className="backdrop-blur-xl bg-white/5 rounded-2xl border border-white/10 p-6 shadow-2xl"
+              // 9. ALERTS KARTI: Dinamik Sınıf Kullanımı
+              className={`backdrop-blur-xl ${themeClasses.card} p-6 shadow-2xl`}
             >
-              <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-orange-400" />
+              <h2 className={`text-xl font-bold ${whiteTextClass} mb-4 flex items-center gap-2`}>
+                <AlertTriangle className="w-5 h-5 text-orange-500" />
                 Recent Alerts
               </h2>
               <div className="space-y-3">
@@ -419,14 +496,17 @@ export default function InstitutionDashboard() {
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.4 + index * 0.1 }}
                     whileHover={{ scale: 1.02 }}
+                    // Alert Kartları: Statik renk sınıfları korundu, karanlık moda uyumlu
                     className={`p-4 rounded-xl border ${
-                      alert.type === 'warning' ? 'bg-orange-500/10 border-orange-500/30' :
-                      alert.type === 'success' ? 'bg-green-500/10 border-green-500/30' :
-                      'bg-blue-500/10 border-blue-500/30'
-                    } hover:bg-white/10 transition-all cursor-pointer`}
+                      alert.type === 'warning' ? 'bg-orange-500/10 border-orange-500/30 text-orange-700 dark:text-orange-300' :
+                      alert.type === 'success' ? 'bg-green-500/10 border-green-500/30 text-green-700 dark:text-green-300' :
+                      'bg-blue-500/10 border-blue-500/30 text-blue-700 dark:text-blue-300'
+                    } ${isDark ? 'hover:bg-white/10' : 'hover:bg-gray-100'} transition-all cursor-pointer`}
                   >
-                    <h3 className="text-white font-medium text-sm mb-1">{alert.title}</h3>
-                    <p className="text-gray-400 text-xs mb-2">{alert.description}</p>
+                    <h3 className={`font-medium text-sm mb-1 ${whiteTextClass}`}>{alert.title}</h3>
+                    {/* Metin Rengi: Dinamik mutedText kullanıldı */}
+                    <p className={`${secondaryTextClass} text-xs mb-2`}>{alert.description}</p>
+                    {/* Metin Rengi: text-gray-500 korundu, her iki modda da uygun */}
                     <span className="text-gray-500 text-xs">{alert.time}</span>
                   </motion.div>
                 ))}
@@ -438,16 +518,18 @@ export default function InstitutionDashboard() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.5 }}
-              className="backdrop-blur-xl bg-white/5 rounded-2xl border border-white/10 p-6 shadow-2xl"
+              // 10. QUICK ACTIONS KARTI: Dinamik Sınıf Kullanımı
+              className={`backdrop-blur-xl ${themeClasses.card} p-6 shadow-2xl`}
             >
-              <h2 className="text-xl font-bold text-white mb-4">Quick Actions</h2>
+              <h2 className={`text-xl font-bold ${whiteTextClass} mb-4`}>Quick Actions</h2>
               <div className="space-y-2">
                 {['Generate Report', 'Schedule Meeting', 'View Analytics'].map((action, index) => (
                   <motion.button
                     key={index}
                     whileHover={{ scale: 1.05, x: 5 }}
                     whileTap={{ scale: 0.95 }}
-                    className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-white text-left transition-all"
+                    // Quick Actions Butonları: Dinamik Sınıf Kullanımı
+                    className={`w-full px-4 py-3 rounded-xl ${themeClasses.card.replace('shadow-2xl', '').replace('rounded-2xl', 'rounded-xl')} ${isDark ? 'hover:bg-white/10 text-white' : 'hover:bg-gray-100 text-gray-700'} text-left transition-all`}
                   >
                     {action}
                   </motion.button>
@@ -460,25 +542,31 @@ export default function InstitutionDashboard() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.6 }}
-              className="backdrop-blur-xl bg-gradient-to-br from-green-500/20 to-emerald-500/20 rounded-2xl border border-green-500/30 p-6 shadow-2xl"
+              // 11. AKREDİTASYON KARTI: Inline Style ile Dinamiklik
+              style={{
+                  // Yeşil gradientin opaklığını temaya göre ayarla
+                  backgroundImage: isDark ? 'linear-gradient(to bottom right, rgba(16, 185, 107, 0.2), rgba(5, 150, 105, 0.2))' : 'linear-gradient(to bottom right, rgba(16, 185, 107, 0.05), rgba(5, 150, 105, 0.05))',
+                  borderColor: isDark ? 'rgba(16, 185, 107, 0.3)' : 'rgba(5, 150, 105, 0.2)',
+              }}
+              className="rounded-2xl border p-6 shadow-2xl"
             >
-              <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
-                <CheckCircle2 className="w-5 h-5 text-green-400" />
+              <h2 className={`text-xl font-bold ${whiteTextClass} mb-2 flex items-center gap-2`}>
+                <CheckCircle2 className="w-5 h-5 text-green-500" />
                 Accreditation Status
               </h2>
-              <p className="text-green-300 text-sm mb-3">All criteria met for ABET 2024</p>
+              <p className="text-green-500 text-sm mb-3">All criteria met for ABET 2024</p>
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-300">PO Achievement</span>
-                  <span className="text-green-400 font-semibold">✓ 95%</span>
+                  <span className={`${secondaryTextClass}`}>PO Achievement</span>
+                  <span className="text-green-500 font-semibold">✓ 95%</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-300">Documentation</span>
-                  <span className="text-green-400 font-semibold">✓ Complete</span>
+                  <span className={`${secondaryTextClass}`}>Documentation</span>
+                  <span className="text-green-500 font-semibold">✓ Complete</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-300">Student Feedback</span>
-                  <span className="text-green-400 font-semibold">✓ 4.2/5.0</span>
+                  <span className={`${secondaryTextClass}`}>Student Feedback</span>
+                  <span className="text-green-500 font-semibold">✓ 4.2/5.0</span>
                 </div>
               </div>
             </motion.div>
@@ -488,4 +576,3 @@ export default function InstitutionDashboard() {
     </div>
   );
 }
-
