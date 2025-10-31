@@ -90,7 +90,7 @@ export default function HomePage() {
               transition={{ delay: 0.3, duration: 0.6 }}
               className="flex flex-col sm:flex-row gap-4 justify-center md:justify-start"
             >
-              <Link href="/auth/login">
+              <Link href="/login">
                 <Button
                   size="lg"
                   className="px-10 py-6 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-base rounded-2xl shadow-lg shadow-blue-600/20 transition-all"
@@ -196,7 +196,7 @@ export default function HomePage() {
             Bring transparency and intelligence to academic performance. AcuRate
             turns your data into actionable insights that drive success.
           </p>
-          <Link href="/auth/login">
+          <Link href="/login">
             <Button
               size="lg"
               className="bg-white text-blue-700 hover:bg-blue-100 rounded-xl font-semibold text-base px-10 py-5"
