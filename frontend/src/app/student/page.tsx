@@ -1,11 +1,10 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Users, BookOpen, FileText, BarChart3, ArrowRight } from 'lucide-react';
-import Link from 'next/link';
+import { GraduationCap, BookOpen, TrendingUp, Target } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
-export default function TeacherDashboard() {
+export default function StudentDashboard() {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -14,35 +13,35 @@ export default function TeacherDashboard() {
   const features = [
     {
       icon: BookOpen,
-      title: 'Manage Courses',
-      description: 'Create and manage your courses, assignments, and materials'
+      title: 'My Courses',
+      description: 'View enrolled courses and course materials'
     },
     {
-      icon: FileText,
-      title: 'Grade Students',
-      description: 'Record grades and provide feedback for assessments'
+      icon: TrendingUp,
+      title: 'Performance',
+      description: 'Track your grades and academic progress'
     },
     {
-      icon: BarChart3,
-      title: 'View Analytics',
-      description: 'Track student performance and course statistics'
+      icon: Target,
+      title: 'PO Progress',
+      description: 'Monitor your program outcome achievements'
     }
   ];
 
   if (!mounted) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-950 flex items-center justify-center">
         <div className="text-white text-xl">Loading...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 relative overflow-hidden flex items-center justify-center">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-950 relative overflow-hidden flex items-center justify-center">
       {/* Animated Background Orbs */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <motion.div
-          className="absolute top-0 left-0 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl"
+          className="absolute top-0 left-0 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl"
           animate={{
             scale: [1, 1.2, 1],
             opacity: [0.3, 0.5, 0.3],
@@ -54,7 +53,7 @@ export default function TeacherDashboard() {
           }}
         />
         <motion.div
-          className="absolute bottom-0 right-0 w-96 h-96 bg-pink-500/20 rounded-full blur-3xl"
+          className="absolute bottom-0 right-0 w-96 h-96 bg-cyan-500/20 rounded-full blur-3xl"
           animate={{
             scale: [1.2, 1, 1.2],
             opacity: [0.4, 0.6, 0.4],
@@ -93,8 +92,8 @@ export default function TeacherDashboard() {
             transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
             className="inline-block mb-8"
           >
-            <div className="w-32 h-32 rounded-3xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center shadow-2xl shadow-purple-500/50 mx-auto">
-              <Users className="w-16 h-16 text-white" />
+            <div className="w-32 h-32 rounded-3xl bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center shadow-2xl shadow-blue-500/50 mx-auto">
+              <GraduationCap className="w-16 h-16 text-white" />
             </div>
           </motion.div>
 
@@ -103,9 +102,9 @@ export default function TeacherDashboard() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="text-6xl font-bold bg-gradient-to-r from-purple-400 via-pink-400 to-purple-400 bg-clip-text text-transparent mb-6"
+            className="text-6xl font-bold bg-gradient-to-r from-blue-400 via-cyan-400 to-blue-400 bg-clip-text text-transparent mb-6"
           >
-            Teacher Dashboard
+            Student Dashboard
           </motion.h1>
 
           {/* Description */}
@@ -124,8 +123,8 @@ export default function TeacherDashboard() {
             transition={{ delay: 0.5 }}
             className="text-lg text-gray-400 mb-12 max-w-2xl mx-auto"
           >
-            The teacher dashboard is currently under development by{' '}
-            <span className="text-pink-400 font-semibold">Beyza</span>.
+            The student dashboard is currently under development by{' '}
+            <span className="text-cyan-400 font-semibold">Beyza</span>.
             <br />
             Check back soon for updates!
           </motion.p>
@@ -146,7 +145,7 @@ export default function TeacherDashboard() {
                 whileHover={{ scale: 1.05, y: -5 }}
                 className="backdrop-blur-xl bg-white/5 rounded-2xl border border-white/10 p-6 text-left hover:bg-white/10 transition-all"
               >
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center mb-4 shadow-lg">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center mb-4 shadow-lg">
                   <feature.icon className="w-6 h-6 text-white" />
                 </div>
                 <h3 className="text-white font-semibold mb-2">{feature.title}</h3>
@@ -155,22 +154,16 @@ export default function TeacherDashboard() {
             ))}
           </motion.div>
 
-          {/* Button */}
+          {/* Info Box */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.9 }}
+            className="backdrop-blur-xl bg-blue-500/10 border border-blue-500/30 rounded-2xl p-6 text-center max-w-2xl mx-auto"
           >
-            <Link href="/institution">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="px-8 py-4 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-semibold shadow-2xl shadow-purple-500/50 flex items-center gap-2 mx-auto transition-all"
-              >
-                View Institution Dashboard
-                <ArrowRight className="w-5 h-5" />
-              </motion.button>
-            </Link>
+            <p className="text-blue-300">
+              <span className="font-semibold">Note:</span> You can view the Institution Dashboard while this page is being developed.
+            </p>
           </motion.div>
         </motion.div>
       </div>
