@@ -7,7 +7,7 @@ import Footer from "@/components/layout/footer";
 import { GraduationCap, BarChart3, Building2 } from "lucide-react";
 import Link from "next/link";
 import { ReactLenis } from "@studio-freight/react-lenis";
-import { useRef } from "react";
+import { useRef, useState, useEffect } from "react"; // <-- 1. useState ve useEffect eklendi
 import ParticlesContainer from "@/components/layout/ParticlesContainer";
 import { ChartIllustration3D as ChartIllustration } from "@/components/ui/charts";
 
@@ -30,13 +30,21 @@ const lenisOptions = {
 
 export default function HomePage() {
   const mainRef = useRef(null);
+  
+  // 2. Client tarafında yüklendiğini kontrol eden state
+  const [hasMounted, setHasMounted] = useState(false);
+
+  // useEffect: Sadece bileşen tarayıcıda yüklendikten sonra (mount) hasMounted'ı true yapar.
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
 
   // ✨ HOOK KULLANIMI: Tema renklerini alıyoruz
   const { 
     isDark, 
     themeClasses, 
     accentGradientClass, 
-    accentStart, // HEX kodlarına da ihtiyacımız olabilir (Örn: hover gölgeleri)
+    accentStart,
     accentEnd 
   } = useThemeColors();
 
@@ -48,10 +56,18 @@ export default function HomePage() {
   const blurColorClass = isDark ? 'dark:bg-purple-900/20' : 'bg-indigo-200/50';
   
   // Feature Card Hover Gölge Stilleri (HEX kodlarına ihtiyacımız olduğu için dinamik stil)
-  // Bu gölgeyi Tailwind yerine inline style ile veriyoruz.
-  const hoverShadowStyle = {
-    '--shadow-color': isDark ? 'rgba(109,40,217,0.2)' : 'rgba(79,70,229,0.2)',
-  };
+  // 3. Hidrasyon hatasını önlemek için dinamik stilleri sadece 'mounted' ise hesapla.
+  const featureStyles = hasMounted ? 
+    { 
+      '--shadow-color': isDark ? 'rgba(109,40,217,0.2)' : 'rgba(79,70,229,0.2)',
+      '--shadow-x-y': '0_10px_45px_var(--shadow-color)',
+      boxShadow: `0 10px 45px ${isDark ? 'rgba(109,40,217,0.2)' : 'rgba(79,70,229,0.2)'}`
+    } as React.CSSProperties
+    : 
+    // Sunucu tarafında veya henüz mount edilmemişken boş bir stil nesnesi gönder.
+    // Framer Motion'ın kendi initial/animate değerleri bu boş nesneyi override edecektir.
+    {};
+
 
   return (
     <ReactLenis root options={lenisOptions}>
@@ -188,17 +204,11 @@ export default function HomePage() {
               whileInView={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: idx * 0.2 }}
               viewport={{ once: true, amount: 0.3 }}
-              // ✅ GÜNCELLEME 8: Hover gölgesini inline style ile dinamikleştirmek için style özelliği eklendi.
-              style={
-                { 
-                  '--shadow-color': isDark ? 'rgba(109,40,217,0.2)' : 'rgba(79,70,229,0.2)',
-                  '--shadow-x-y': '0_10px_45px_var(--shadow-color)',
-                  boxShadow: `0 10px 45px ${isDark ? 'rgba(109,40,217,0.2)' : 'rgba(79,70,229,0.2)'}`
-                } as React.CSSProperties
-              }
+              // 4. Hidrasyon güvenli stil: hasMounted kontrolü ile stil uygulandı
+              style={featureStyles} 
               className="relative z-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-10 text-left 
               shadow-xl 
-              hover:-translate-y-2 transition-all duration-500" // Mevcut Tailwind gölge sınıfları kaldırılıp inline stil ile dinamikleştirildi
+              hover:-translate-y-2 transition-all duration-500" // Mevcut Tailwind gölge sınıfları korundu
             >
               <div 
                 // ✅ GÜNCELLEME 9: Kart iç gradienti korundu.

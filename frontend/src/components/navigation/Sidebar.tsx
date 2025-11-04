@@ -56,7 +56,6 @@ export default function Sidebar() {
     const toggleTheme = () => setTheme(isDark ? 'light' : 'dark');
 
     const handleLogout = () => {
-        // Mock token temizleme ve yönlendirme
         alert("Çıkış yapılıyor... (Simülasyon)");
         router.push('/login'); 
         setIsUserMenuOpen(false);
@@ -80,30 +79,28 @@ export default function Sidebar() {
         return pathname.startsWith(href);
     }
 
-    // HATA GİDERİLDİ: Framer Motion tip hatası çözüldü (ScaleY ve Tween kullanıldı)
+    // HATA GİDERİLDİ: Tip güvenliğini sağlamak için sadece scaleY/opacity kullanıldı.
     const dropdownVariants = {
         hidden: { 
             opacity: 0, 
-            y: -10, 
-            scaleY: 0.9, 
-            height: 0, // Yüksekliği sıfırlıyoruz
-            transformOrigin: 'bottom'
+            scaleY: 0, // Yüksekliği sıfırlamak için ölçek kullanıldı
+            y: -5,
+            transformOrigin: 'bottom',
+            transition: { duration: 0.15 } 
         },
         visible: { 
             opacity: 1, 
+            scaleY: 1, 
             y: 0, 
-            scaleY: 1,
-            height: 'auto', // Yükseklik 'auto' olabilir, ancak tip hatasını önlemek için scaleY kullanılır
+            transformOrigin: 'bottom',
             transition: { 
-                type: "tween", 
                 duration: 0.2,
             } 
         },
         exit: { 
             opacity: 0, 
-            y: -10, 
-            scaleY: 0.9,
-            height: 0,
+            scaleY: 0, 
+            y: -5,
             transition: { duration: 0.15 } 
         }
     };
@@ -210,7 +207,7 @@ export default function Sidebar() {
                             initial="hidden"
                             animate="visible"
                             exit="exit"
-                            // Yüksekliği manuel olarak ayarlar (scaleY ile daha iyi çalışır)
+                            // Yüksekliği ölçekleyerek animasyon yapılır
                             style={{ overflow: 'hidden' }} 
                             className={`mt-2 p-1 rounded-xl space-y-1 ${themeClasses.card.replace('shadow-2xl', '').replace('border-white/10', 'border-white/20')}`}
                         >
