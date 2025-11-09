@@ -2,12 +2,15 @@
 
 import { motion } from 'framer-motion';
 import { User, Lock, Eye, EyeOff, GraduationCap, Users as UsersIcon, Building2, Sun, Moon } from 'lucide-react';
-import { useState } from 'react'; // Sadece local state'ler için
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 // ✨ TEMA ENTEGRASYONU: next-themes ve kendi renk hook'umuzu import ediyoruz
 import { useTheme } from 'next-themes'; 
-import { useThemeColors } from '@/hooks/useThemeColors'; // Doğru yolu kontrol edin
+import { useThemeColors } from '@/hooks/useThemeColors';
+
+// ✨ API ENTEGRASYONU
+import { api } from '@/lib/api';
 
 type Role = 'student' | 'teacher' | 'institution';
 
@@ -76,28 +79,32 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
 
-    // Simulate API call
-    setTimeout(() => {
-      const creds = selectedRoleData?.credentials;
-      if (username === creds?.username && password === creds?.password) {
-        // ... (Cookie Ayarları)
-        document.cookie = `auth_token=demo_token_${Date.now()}; path=/; max-age=86400`;
-        document.cookie = `user_role=${selectedRole}; path=/; max-age=86400`;
-        document.cookie = `username=${username}; path=/; max-age=86400`;
+    try {
+      // Real API call
+      const response = await api.login(username, password);
 
-        // ... (Yönlendirme)
-        if (selectedRole === 'student') {
-          router.push('/student');
-        } else if (selectedRole === 'teacher') {
-          router.push('/teacher');
-        } else {
-          router.push('/institution');
-        }
+      if (response.success && response.user) {
+        // Store user info in cookie for middleware (lowercase for middleware compatibility)
+        document.cookie = `user_role=${response.user.role.toLowerCase()}; path=/; max-age=86400`;
+        document.cookie = `username=${response.user.username}; path=/; max-age=86400`;
+        document.cookie = `auth_token=authenticated; path=/; max-age=86400`;
+
+        // Redirect based on role
+        const roleRedirect: Record<string, string> = {
+          'STUDENT': '/student',
+          'TEACHER': '/teacher',
+          'INSTITUTION': '/institution'
+        };
+
+        router.push(roleRedirect[response.user.role] || '/');
       } else {
-        setError('Invalid username or password');
+        setError(response.errors?.non_field_errors?.[0] || 'Login failed. Please try again.');
         setLoading(false);
       }
-    }, 1000);
+    } catch (err: any) {
+      setError(err.message || 'An error occurred. Please try again.');
+      setLoading(false);
+    }
   };
 
   // 2. ✨ YENİ: Temayı değiştirme fonksiyonu
@@ -129,8 +136,10 @@ export default function LoginPage() {
     : 'bg-indigo-50/70 border-indigo-300 shadow-lg shadow-indigo-100/50';
   const inputFocusClass = themeClasses.inputFocus; // Hook'tan gelen focus sınıfı
 
+  const containerClass = `min-h-screen bg-gradient-to-br ${backgroundClass} relative overflow-hidden flex items-center justify-center p-4 transition-colors duration-500`;
+  
   return (
-    <div className={`min-h-screen bg-gradient-to-br ${backgroundClass} relative overflow-hidden flex items-center justify-center p-4 transition-colors duration-500`}>
+    <div className={containerClass}>
       {/* Animated Background - Tema rengine göre hafif değişsin */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <motion.div

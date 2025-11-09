@@ -4,8 +4,8 @@
 import { motion } from 'framer-motion';
 import { Award, BookOpen, CheckSquare, Trophy, ArrowUpRight, ArrowDownRight, TrendingUp, AlertTriangle } from 'lucide-react';
 import { useState, useEffect } from 'react';
-// useThemeColors kancanızın doğru yolu burada olmalıdır:
-import { useThemeColors } from '@/hooks/useThemeColors'; 
+import { useThemeColors } from '@/hooks/useThemeColors';
+import { api, type DashboardData, type Enrollment, type StudentPOAchievement } from '@/lib/api'; 
 import { 
     Chart as ChartJS, 
     CategoryScale, 
@@ -34,29 +34,17 @@ ChartJS.register(
 );
 
 
-// --- MOCK VERİLER ---
+// --- API STATE ---
+interface StudentState {
+  loading: boolean;
+  error: string | null;
+  data: DashboardData | null;
+}
 
-const studentInfo = {
-  name: 'Elara Vesper',
-  studentId: '202201042',
-  major: 'Computer Science',
-  gpa: 3.74,
-  credits: 95,
-  status: 'High Performer'
-};
-
-const performanceStats = [
-  { title: 'Current GPA', value: '3.74', change: '+0.1', trend: 'up', icon: Trophy, color: 'from-green-500 to-emerald-500' },
-  { title: 'Credits Earned', value: '95', change: '+15', trend: 'up', icon: BookOpen, color: 'from-blue-500 to-cyan-500' },
-  { title: 'Courses in Progress', value: '5', change: '0', trend: 'stable', icon: CheckSquare, color: 'from-orange-500 to-red-500' },
-  { title: 'Total PO Achievement', value: '88%', change: '+3%', trend: 'up', icon: Award, color: 'from-purple-500 to-pink-500' }
-];
-
-const currentCourses = [
+// Default mock data for charts (before API loads)
+const defaultCourses = [
     { code: 'CS301', name: 'Data Structures', grade: 'A-', credits: 4, po_achieved: 92 },
     { code: 'SE405', name: 'Software Engineering', grade: 'B+', credits: 3, po_achieved: 85 },
-    { code: 'DM201', name: 'Discrete Mathematics', grade: 'A', credits: 3, po_achieved: 95 },
-    { code: 'PHY101', name: 'Physics I', grade: 'B', credits: 4, po_achieved: 78 },
 ];
 
 const poRadarData = {
@@ -168,16 +156,16 @@ const barOptions = (isDark: boolean, mutedText: string) => ({
 });
 
 
-const courseGradesData = {
-    labels: currentCourses.map(c => c.code),
+const getCourseGradesData = (courses: typeof defaultCourses) => ({
+    labels: courses.map(c => c.code),
     datasets: [{
         label: 'PO Achievement (%)',
-        data: currentCourses.map(c => c.po_achieved),
-        backgroundColor: currentCourses.map(c => c.po_achieved >= 90 ? '#10B981' : c.po_achieved >= 80 ? '#3B82F6' : '#F97316'),
-        borderColor: currentCourses.map(c => c.po_achieved >= 90 ? '#059669' : c.po_achieved >= 80 ? '#06B6D4' : '#EF4444'),
+        data: courses.map(c => c.po_achieved),
+        backgroundColor: courses.map(c => c.po_achieved >= 90 ? '#10B981' : c.po_achieved >= 80 ? '#3B82F6' : '#F97316'),
+        borderColor: courses.map(c => c.po_achieved >= 90 ? '#059669' : c.po_achieved >= 80 ? '#06B6D4' : '#EF4444'),
         borderWidth: 1
     }]
-};
+});
 
 
 // --- ANA DASHBOARD BİLEŞENİ ---
@@ -209,6 +197,27 @@ export default function StudentHomePage() {
   const dynamicRadarOptions = radarOptions(isDark, accentStart, secondaryTextClass);
   const dynamicBarOptions = barOptions(isDark, secondaryTextClass);
   const dynamicLineOptions = lineOptions(isDark, secondaryTextClass);
+  
+  // Use default courses (mock data for now)
+  const currentCourses = defaultCourses;
+  const courseGradesData = getCourseGradesData(currentCourses);
+  
+  // Mock student info
+  const studentInfo = {
+    name: 'Student User',
+    studentId: '202201042',
+    major: 'Computer Science',
+    gpa: 3.74,
+    credits: 95,
+    status: 'High Performer'
+  };
+  
+  const performanceStats = [
+    { title: 'Current GPA', value: '3.74', change: '+0.1', trend: 'up' as const, icon: Trophy, color: 'from-green-500 to-emerald-500' },
+    { title: 'Credits Earned', value: '95', change: '+15', trend: 'up' as const, icon: BookOpen, color: 'from-blue-500 to-cyan-500' },
+    { title: 'Courses in Progress', value: '5', change: '0', trend: 'stable' as const, icon: CheckSquare, color: 'from-orange-500 to-red-500' },
+    { title: 'Total PO Achievement', value: '88%', change: '+3%', trend: 'up' as const, icon: Award, color: 'from-purple-500 to-pink-500' }
+  ];
 
 
   return (
