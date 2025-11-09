@@ -9,9 +9,9 @@ export default function InstitutionLayout({
 }) {
   return (
     <>
-      <Navbar />
+    
       {children}
-      <Footer />
+  
     </>
   );
 }
