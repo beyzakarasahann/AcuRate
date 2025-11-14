@@ -68,23 +68,38 @@ export interface Course {
 export interface Enrollment {
   id: number;
   student: number;
-  student_name: string;
-  student_id: string;
+  student_name?: string;
+  student_id?: string;
   course: number;
-  course_code: string;
-  course_name: string;
-  enrollment_date: string;
-  status: string;
-  status_display: string;
-  final_grade?: number;
-  letter_grade?: string;
+  course_code?: string;
+  course_name?: string;
+  enrolled_at: string;
   is_active: boolean;
+  final_grade?: number | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Assessment {
+  id: number;
+  course: number;
+  course_code?: string;
+  course_name?: string;
+  title: string;
+  description?: string;
+  assessment_type: string;
+  weight: number;
+  max_score: number;
+  due_date?: string;
+  is_active: boolean;
+  related_pos?: number[];
 }
 
 export interface StudentGrade {
   id: number;
   student: number;
   student_name: string;
+  student_id?: string;
   assessment: number;
   assessment_title: string;
   assessment_type: string;
@@ -93,6 +108,7 @@ export interface StudentGrade {
   percentage: number;
   feedback?: string;
   graded_at?: string;
+  graded_by?: number;
 }
 
 export interface StudentPOAchievement {
@@ -101,15 +117,15 @@ export interface StudentPOAchievement {
   student_name: string;
   student_id: string;
   program_outcome: number;
-  po_code: string;
-  po_title: string;
+  po_code?: string;
+  po_title?: string;
   achievement_percentage: number;
   target_percentage: number;
-  is_achieved: boolean;
+  is_achieved?: boolean;
   completed_assessments: number;
   total_assessments: number;
-  semester: string;
-  year: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface DashboardData {
@@ -127,6 +143,11 @@ export interface DashboardData {
   total_courses?: number;
   active_enrollments?: number;
   pending_assessments?: number;
+  gpa_ranking?: {
+    rank: number;
+    total_students: number;
+    percentile: number;
+  } | null;
 }
 
 // Token management
@@ -221,7 +242,15 @@ class ApiClient {
           const newToken = TokenManager.getAccessToken();
           headers['Authorization'] = `Bearer ${newToken}`;
           const retryResponse = await fetch(url, { ...options, headers });
-          return await retryResponse.json();
+          if (!retryResponse.ok) {
+            const errorText = await retryResponse.text();
+            throw new Error(`Request failed: ${retryResponse.status} ${retryResponse.statusText}`);
+          }
+          try {
+            return await retryResponse.json();
+          } catch {
+            throw new Error('Invalid JSON response from server');
+          }
         } else {
           // Refresh failed, logout
           TokenManager.clearTokens();
@@ -232,16 +261,83 @@ class ApiClient {
         }
       }
 
-      const data = await response.json();
+      // Check if response is JSON
+      const contentType = response.headers.get('content-type');
+      let data;
+      
+      if (contentType && contentType.includes('application/json')) {
+        try {
+          data = await response.json();
+        } catch (jsonError) {
+          throw new Error('Failed to parse JSON response. The server may be down or returned an invalid response.');
+        }
+      } else {
+        const text = await response.text();
+        if (!response.ok) {
+          throw new Error(`Server error: ${response.status} ${response.statusText}. ${text.substring(0, 200)}`);
+        }
+        throw new Error('Expected JSON response but received non-JSON content');
+      }
 
       if (!response.ok) {
-        throw new Error(data.error || data.message || 'Request failed');
+        // Handle authentication errors (400, 401) with user-friendly messages
+        if (response.status === 400 || response.status === 401) {
+          // Check if it's a login/authentication error
+          const errorDetail = data?.detail || data?.error || data?.message;
+          if (errorDetail && (
+            typeof errorDetail === 'string' && (
+              errorDetail.toLowerCase().includes('invalid') ||
+              errorDetail.toLowerCase().includes('credential') ||
+              errorDetail.toLowerCase().includes('password') ||
+              errorDetail.toLowerCase().includes('username') ||
+              errorDetail.toLowerCase().includes('authentication')
+            )
+          )) {
+            throw new Error('Incorrect username or password');
+          }
+          // Check for non_field_errors (Django REST Framework format)
+          if (data?.non_field_errors && Array.isArray(data.non_field_errors) && data.non_field_errors.length > 0) {
+            const firstError = data.non_field_errors[0];
+            if (typeof firstError === 'string' && (
+              firstError.toLowerCase().includes('invalid') ||
+              firstError.toLowerCase().includes('credential') ||
+              firstError.toLowerCase().includes('password') ||
+              firstError.toLowerCase().includes('username')
+            )) {
+              throw new Error('Incorrect username or password');
+            }
+            throw new Error(firstError);
+          }
+          throw new Error('Incorrect username or password');
+        }
+        const errorMessage = data?.error || data?.message || data?.detail || `Request failed with status ${response.status}`;
+        throw new Error(errorMessage);
       }
 
       return data;
     } catch (error) {
+      // Handle network errors
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        console.error('API Error: Network error - Backend server may be down', error);
+        throw new Error('Cannot connect to the server. Please make sure the backend is running on http://localhost:8000');
+      }
+      
+      // Re-throw if it's already an Error
+      if (error instanceof Error) {
+        // Don't log user-friendly authentication errors to console
+        const isAuthError = error.message === 'Incorrect username or password' || 
+                           error.message === 'Authentication failed' ||
+                           error.message.toLowerCase().includes('incorrect username or password');
+        
+        if (!isAuthError) {
+          console.error('API Error:', error.message);
+        }
+        throw error;
+      }
+      
+      // Handle unknown errors
       console.error('API Error:', error);
-      throw error;
+      throw new Error('An unexpected error occurred');
     }
   }
 
@@ -296,12 +392,72 @@ class ApiClient {
   }
 
   async getCurrentUser(): Promise<User> {
-    const response = await this.request<{ success: boolean; user: User }>('/auth/me/');
-    if (response.user) {
+    // Try /users/me/ first (ViewSet action)
+    try {
+      const response = await this.request<User>('/users/me/');
+      TokenManager.setUser(response);
+      return response;
+    } catch (error: any) {
+      // Fallback to /auth/me/ if /users/me/ doesn't work
+      try {
+        const response = await this.request<{ success: boolean; user: User }>('/auth/me/');
+        if (response.success && response.user) {
+          TokenManager.setUser(response.user);
+          return response.user;
+        }
+        throw new Error('Failed to get current user');
+      } catch (fallbackError: any) {
+        // If both fail, throw the original error with more context
+        const errorMessage = error?.message || fallbackError?.message || 'Failed to get current user';
+        throw new Error(errorMessage);
+      }
+    }
+  }
+
+  async updateProfile(data: Partial<User>): Promise<User> {
+    const response = await this.request<{ success: boolean; user: User; message?: string }>('/users/update_profile/', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    if (response.success && response.user) {
       TokenManager.setUser(response.user);
       return response.user;
     }
-    throw new Error('Failed to get current user');
+    throw new Error(response.message || 'Failed to update profile');
+  }
+
+  async changePassword(oldPassword: string, newPassword: string, newPasswordConfirm: string): Promise<void> {
+    const response = await this.request<{ success: boolean; message?: string; error?: string }>('/users/change_password/', {
+      method: 'POST',
+      body: JSON.stringify({
+        old_password: oldPassword,
+        new_password: newPassword,
+        new_password_confirm: newPasswordConfirm,
+      }),
+    });
+    if (!response.success) {
+      throw new Error(response.error || response.message || 'Failed to change password');
+    }
+  }
+
+  // Contact Request
+  async createContactRequest(data: {
+    institution_name: string;
+    institution_type: string;
+    contact_name: string;
+    contact_email: string;
+    contact_phone?: string;
+    request_type: string;
+    message?: string;
+  }): Promise<{ success: boolean; message: string; request_id?: number }> {
+    const response = await this.request<{ success: boolean; message: string; request_id?: number; errors?: any }>('/contact/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    if (!response.success) {
+      throw new Error(response.errors ? JSON.stringify(response.errors) : 'Failed to submit contact request');
+    }
+    return response;
   }
 
   async register(userData: {
@@ -378,6 +534,58 @@ class ApiClient {
     const queryParams = new URLSearchParams(params as any).toString();
     const endpoint = `/po-achievements/${queryParams ? `?${queryParams}` : ''}`;
     return await this.request<StudentPOAchievement[]>(endpoint);
+  }
+
+  // Assessments
+  async getAssessments(params?: { course?: number }): Promise<Assessment[]> {
+    const queryParams = new URLSearchParams(params as any).toString();
+    const endpoint = `/assessments/${queryParams ? `?${queryParams}` : ''}`;
+    return await this.request<Assessment[]>(endpoint);
+  }
+
+  async getAssessment(id: number): Promise<Assessment> {
+    return await this.request<Assessment>(`/assessments/${id}/`);
+  }
+
+  async createAssessment(data: Partial<Assessment>): Promise<Assessment> {
+    return await this.request<Assessment>('/assessments/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateAssessment(id: number, data: Partial<Assessment>): Promise<Assessment> {
+    return await this.request<Assessment>(`/assessments/${id}/`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteAssessment(id: number): Promise<void> {
+    return await this.request<void>(`/assessments/${id}/`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Student Grades
+  async createGrade(data: Partial<StudentGrade>): Promise<StudentGrade> {
+    return await this.request<StudentGrade>('/grades/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateGrade(id: number, data: Partial<StudentGrade>): Promise<StudentGrade> {
+    return await this.request<StudentGrade>(`/grades/${id}/`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteGrade(id: number): Promise<void> {
+    return await this.request<void>(`/grades/${id}/`, {
+      method: 'DELETE',
+    });
   }
 }
 

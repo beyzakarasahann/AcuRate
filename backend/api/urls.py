@@ -11,10 +11,12 @@ from .views import (
     login_view, logout_view, current_user_view, register_view,
     # Dashboard views
     student_dashboard, teacher_dashboard, institution_dashboard,
+    # Contact views
+    create_contact_request,
     # ViewSets
     UserViewSet, ProgramOutcomeViewSet, CourseViewSet,
     EnrollmentViewSet, AssessmentViewSet, StudentGradeViewSet,
-    StudentPOAchievementViewSet
+    StudentPOAchievementViewSet, ContactRequestViewSet
 )
 
 # Create router for ViewSets
@@ -26,6 +28,7 @@ router.register(r'enrollments', EnrollmentViewSet, basename='enrollment')
 router.register(r'assessments', AssessmentViewSet, basename='assessment')
 router.register(r'grades', StudentGradeViewSet, basename='grade')
 router.register(r'po-achievements', StudentPOAchievementViewSet, basename='poachievement')
+router.register(r'contact-requests', ContactRequestViewSet, basename='contactrequest')
 
 app_name = 'api'
 
@@ -41,6 +44,9 @@ urlpatterns = [
     path('dashboard/student/', student_dashboard, name='student-dashboard'),
     path('dashboard/teacher/', teacher_dashboard, name='teacher-dashboard'),
     path('dashboard/institution/', institution_dashboard, name='institution-dashboard'),
+    
+    # Contact endpoints
+    path('contact/', create_contact_request, name='create-contact-request'),
     
     # Router URLs (CRUD endpoints)
     path('', include(router.urls)),

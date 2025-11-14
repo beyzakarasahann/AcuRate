@@ -7,7 +7,8 @@ from rest_framework import serializers
 from django.contrib.auth import authenticate
 from .models import (
     User, ProgramOutcome, Course, CoursePO, 
-    Enrollment, Assessment, StudentGrade, StudentPOAchievement
+    Enrollment, Assessment, StudentGrade, StudentPOAchievement,
+    ContactRequest
 )
 
 
@@ -188,18 +189,16 @@ class EnrollmentSerializer(serializers.ModelSerializer):
     student_id = serializers.CharField(source='student.student_id', read_only=True)
     course_code = serializers.CharField(source='course.code', read_only=True)
     course_name = serializers.CharField(source='course.name', read_only=True)
-    status_display = serializers.CharField(source='get_status_display', read_only=True)
     
     class Meta:
         model = Enrollment
         fields = [
             'id', 'student', 'student_name', 'student_id',
             'course', 'course_code', 'course_name',
-            'enrollment_date', 'status', 'status_display',
-            'final_grade', 'letter_grade', 'is_active',
-            'created_at', 'updated_at'
+            'enrolled_at', 'is_active',
+            'final_grade', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'enrollment_date', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'enrolled_at', 'created_at', 'updated_at']
 
 
 # =============================================================================
@@ -231,8 +230,9 @@ class StudentGradeSerializer(serializers.ModelSerializer):
     """Serializer for StudentGrade model"""
     student_name = serializers.CharField(source='student.get_full_name', read_only=True)
     assessment_title = serializers.CharField(source='assessment.title', read_only=True)
-    assessment_type = serializers.CharField(source='assessment.get_type_display', read_only=True)
-    percentage = serializers.FloatField(read_only=True)
+    assessment_type = serializers.CharField(source='assessment.get_assessment_type_display', read_only=True)
+    max_score = serializers.DecimalField(source='assessment.max_score', max_digits=6, decimal_places=2, read_only=True)
+    percentage = serializers.SerializerMethodField()
     
     class Meta:
         model = StudentGrade
@@ -240,28 +240,39 @@ class StudentGradeSerializer(serializers.ModelSerializer):
             'id', 'student', 'student_name',
             'assessment', 'assessment_title', 'assessment_type',
             'score', 'max_score', 'percentage',
-            'feedback', 'graded_at', 'graded_by',
+            'feedback', 'graded_at',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'percentage', 'created_at', 'updated_at']
+    
+    def get_percentage(self, obj):
+        """Calculate percentage score"""
+        if obj.assessment.max_score > 0:
+            return float((obj.score / obj.assessment.max_score) * 100)
+        return 0.0
 
 
 class StudentGradeDetailSerializer(serializers.ModelSerializer):
     """Detailed grade serializer with all info"""
     student = UserSerializer(read_only=True)
     assessment = AssessmentSerializer(read_only=True)
-    graded_by_name = serializers.CharField(source='graded_by.get_full_name', read_only=True)
-    percentage = serializers.FloatField(read_only=True)
+    max_score = serializers.DecimalField(source='assessment.max_score', max_digits=6, decimal_places=2, read_only=True)
+    percentage = serializers.SerializerMethodField()
     
     class Meta:
         model = StudentGrade
         fields = [
             'id', 'student', 'assessment', 'score', 'max_score',
             'percentage', 'feedback', 'graded_at',
-            'graded_by', 'graded_by_name',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'percentage', 'created_at', 'updated_at']
+    
+    def get_percentage(self, obj):
+        """Calculate percentage score"""
+        if obj.assessment.max_score > 0:
+            return float((obj.score / obj.assessment.max_score) * 100)
+        return 0.0
 
 
 # =============================================================================
@@ -274,7 +285,8 @@ class StudentPOAchievementSerializer(serializers.ModelSerializer):
     student_id = serializers.CharField(source='student.student_id', read_only=True)
     po_code = serializers.CharField(source='program_outcome.code', read_only=True)
     po_title = serializers.CharField(source='program_outcome.title', read_only=True)
-    target_percentage = serializers.FloatField(source='program_outcome.target_percentage', read_only=True)
+    target_percentage = serializers.DecimalField(source='program_outcome.target_percentage', max_digits=5, decimal_places=2, read_only=True)
+    achievement_percentage = serializers.DecimalField(source='current_percentage', max_digits=5, decimal_places=2, read_only=True)
     is_achieved = serializers.BooleanField(read_only=True)
     
     class Meta:
@@ -284,7 +296,6 @@ class StudentPOAchievementSerializer(serializers.ModelSerializer):
             'program_outcome', 'po_code', 'po_title',
             'achievement_percentage', 'target_percentage', 'is_achieved',
             'completed_assessments', 'total_assessments',
-            'semester', 'year',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'is_achieved', 'created_at', 'updated_at']
@@ -301,9 +312,9 @@ class StudentPOAchievementDetailSerializer(serializers.ModelSerializer):
         model = StudentPOAchievement
         fields = [
             'id', 'student', 'program_outcome',
-            'achievement_percentage', 'is_achieved',
+            'current_percentage', 'is_achieved',
             'completed_assessments', 'total_assessments',
-            'progress_percentage', 'semester', 'year',
+            'progress_percentage', 'last_calculated',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'is_achieved', 'created_at', 'updated_at']
@@ -311,7 +322,7 @@ class StudentPOAchievementDetailSerializer(serializers.ModelSerializer):
     def get_progress_percentage(self, obj):
         """Calculate progress towards target"""
         target = obj.program_outcome.target_percentage
-        return min(100, (obj.achievement_percentage / target * 100)) if target > 0 else 0
+        return min(100, (obj.current_percentage / target * 100)) if target > 0 else 0
 
 
 # =============================================================================
@@ -327,6 +338,7 @@ class StudentDashboardSerializer(serializers.Serializer):
     overall_gpa = serializers.FloatField()
     total_credits = serializers.IntegerField()
     completed_courses = serializers.IntegerField()
+    gpa_ranking = serializers.DictField(required=False, allow_null=True)
 
 
 class TeacherDashboardSerializer(serializers.Serializer):
@@ -336,6 +348,53 @@ class TeacherDashboardSerializer(serializers.Serializer):
     total_students = serializers.IntegerField()
     pending_assessments = serializers.IntegerField()
     recent_submissions = StudentGradeSerializer(many=True)
+
+
+# =============================================================================
+# CONTACT REQUEST SERIALIZERS
+# =============================================================================
+
+class ContactRequestSerializer(serializers.ModelSerializer):
+    """Serializer for Contact Request model"""
+    
+    institution_type_display = serializers.CharField(source='get_institution_type_display', read_only=True)
+    request_type_display = serializers.CharField(source='get_request_type_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    
+    class Meta:
+        model = ContactRequest
+        fields = [
+            'id', 'institution_name', 'institution_type', 'institution_type_display',
+            'contact_name', 'contact_email', 'contact_phone',
+            'request_type', 'request_type_display',
+            'message', 'status', 'status_display', 'notes',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'status', 'status_display', 'notes', 'created_at', 'updated_at']
+
+
+class ContactRequestCreateSerializer(serializers.ModelSerializer):
+    """Serializer for creating contact requests (public endpoint)"""
+    
+    class Meta:
+        model = ContactRequest
+        fields = [
+            'institution_name', 'institution_type',
+            'contact_name', 'contact_email', 'contact_phone',
+            'request_type', 'message'
+        ]
+    
+    def validate_contact_email(self, value):
+        """Validate email format"""
+        if not value:
+            raise serializers.ValidationError("Email is required")
+        return value
+    
+    def validate_institution_name(self, value):
+        """Validate institution name"""
+        if not value or len(value.strip()) < 2:
+            raise serializers.ValidationError("Institution name must be at least 2 characters")
+        return value.strip()
 
 
 class InstitutionDashboardSerializer(serializers.Serializer):

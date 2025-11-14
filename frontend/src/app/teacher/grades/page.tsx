@@ -2,18 +2,10 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { FileText, Search, Save, Download, Upload, Filter, CheckCircle2, AlertCircle, User, BookOpen, Calendar, Plus, X, Edit, TrendingUp, Info } from 'lucide-react';
+import { FileText, Search, Save, Download, Upload, Filter, CheckCircle2, AlertCircle, User, BookOpen, Calendar, Plus, X, Edit, TrendingUp, Info, Loader2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useThemeColors } from '@/hooks/useThemeColors';
-
-// --- MOCK VERİLER ---
-
-const mockCourses = [
-  { id: 1, code: 'CS301', name: 'Data Structures', semester: 'Fall 2025' },
-  { id: 2, code: 'SE405', name: 'Software Engineering', semester: 'Fall 2025' },
-  { id: 3, code: 'CS201', name: 'Programming Fundamentals', semester: 'Fall 2025' },
-  { id: 4, code: 'CS401', name: 'Advanced Algorithms', semester: 'Fall 2025' },
-];
+import { api, type Course, type Assessment, type Enrollment, type StudentGrade } from '@/lib/api';
 
 // Assessment type seçenekleri (backend'deki AssessmentType ile uyumlu)
 const assessmentTypes = [
@@ -27,26 +19,20 @@ const assessmentTypes = [
   { value: 'OTHER', label: 'Other' },
 ];
 
-const mockAssessments = [
-  { id: 1, courseId: 1, title: 'Midterm Exam', type: 'MIDTERM', maxScore: 100, weight: 30, dueDate: '2025-10-15' },
-  { id: 2, courseId: 1, title: 'Final Project', type: 'PROJECT', maxScore: 100, weight: 40, dueDate: '2025-12-10' },
-  { id: 3, courseId: 1, title: 'Lab Assignment 1', type: 'LAB', maxScore: 20, weight: 10, dueDate: '2025-09-20' },
-  { id: 4, courseId: 2, title: 'Midterm Exam', type: 'MIDTERM', maxScore: 100, weight: 35, dueDate: '2025-10-20' },
-  { id: 5, courseId: 2, title: 'Group Project', type: 'PROJECT', maxScore: 100, weight: 45, dueDate: '2025-12-15' },
-];
-
-const mockStudents = [
-  { id: 1, studentId: '202201042', name: 'Elara Vesper', email: 'elara.vesper@student.edu' },
-  { id: 2, studentId: '202201043', name: 'Alex Chen', email: 'alex.chen@student.edu' },
-  { id: 3, studentId: '202201044', name: 'Maria Garcia', email: 'maria.garcia@student.edu' },
-  { id: 4, studentId: '202201045', name: 'John Smith', email: 'john.smith@student.edu' },
-  { id: 5, studentId: '202201046', name: 'Sarah Johnson', email: 'sarah.johnson@student.edu' },
-];
-
 // --- ANA BİLEŞEN ---
 
 export default function TeacherGradesPage() {
   const [mounted, setMounted] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
+  // Backend data
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [assessments, setAssessments] = useState<Assessment[]>([]);
+  const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
+  const [existingGrades, setExistingGrades] = useState<StudentGrade[]>([]);
+  
+  // UI state
   const [selectedCourse, setSelectedCourse] = useState<number | null>(null);
   const [selectedAssessment, setSelectedAssessment] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -54,7 +40,6 @@ export default function TeacherGradesPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'success' | 'error' | null>(null);
   const [showCreateAssessment, setShowCreateAssessment] = useState(false);
-  const [customAssessments, setCustomAssessments] = useState<typeof mockAssessments>([]);
   const [newAssessment, setNewAssessment] = useState({
     title: '',
     type: 'MIDTERM',
@@ -64,9 +49,97 @@ export default function TeacherGradesPage() {
     description: ''
   });
 
+  // Load data from backend
   useEffect(() => {
     setMounted(true);
+    fetchData();
   }, []);
+
+  // Load assessments when course changes
+  useEffect(() => {
+    if (selectedCourse) {
+      fetchAssessments(selectedCourse);
+      fetchEnrollments(selectedCourse);
+      fetchGrades(selectedCourse);
+    } else {
+      setAssessments([]);
+      setEnrollments([]);
+      setExistingGrades([]);
+    }
+  }, [selectedCourse]);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const [coursesData] = await Promise.all([
+        api.getCourses()
+      ]);
+      setCourses(coursesData);
+    } catch (err: any) {
+      console.error('Failed to fetch data:', err);
+      setError(err.message || 'Failed to load data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchAssessments = async (courseId: number) => {
+    try {
+      const assessmentsData = await api.getAssessments({ course: courseId });
+      setAssessments(assessmentsData);
+    } catch (err: any) {
+      console.error('Failed to fetch assessments:', err);
+    }
+  };
+
+  const fetchEnrollments = async (courseId: number) => {
+    try {
+      const enrollmentsData = await api.getEnrollments({ course: courseId });
+      setEnrollments(enrollmentsData);
+    } catch (err: any) {
+      console.error('Failed to fetch enrollments:', err);
+    }
+  };
+
+  const fetchGrades = async (courseId: number) => {
+    try {
+      // Get all assessments for this course first
+      const assessmentsData = await api.getAssessments({ course: courseId });
+      if (assessmentsData.length > 0 && selectedAssessment) {
+        // Get grades only for selected assessment
+        const assessmentGrades = await api.getGrades({ assessment: selectedAssessment });
+        setExistingGrades(assessmentGrades);
+        
+        // Pre-populate grades state with existing grades for selected assessment
+        const gradesMap: Record<number, { score: string; feedback: string }> = {};
+        assessmentGrades.forEach(grade => {
+          if (grade.assessment === selectedAssessment) {
+            gradesMap[grade.student] = {
+              score: grade.score.toString(),
+              feedback: grade.feedback || ''
+            };
+          }
+        });
+        setGrades(gradesMap);
+      } else {
+        setExistingGrades([]);
+        setGrades({});
+      }
+    } catch (err: any) {
+      console.error('Failed to fetch grades:', err);
+    }
+  };
+
+  // Load grades when assessment changes
+  useEffect(() => {
+    if (selectedCourse && selectedAssessment) {
+      fetchGrades(selectedCourse);
+    } else {
+      setExistingGrades([]);
+      setGrades({});
+    }
+  }, [selectedAssessment]);
 
   const { 
     isDark, 
@@ -80,20 +153,59 @@ export default function TeacherGradesPage() {
     return null;
   }
 
+  // Loading state
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-indigo-500" />
+          <p className={mutedText}>Loading grades...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className={`text-center p-6 rounded-lg ${isDark ? 'bg-red-500/10 border border-red-500/30' : 'bg-red-50 border border-red-200'}`}>
+          <AlertCircle className="w-8 h-8 mx-auto mb-4 text-red-500" />
+          <p className={isDark ? 'text-red-300' : 'text-red-700'}>{error}</p>
+          <button
+            onClick={fetchData}
+            className="mt-4 px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const whiteText = text;
   const accentIconClass = isDark ? 'text-indigo-400' : 'text-indigo-600';
 
+  // Get students from enrollments
+  const students = enrollments
+    .filter(e => e.is_active)
+    .map(e => ({
+      id: e.student,
+      studentId: e.student_id || '-',
+      name: e.student_name,
+      email: `${e.student_id || e.student}@student.edu` // Fallback email
+    }));
+
   // Filtrelenmiş öğrenciler
-  const filteredStudents = mockStudents.filter(student =>
+  const filteredStudents = students.filter(student =>
     student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     student.studentId.includes(searchTerm) ||
     student.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Seçili derse ait assessment'lar (hem mock hem custom)
-  const allAssessments = [...mockAssessments, ...customAssessments];
+  // Seçili derse ait assessment'lar
   const availableAssessments = selectedCourse
-    ? allAssessments.filter(a => a.courseId === selectedCourse)
+    ? assessments.filter(a => a.course === selectedCourse)
     : [];
 
   // Not girişi değişikliği
@@ -117,12 +229,51 @@ export default function TeacherGradesPage() {
     setIsSaving(true);
     setSaveStatus(null);
 
-    // Simüle edilmiş API çağrısı
-    setTimeout(() => {
+    try {
+      // Save/update grades for each student
+      const gradePromises = Object.entries(grades).map(async ([studentId, gradeData]) => {
+        const studentIdNum = parseInt(studentId);
+        const score = parseFloat(gradeData.score);
+        
+        if (isNaN(score) || score < 0) {
+          return;
+        }
+
+        // Check if grade already exists
+        const existingGrade = existingGrades.find(
+          g => g.student === studentIdNum && g.assessment === selectedAssessment
+        );
+
+        const gradePayload = {
+          student: studentIdNum,
+          assessment: selectedAssessment,
+          score: score,
+          feedback: gradeData.feedback || ''
+        };
+
+        if (existingGrade) {
+          // Update existing grade
+          await api.updateGrade(existingGrade.id, gradePayload);
+        } else {
+          // Create new grade
+          await api.createGrade(gradePayload);
+        }
+      });
+
+      await Promise.all(gradePromises);
+      
+      // Refresh grades
+      await fetchGrades(selectedCourse!);
+      
       setIsSaving(false);
       setSaveStatus('success');
       setTimeout(() => setSaveStatus(null), 3000);
-    }, 1500);
+    } catch (err: any) {
+      console.error('Failed to save grades:', err);
+      setIsSaving(false);
+      setSaveStatus('error');
+      setTimeout(() => setSaveStatus(null), 3000);
+    }
   };
 
   // Notları temizle
@@ -132,7 +283,7 @@ export default function TeacherGradesPage() {
   };
 
   // Yeni assessment oluşturma
-  const handleCreateAssessment = () => {
+  const handleCreateAssessment = async () => {
     if (!selectedCourse) {
       alert('Please select a course first.');
       return;
@@ -152,30 +303,31 @@ export default function TeacherGradesPage() {
       return;
     }
 
-    // Yeni assessment ID'si oluştur
-    const maxId = allAssessments.length > 0 ? Math.max(...allAssessments.map(a => a.id)) : 0;
-    const newAssessmentId = maxId + 1;
+    try {
+      const createdAssessment = await api.createAssessment({
+        course: selectedCourse,
+        title: newAssessment.title,
+        assessment_type: newAssessment.type,
+        max_score: 100, // Sabit 100
+        weight: newAssessment.weight,
+        due_date: newAssessment.dueDate || undefined,
+        description: newAssessment.description || undefined,
+        is_active: true
+      });
 
-    const createdAssessment = {
-      id: newAssessmentId,
-      courseId: selectedCourse,
-      title: newAssessment.title,
-      type: newAssessment.type,
-      maxScore: 100, // Sabit 100
-      weight: newAssessment.weight,
-      dueDate: newAssessment.dueDate || '',
-      description: newAssessment.description
-    };
+      // Refresh assessments
+      await fetchAssessments(selectedCourse);
+      
+      // Yeni oluşturulan assessment'ı seç
+      setSelectedAssessment(createdAssessment.id);
 
-    // Custom assessment listesine ekle
-    setCustomAssessments([...customAssessments, createdAssessment]);
-    
-    // Yeni oluşturulan assessment'ı seç
-    setSelectedAssessment(newAssessmentId);
-
-    // Form'u temizle ve modal'ı kapat
-    setNewAssessment({ title: '', type: 'MIDTERM', maxScore: 100, weight: 30, dueDate: '', description: '' });
-    setShowCreateAssessment(false);
+      // Form'u temizle ve modal'ı kapat
+      setNewAssessment({ title: '', type: 'MIDTERM', maxScore: 100, weight: 30, dueDate: '', description: '' });
+      setShowCreateAssessment(false);
+    } catch (err: any) {
+      console.error('Failed to create assessment:', err);
+      alert('Failed to create assessment. Please try again.');
+    }
   };
 
   // Weight değişikliğinde toplam kontrolü
@@ -194,25 +346,24 @@ export default function TeacherGradesPage() {
   };
 
   // Seçili assessment bilgisi
-  const currentAssessment = allAssessments.find(a => a.id === selectedAssessment);
-  const selectedCourseData = mockCourses.find(c => c.id === selectedCourse);
+  const currentAssessment = availableAssessments.find(a => a.id === selectedAssessment);
+  const selectedCourseData = courses.find(c => c.id === selectedCourse);
   
   // Assessment type label'ını al
   const getAssessmentTypeLabel = (type: string) => {
     return assessmentTypes.find(at => at.value === type)?.label || type;
   };
 
-  // Mock: Her assessment için istatistikler (gerçek uygulamada API'den gelecek)
+  // Assessment istatistiklerini hesapla
   const getAssessmentStats = (assessmentId: number) => {
-    // Simüle edilmiş veriler
-    const mockStats: Record<number, { graded: number; total: number; average: number }> = {
-      1: { graded: 28, total: 32, average: 82.5 },
-      2: { graded: 0, total: 32, average: 0 },
-      3: { graded: 32, total: 32, average: 88.2 },
-      4: { graded: 25, total: 28, average: 79.5 },
-      5: { graded: 0, total: 28, average: 0 },
-    };
-    return mockStats[assessmentId] || { graded: 0, total: mockStudents.length, average: 0 };
+    const assessmentGrades = existingGrades.filter(g => g.assessment === assessmentId);
+    const total = students.length;
+    const graded = assessmentGrades.length;
+    const average = graded > 0
+      ? assessmentGrades.reduce((sum, g) => sum + g.score, 0) / graded
+      : 0;
+    
+    return { graded, total, average: Math.round(average * 10) / 10 };
   };
 
   // Toplam weight hesapla
@@ -274,11 +425,13 @@ export default function TeacherGradesPage() {
               className={`w-full px-4 py-3 rounded-xl ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'} border focus:outline-none focus:ring-2 focus:ring-indigo-500`}
             >
               <option value="">-- Select a course --</option>
-              {mockCourses.map(course => (
+              {courses.length > 0 ? courses.map(course => (
                 <option key={course.id} value={course.id}>
-                  {course.code} - {course.name} ({course.semester})
+                  {course.code} - {course.name} {course.semester_display ? `(${course.semester_display})` : ''}
                 </option>
-              ))}
+              )) : (
+                <option value="">No courses available</option>
+              )}
             </select>
           </div>
 
@@ -313,7 +466,7 @@ export default function TeacherGradesPage() {
               <option value="">-- Select an assessment --</option>
               {availableAssessments.map(assessment => (
                 <option key={assessment.id} value={assessment.id}>
-                  {assessment.title} ({getAssessmentTypeLabel(assessment.type)}) - Max: {assessment.maxScore}, Weight: {assessment.weight}%
+                  {assessment.title} ({getAssessmentTypeLabel(assessment.assessment_type)}) - Max: {assessment.max_score}, Weight: {assessment.weight}%
                 </option>
               ))}
             </select>
@@ -333,11 +486,11 @@ export default function TeacherGradesPage() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
               <div>
                 <span className={mutedText}>Type:</span>
-                <p className={whiteText}>{getAssessmentTypeLabel(currentAssessment.type)}</p>
+                <p className={whiteText}>{getAssessmentTypeLabel(currentAssessment.assessment_type)}</p>
               </div>
               <div>
                 <span className={mutedText}>Max Score:</span>
-                <p className={whiteText}>{currentAssessment.maxScore}</p>
+                <p className={whiteText}>{currentAssessment.max_score}</p>
               </div>
               <div>
                 <span className={mutedText}>Weight:</span>
@@ -345,7 +498,7 @@ export default function TeacherGradesPage() {
               </div>
               <div>
                 <span className={mutedText}>Due Date:</span>
-                <p className={whiteText}>{currentAssessment.dueDate || 'Not set'}</p>
+                <p className={whiteText}>{currentAssessment.due_date ? new Date(currentAssessment.due_date).toLocaleDateString() : 'Not set'}</p>
               </div>
             </div>
           </motion.div>
@@ -506,13 +659,13 @@ export default function TeacherGradesPage() {
                         </td>
                         <td className={`py-4 px-4`}>
                           <span className={`px-2 py-1 rounded text-xs font-medium ${
-                            assessment.type === 'MIDTERM' || assessment.type === 'FINAL'
+                            assessment.assessment_type === 'MIDTERM' || assessment.assessment_type === 'FINAL'
                               ? isDark ? 'bg-red-500/20 text-red-300' : 'bg-red-100 text-red-700'
-                              : assessment.type === 'PROJECT'
+                              : assessment.assessment_type === 'PROJECT'
                               ? isDark ? 'bg-purple-500/20 text-purple-300' : 'bg-purple-100 text-purple-700'
                               : isDark ? 'bg-blue-500/20 text-blue-300' : 'bg-blue-100 text-blue-700'
                           }`}>
-                            {getAssessmentTypeLabel(assessment.type)}
+                            {getAssessmentTypeLabel(assessment.assessment_type)}
                           </span>
                         </td>
                         <td className={`py-4 px-4`}>
@@ -532,12 +685,12 @@ export default function TeacherGradesPage() {
                             </div>
                           </div>
                         </td>
-                        <td className={`py-4 px-4 ${whiteText}`}>{assessment.maxScore}</td>
+                        <td className={`py-4 px-4 ${whiteText}`}>{assessment.max_score}</td>
                         <td className={`py-4 px-4`}>
-                          {assessment.dueDate ? (
+                          {assessment.due_date ? (
                             <div className="flex items-center gap-1">
                               <Calendar className={`w-3 h-3 ${mutedText}`} />
-                              <span className={whiteText}>{assessment.dueDate}</span>
+                              <span className={whiteText}>{new Date(assessment.due_date).toLocaleDateString()}</span>
                             </div>
                           ) : (
                             <span className={mutedText}>Not set</span>
@@ -730,7 +883,7 @@ export default function TeacherGradesPage() {
                   <th className={`text-left py-3 px-4 ${mutedText} font-medium text-sm`}>Name</th>
                   <th className={`text-left py-3 px-4 ${mutedText} font-medium text-sm`}>Email</th>
                   <th className={`text-left py-3 px-4 ${mutedText} font-medium text-sm`}>
-                    Score / {currentAssessment?.maxScore || 100}
+                    Score / {currentAssessment?.max_score || 100}
                   </th>
                   <th className={`text-left py-3 px-4 ${mutedText} font-medium text-sm`}>Percentage</th>
                   <th className={`text-left py-3 px-4 ${mutedText} font-medium text-sm`}>Feedback</th>
@@ -740,8 +893,8 @@ export default function TeacherGradesPage() {
                 {filteredStudents.map((student, index) => {
                   const studentGrade = grades[student.id] || { score: '', feedback: '' };
                   const scoreNum = parseFloat(studentGrade.score) || 0;
-                  const percentage = currentAssessment ? (scoreNum / currentAssessment.maxScore) * 100 : 0;
-                  const isValidScore = scoreNum >= 0 && scoreNum <= (currentAssessment?.maxScore || 100);
+                  const percentage = currentAssessment ? (scoreNum / currentAssessment.max_score) * 100 : 0;
+                  const isValidScore = scoreNum >= 0 && scoreNum <= (currentAssessment?.max_score || 100);
 
                   return (
                     <motion.tr
@@ -763,7 +916,7 @@ export default function TeacherGradesPage() {
                         <input
                           type="number"
                           min="0"
-                          max={currentAssessment?.maxScore || 100}
+                          max={currentAssessment?.max_score || 100}
                           step="0.01"
                           value={studentGrade.score}
                           onChange={(e) => handleGradeChange(student.id, 'score', e.target.value)}

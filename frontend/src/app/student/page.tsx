@@ -2,7 +2,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Award, BookOpen, CheckSquare, Trophy, ArrowUpRight, ArrowDownRight, TrendingUp, AlertTriangle } from 'lucide-react';
+import { Award, BookOpen, CheckSquare, Trophy, ArrowUpRight, ArrowDownRight, TrendingUp, AlertTriangle, Loader2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { api, type DashboardData, type Enrollment, type StudentPOAchievement } from '@/lib/api'; 
@@ -11,71 +11,23 @@ import {
     CategoryScale, 
     LinearScale, 
     BarElement, 
-    ArcElement, 
     Tooltip, 
     Legend, 
-    RadialLinearScale, 
     PointElement, 
     LineElement,
 } from 'chart.js';
-import { Bar, Radar, Line } from 'react-chartjs-2';
+import { Bar, Line } from 'react-chartjs-2';
 
 // Chart.js'i gerekli elemanlarla kaydetme
 ChartJS.register(
   CategoryScale,
   LinearScale,
   BarElement,
-  ArcElement,
   Tooltip,
   Legend,
-  RadialLinearScale, 
   PointElement, 
   LineElement
 );
-
-
-// --- API STATE ---
-interface StudentState {
-  loading: boolean;
-  error: string | null;
-  data: DashboardData | null;
-}
-
-// Default mock data for charts (before API loads)
-const defaultCourses = [
-    { code: 'CS301', name: 'Data Structures', grade: 'A-', credits: 4, po_achieved: 92 },
-    { code: 'SE405', name: 'Software Engineering', grade: 'B+', credits: 3, po_achieved: 85 },
-];
-
-const poRadarData = {
-    labels: ['PO1: Critical Thinking', 'PO2: Research Skills', 'PO3: Team Collaboration', 'PO4: Investigation', 'PO5: Tool Usage'],
-    datasets: [
-      {
-        label: 'My Achievement (%)',
-        data: [90, 88, 85, 92, 80],
-        backgroundColor: 'rgba(99, 102, 241, 0.2)',
-        borderColor: 'rgb(99, 102, 241)',
-        pointBackgroundColor: 'rgb(99, 102, 241)',
-        pointBorderColor: '#fff',
-        pointHoverBackgroundColor: '#fff',
-        pointHoverBorderColor: 'rgb(99, 102, 241)'
-      },
-    ]
-};
-
-const gpaTrendData = {
-    labels: ['F23', 'S24', 'F24', 'S25', 'F25 (Current)'],
-    datasets: [
-        {
-            label: 'Semester GPA',
-            data: [3.20, 3.45, 3.60, 3.70, 3.74],
-            fill: false,
-            borderColor: 'rgb(16, 185, 129)',
-            backgroundColor: 'rgba(16, 185, 129, 0.5)',
-            tension: 0.4
-        }
-    ]
-};
 
 
 // --- YARDIMCI FONKSİYONLAR VE SABİTLER ---
@@ -90,7 +42,7 @@ const getGradientColors = (colorClass: string) => {
     }
 };
 
-const lineOptions = (isDark: boolean, mutedText: string) => ({
+const lineOptions = (isDark: boolean, mutedText: string, min?: number, max?: number, yAxisLabel?: string) => ({
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
@@ -103,37 +55,18 @@ const lineOptions = (isDark: boolean, mutedText: string) => ({
     },
     scales: {
         y: {
-            beginAtZero: false,
-            min: 3.0,
-            max: 4.0,
-            title: { display: true, text: 'GPA', color: mutedText },
+            beginAtZero: min === undefined,
+            ...(min !== undefined && { min }),
+            ...(max !== undefined && { max }),
+            title: { display: true, text: yAxisLabel || 'Value', color: mutedText },
             grid: { color: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)' },
-            ticks: { color: mutedText, stepSize: 0.25 }
+            ticks: { color: mutedText }
         },
         x: {
-            title: { display: true, text: 'Semester', color: mutedText },
+            title: { display: true, text: 'Period', color: mutedText },
             grid: { color: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)' },
             ticks: { color: mutedText }
         }
-    }
-});
-
-const radarOptions = (isDark: boolean, accentStart: string, mutedText: string) => ({
-    responsive: true,
-    maintainAspectRatio: false,
-    scales: {
-      r: {
-        angleLines: { color: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)' },
-        grid: { color: isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.15)' },
-        pointLabels: { color: mutedText, font: { size: 12 } },
-        suggestedMin: 50,
-        suggestedMax: 100,
-        ticks: { backdropColor: 'transparent', color: mutedText, showLabelBackdrop: false }
-      }
-    },
-    plugins: {
-      legend: { labels: { color: mutedText, boxWidth: 10, boxHeight: 10 } },
-      tooltip: { bodyColor: isDark ? '#FFF' : '#000', titleColor: isDark ? '#FFF' : '#000', backgroundColor: isDark ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.8)', }
     }
 });
 
@@ -156,25 +89,34 @@ const barOptions = (isDark: boolean, mutedText: string) => ({
 });
 
 
-const getCourseGradesData = (courses: typeof defaultCourses) => ({
-    labels: courses.map(c => c.code),
-    datasets: [{
-        label: 'PO Achievement (%)',
-        data: courses.map(c => c.po_achieved),
-        backgroundColor: courses.map(c => c.po_achieved >= 90 ? '#10B981' : c.po_achieved >= 80 ? '#3B82F6' : '#F97316'),
-        borderColor: courses.map(c => c.po_achieved >= 90 ? '#059669' : c.po_achieved >= 80 ? '#06B6D4' : '#EF4444'),
-        borderWidth: 1
-    }]
-});
+// Chart data functions will be generated dynamically
 
 
 // --- ANA DASHBOARD BİLEŞENİ ---
 export default function StudentHomePage() {
-  const [mounted, setMounted] = useState(false); 
+  const [mounted, setMounted] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   
   useEffect(() => {
     setMounted(true);
+    fetchDashboardData();
   }, []);
+
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await api.getStudentDashboard();
+      setDashboardData(data);
+    } catch (err: any) {
+      console.error('Failed to fetch dashboard data:', err);
+      setError(err.message || 'Failed to load dashboard data');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const { 
     isDark, 
@@ -183,41 +125,152 @@ export default function StudentHomePage() {
     accentEnd, 
     themeClasses, 
     mutedText, 
-    text // 👈 DÜZELTME 1: whiteText yerine 'text' kullanıldı
+    text
   } = useThemeColors();
 
   if (!mounted || !themeMounted) {
     return null;
   }
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-indigo-500" />
+          <p className={mutedText}>Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error || !dashboardData) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className={`text-center p-6 rounded-lg ${isDark ? 'bg-red-500/10 border border-red-500/30' : 'bg-red-50 border border-red-200'}`}>
+          <AlertTriangle className="w-8 h-8 mx-auto mb-4 text-red-500" />
+          <p className={isDark ? 'text-red-300' : 'text-red-700'}>{error || 'Failed to load dashboard data'}</p>
+          <button
+            onClick={fetchDashboardData}
+            className="mt-4 px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Extract data
+  const student = dashboardData.student;
+  const enrollments = dashboardData.enrollments || [];
+  const poAchievements = dashboardData.po_achievements || [];
+  const overallGpa = dashboardData.overall_gpa || 0;
+  const totalCredits = dashboardData.total_credits || 0;
+  const completedCourses = dashboardData.completed_courses || 0;
+
+  // Calculate active courses
+  const activeCourses = enrollments.filter(e => e.is_active);
+
+  // Calculate total PO achievement
+  const totalPOAchievement = poAchievements.length > 0
+    ? Math.round(poAchievements.reduce((sum, po) => sum + (po.achievement_percentage || 0), 0) / poAchievements.length)
+    : 0;
+
+  // Student info
+  const studentInfo = {
+    name: student ? `${student.first_name} ${student.last_name}` : '-',
+    studentId: student?.student_id || '-',
+    major: student?.department || '-',
+    gpa: overallGpa,
+    credits: totalCredits,
+    status: overallGpa >= 3.5 ? 'High Performer' : overallGpa >= 3.0 ? 'Good' : 'Average'
+  };
   
-  const whiteTextClass = text; // 👈 DÜZELTME 2: 'text' değişkeni 'whiteTextClass' olarak tanımlandı
+  const performanceStats: Array<{
+    title: string;
+    value: string;
+    change: string;
+    trend: 'up' | 'down' | 'stable';
+    icon: any;
+    color: string;
+  }> = [
+    { title: 'Current GPA', value: overallGpa > 0 ? overallGpa.toFixed(2) : '-', change: '', trend: 'up', icon: Trophy, color: 'from-green-500 to-emerald-500' },
+    { title: 'Credits Earned', value: totalCredits > 0 ? totalCredits.toString() : '-', change: '', trend: 'up', icon: BookOpen, color: 'from-blue-500 to-cyan-500' },
+    { title: 'Courses in Progress', value: activeCourses.length > 0 ? activeCourses.length.toString() : '-', change: '', trend: 'stable', icon: CheckSquare, color: 'from-orange-500 to-red-500' },
+    { title: 'Total PO Achievement', value: totalPOAchievement > 0 ? `${totalPOAchievement}%` : '-', change: '', trend: 'up', icon: Award, color: 'from-purple-500 to-pink-500' }
+  ];
+
+  // GPA Trend Data (mock for now - can be calculated from semester data if available)
+  const hasGPAData = overallGpa > 0;
+  const gpaTrendData = {
+    labels: hasGPAData ? ['Previous', 'Current'] : [],
+    datasets: [
+        {
+            label: 'GPA',
+            data: hasGPAData ? [overallGpa - 0.1, overallGpa] : [],
+            fill: false,
+            borderColor: 'rgb(16, 185, 129)',
+            backgroundColor: 'rgba(16, 185, 129, 0.5)',
+            tension: 0.4
+        }
+    ]
+  };
+
+  // PO Achievement Line Chart Data
+  const hasPOData = poAchievements.length > 0;
+  const poLineData = {
+    labels: hasPOData ? poAchievements.map(po => po.po_code || 'PO') : [],
+    datasets: [
+      {
+        label: 'Achievement (%)',
+        data: hasPOData ? poAchievements.map(po => po.achievement_percentage || 0) : [],
+        borderColor: 'rgb(99, 102, 241)',
+        backgroundColor: 'rgba(99, 102, 241, 0.2)',
+        pointBackgroundColor: 'rgb(99, 102, 241)',
+        pointBorderColor: '#fff',
+        pointHoverBackgroundColor: '#fff',
+        pointHoverBorderColor: 'rgb(99, 102, 241)',
+        tension: 0.4,
+        fill: true
+      },
+      ...(hasPOData ? [{
+        label: 'Target (%)',
+        data: poAchievements.map(po => po.target_percentage || 0),
+        borderColor: 'rgb(239, 68, 68)',
+        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+        borderDash: [5, 5],
+        pointBackgroundColor: 'rgb(239, 68, 68)',
+        pointBorderColor: '#fff',
+        pointHoverBackgroundColor: '#fff',
+        pointHoverBorderColor: 'rgb(239, 68, 68)',
+        tension: 0.4,
+        fill: false
+      }] : [])
+    ]
+  };
+
+  // Course Grades Data (only if courses exist)
+  const hasCourseData = activeCourses.length > 0;
+  const courseGradesData = {
+    labels: hasCourseData ? activeCourses.map(e => e.course_code || '-') : [],
+    datasets: [{
+        label: 'PO Achievement (%)',
+        data: hasCourseData ? activeCourses.map(() => 0) : [], // TODO: Calculate from actual PO data
+        backgroundColor: hasCourseData ? activeCourses.map(() => '#3B82F6') : [],
+        borderColor: hasCourseData ? activeCourses.map(() => '#06B6D4') : [],
+        borderWidth: 1
+    }]
+  };
+  
+  const whiteTextClass = text;
   const accentIconClass = isDark ? 'text-indigo-400' : 'text-indigo-600';
   const secondaryTextClass = mutedText;
 
-  const dynamicRadarOptions = radarOptions(isDark, accentStart, secondaryTextClass);
   const dynamicBarOptions = barOptions(isDark, secondaryTextClass);
-  const dynamicLineOptions = lineOptions(isDark, secondaryTextClass);
-  
-  // Use default courses (mock data for now)
-  const currentCourses = defaultCourses;
-  const courseGradesData = getCourseGradesData(currentCourses);
-  
-  // Mock student info
-  const studentInfo = {
-    name: 'Student User',
-    studentId: '202201042',
-    major: 'Computer Science',
-    gpa: 3.74,
-    credits: 95,
-    status: 'High Performer'
-  };
-  
-  const performanceStats = [
-    { title: 'Current GPA', value: '3.74', change: '+0.1', trend: 'up' as const, icon: Trophy, color: 'from-green-500 to-emerald-500' },
-    { title: 'Credits Earned', value: '95', change: '+15', trend: 'up' as const, icon: BookOpen, color: 'from-blue-500 to-cyan-500' },
-    { title: 'Courses in Progress', value: '5', change: '0', trend: 'stable' as const, icon: CheckSquare, color: 'from-orange-500 to-red-500' },
-    { title: 'Total PO Achievement', value: '88%', change: '+3%', trend: 'up' as const, icon: Award, color: 'from-purple-500 to-pink-500' }
-  ];
+  const dynamicLineOptions = lineOptions(isDark, secondaryTextClass, 0, 100, 'Achievement (%)');
+  const dynamicGPALineOptions = lineOptions(isDark, secondaryTextClass, 0, 4.0, 'GPA');
 
 
   return (
@@ -233,7 +286,7 @@ export default function StudentHomePage() {
             className="flex items-center justify-between flex-wrap gap-4 mb-8"
         >
             <h1 className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">
-                Welcome back, {studentInfo.name.split(' ')[0]}
+                Welcome back, {studentInfo.name !== '-' ? studentInfo.name.split(' ')[0] : 'Student'}
             </h1>
         </motion.div>
 
@@ -270,7 +323,7 @@ export default function StudentHomePage() {
                             </div>
                         </div>
                         <h3 className={`${secondaryTextClass} text-sm mb-1`}>{stat.title}</h3>
-                        <p className={`text-3xl font-bold ${whiteTextClass}`}>{stat.value}</p>
+                        <p className={`text-3xl font-bold ${whiteTextClass}`}>{stat.value || '-'}</p>
                     </motion.div>
                 );
             })}
@@ -293,11 +346,17 @@ export default function StudentHomePage() {
                         Academic Performance Trend (GPA)
                     </h2>
                     <div className="h-72">
-                        <Line data={gpaTrendData} options={dynamicLineOptions} />
+                        {hasGPAData ? (
+                            <Line data={gpaTrendData} options={dynamicGPALineOptions} />
+                        ) : (
+                            <div className="flex items-center justify-center h-full">
+                                <p className={secondaryTextClass}>No GPA data available</p>
+                            </div>
+                        )}
                     </div>
                 </motion.div>
 
-                {/* Program Outcomes Radar Chart */}
+                {/* Program Outcomes Achievement Line Chart */}
                 <motion.div
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
@@ -309,7 +368,13 @@ export default function StudentHomePage() {
                         Program Outcomes Achievement
                     </h2>
                     <div className="h-72">
-                        <Radar data={poRadarData} options={dynamicRadarOptions} />
+                        {hasPOData ? (
+                            <Line data={poLineData} options={dynamicLineOptions} />
+                        ) : (
+                            <div className="flex items-center justify-center h-full">
+                                <p className={secondaryTextClass}>No PO achievement data available</p>
+                            </div>
+                        )}
                     </div>
                 </motion.div>
             </div>
@@ -329,7 +394,13 @@ export default function StudentHomePage() {
                         Current Courses PO Performance
                     </h2>
                     <div className="h-72">
-                        <Bar data={courseGradesData} options={dynamicBarOptions} />
+                        {hasCourseData ? (
+                            <Bar data={courseGradesData} options={dynamicBarOptions} />
+                        ) : (
+                            <div className="flex items-center justify-center h-full">
+                                <p className={secondaryTextClass}>No course data available</p>
+                            </div>
+                        )}
                     </div>
                 </motion.div>
                 
@@ -345,12 +416,20 @@ export default function StudentHomePage() {
                         Notifications
                     </h2>
                     <div className="space-y-2">
-                        <p className={`${secondaryTextClass} text-sm p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-700 dark:text-red-300`}>
-                            **SE405** PO Achievement is slightly below target. Check instructor feedback.
-                        </p>
-                        <p className={`${secondaryTextClass} text-sm p-3 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-700 dark:text-blue-300`}>
-                            New course material added for **CS301**.
-                        </p>
+                        {poAchievements.length > 0 ? (
+                            poAchievements
+                                .filter(po => (po.achievement_percentage || 0) < (po.target_percentage || 0))
+                                .slice(0, 2)
+                                .map((po, index) => (
+                                    <p key={index} className={`${secondaryTextClass} text-sm p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-700 dark:text-red-300`}>
+                                        <strong>{po.po_code}</strong> PO Achievement is below target. Current: {po.achievement_percentage?.toFixed(1)}%, Target: {po.target_percentage?.toFixed(1)}%
+                                    </p>
+                                ))
+                        ) : (
+                            <p className={`${secondaryTextClass} text-sm p-3 rounded-xl ${isDark ? 'bg-gray-500/10 border-gray-500/30' : 'bg-gray-100 border-gray-200'}`}>
+                                No notifications
+                            </p>
+                        )}
                     </div>
                 </motion.div>
             </div>

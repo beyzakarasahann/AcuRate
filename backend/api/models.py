@@ -591,3 +591,102 @@ class StudentPOAchievement(models.Model):
         if self.total_assessments > 0:
             return (self.completed_assessments / self.total_assessments) * 100
         return 0
+
+
+# =============================================================================
+# CONTACT REQUEST MODEL
+# =============================================================================
+
+class ContactRequest(models.Model):
+    """
+    Model for institutional contact/demo requests from the contact page.
+    """
+    
+    class InstitutionType(models.TextChoices):
+        UNIVERSITY = 'university', 'University'
+        FACULTY = 'faculty', 'Faculty / Department'
+        SCHOOL = 'school', 'School / College'
+        TRAINING = 'training', 'Training Center'
+        COMPANY = 'company', 'Company'
+        OTHER = 'other', 'Other'
+    
+    class RequestType(models.TextChoices):
+        DEMO = 'demo', 'Request a demo'
+        PRICING = 'pricing', 'Request pricing'
+        PARTNERSHIP = 'partnership', 'Partnership / Collaboration'
+        TECHNICAL = 'technical', 'Technical integration question'
+        GENERAL = 'general', 'General institutional inquiry'
+    
+    # Institution Details
+    institution_name = models.CharField(
+        max_length=255,
+        help_text="Name of the institution"
+    )
+    
+    institution_type = models.CharField(
+        max_length=20,
+        choices=InstitutionType.choices,
+        help_text="Type of institution"
+    )
+    
+    # Contact Person Details
+    contact_name = models.CharField(
+        max_length=255,
+        help_text="Full name of the contact person"
+    )
+    
+    contact_email = models.EmailField(
+        help_text="Work email of the contact person"
+    )
+    
+    contact_phone = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text="Phone number (optional)"
+    )
+    
+    # Request Details
+    request_type = models.CharField(
+        max_length=20,
+        choices=RequestType.choices,
+        help_text="Type of request"
+    )
+    
+    message = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Additional message or description"
+    )
+    
+    # Status tracking
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ('pending', 'Pending'),
+            ('contacted', 'Contacted'),
+            ('demo_scheduled', 'Demo Scheduled'),
+            ('completed', 'Completed'),
+            ('archived', 'Archived')
+        ],
+        default='pending',
+        help_text="Status of the request"
+    )
+    
+    notes = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Internal notes about this request"
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'contact_requests'
+        ordering = ['-created_at']
+        verbose_name = 'Contact Request'
+        verbose_name_plural = 'Contact Requests'
+    
+    def __str__(self):
+        return f"{self.institution_name} - {self.contact_name} ({self.get_request_type_display()})"

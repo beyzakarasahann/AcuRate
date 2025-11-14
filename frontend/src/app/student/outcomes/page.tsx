@@ -2,64 +2,27 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Award, Target, CheckCircle2, XCircle, TrendingUp, BookOpen, ListOrdered } from 'lucide-react';
+import { Award, Target, CheckCircle2, XCircle, TrendingUp, BookOpen, ListOrdered, Loader2, AlertTriangle } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useThemeColors } from '@/hooks/useThemeColors'; 
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Doughnut } from 'react-chartjs-2';
+import { api, type ProgramOutcome, type StudentPOAchievement, type Enrollment, type Assessment } from '@/lib/api';
 
 // Doughnut Chart'ı kaydetme
 ChartJS.register(ArcElement, Tooltip, Legend);
 
-// --- MOCK VERİLER (Outcomes Sayfasına Özel) ---
-
-const programOutcomesData = [
-    {
-        code: 'PO1',
-        title: 'Engineering Knowledge',
-        description: 'Ability to apply knowledge of mathematics, science, and engineering.',
-        target: 80,
-        current: 85,
-        status: 'Achieved',
-        courses: ['CS301', 'DM201', 'PHY101'],
-    },
-    {
-        code: 'PO2',
-        title: 'Problem Analysis',
-        description: 'Ability to identify, formulate, research literature, and analyze complex engineering problems.',
-        target: 75,
-        current: 78,
-        status: 'Achieved',
-        courses: ['SE405', 'CS301'],
-    },
-    {
-        code: 'PO3',
-        title: 'Design/Development',
-        description: 'Ability to design solutions for complex engineering problems.',
-        target: 70,
-        current: 68,
-        status: 'Needs Attention', // Hedefin altında
-        courses: ['SWE501', 'SE405'],
-    },
-    {
-        code: 'PO4',
-        title: 'Investigation',
-        description: 'Ability to use research-based knowledge and methods.',
-        target: 75,
-        current: 82,
-        status: 'Excellent',
-        courses: ['CS301'],
-    },
-    {
-        code: 'PO5',
-        title: 'Modern Tool Usage',
-        description: 'Ability to create, select, and apply appropriate techniques, resources, and modern engineering tools.',
-        target: 70,
-        current: 72,
-        status: 'Achieved',
-        courses: ['SWE501'],
-    }
-];
+// PO Data Interface
+interface POData {
+    code: string;
+    title: string;
+    description: string;
+    target: number;
+    current: number;
+    status: 'Achieved' | 'Needs Attention' | 'Excellent';
+    courses: string[];
+    poId: number;
+}
 
 // --- YARDIMCI FONKSİYONLAR ve Sabitler ---
 
@@ -92,22 +55,145 @@ const doughnutOptions = (isDark: boolean, mutedText: string) => ({
 
 export default function OutcomesPage() {
   const [mounted, setMounted] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [programOutcomesData, setProgramOutcomesData] = useState<POData[]>([]);
 
   useEffect(() => {
     setMounted(true);
+    fetchOutcomesData();
   }, []);
 
-  // HATA ÇÖZÜMÜ: whiteText yerine 'text' çekildi
+  const fetchOutcomesData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Fetch all required data
+      let programOutcomes: ProgramOutcome[] = [];
+      let poAchievements: StudentPOAchievement[] = [];
+      let enrollments: Enrollment[] = [];
+      let assessments: Assessment[] = [];
+
+      try {
+        [programOutcomes, poAchievements, enrollments, assessments] = await Promise.all([
+          api.getProgramOutcomes(),
+          api.getPOAchievements(),
+          api.getEnrollments(),
+          api.getAssessments()
+        ]);
+      } catch (apiError: any) {
+        console.error('API Error:', apiError);
+        // If API fails, show empty state
+        if (apiError.message?.includes('500') || apiError.message?.includes('enrollment')) {
+          setProgramOutcomesData([]);
+          setLoading(false);
+          return;
+        }
+        // For other errors, continue with empty arrays
+      }
+
+      // Filter only active POs
+      const activePOs = programOutcomes.filter(po => po.is_active);
+
+      // Transform to POData format
+      const poDataList: POData[] = activePOs.map(po => {
+        // Find student's achievement for this PO
+        const achievement = poAchievements.find(a => a.program_outcome === po.id);
+        
+        const current = achievement ? achievement.achievement_percentage : 0;
+        const target = po.target_percentage;
+
+        // Determine status
+        let status: 'Achieved' | 'Needs Attention' | 'Excellent';
+        if (current >= target * 1.1) {
+          status = 'Excellent';
+        } else if (current >= target) {
+          status = 'Achieved';
+        } else {
+          status = 'Needs Attention';
+        }
+
+        // Find courses that contribute to this PO
+        // Get all assessments related to this PO
+        const relatedAssessments = assessments.filter(a => 
+          a.related_pos?.includes(po.id)
+        );
+
+        // Get unique course codes from enrollments that have these assessments
+        const courseIds = new Set(relatedAssessments.map(a => a.course));
+        const contributingCourses = enrollments
+          .filter(e => courseIds.has(e.course))
+          .map(e => e.course_code)
+          .filter((code, index, self) => code && self.indexOf(code) === index); // Remove duplicates
+
+        return {
+          code: po.code,
+          title: po.title,
+          description: po.description,
+          target: target,
+          current: Math.round(current * 10) / 10,
+          status: status,
+          courses: contributingCourses,
+          poId: po.id
+        };
+      });
+
+      setProgramOutcomesData(poDataList);
+    } catch (err: any) {
+      console.error('Failed to fetch outcomes data:', err);
+      if (err.message?.includes('404') || err.message?.includes('No')) {
+        setProgramOutcomesData([]);
+      } else {
+        setError(err.message || 'Failed to load outcomes data');
+        setProgramOutcomesData([]);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const { isDark, themeClasses, text, mutedText } = useThemeColors();
 
   if (!mounted) {
     return null;
   }
   
-  // 'whiteText' kullanımları için 'text' değişkeni kullanılır.
   const whiteText = text;
 
-  const overallAchievement = Math.round(programOutcomesData.reduce((sum, po) => sum + po.current, 0) / programOutcomesData.length);
+  const overallAchievement = programOutcomesData.length > 0
+    ? Math.round(programOutcomesData.reduce((sum, po) => sum + po.current, 0) / programOutcomesData.length)
+    : 0;
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-indigo-500" />
+          <p className={mutedText}>Loading outcomes...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error && programOutcomesData.length === 0) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className={`text-center p-6 rounded-lg ${isDark ? 'bg-red-500/10 border border-red-500/30' : 'bg-red-50 border border-red-200'}`}>
+          <AlertTriangle className="w-8 h-8 mx-auto mb-4 text-red-500" />
+          <p className={isDark ? 'text-red-300' : 'text-red-700'}>{error}</p>
+          <button
+            onClick={fetchOutcomesData}
+            className="mt-4 px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`container mx-auto py-0`}>
@@ -121,22 +207,25 @@ export default function OutcomesPage() {
           <Award className="w-7 h-7 text-yellow-500" />
           Program Outcomes Overview
         </h1>
-        <div className="flex items-center gap-4">
-            <span className={mutedText}>Overall PO Achievement:</span>
-            <span className={`text-2xl font-extrabold ${overallAchievement >= 75 ? 'text-green-500' : 'text-orange-500'}`}>
-                {overallAchievement}%
-            </span>
-        </div>
+        {programOutcomesData.length > 0 && (
+          <div className="flex items-center gap-4">
+              <span className={mutedText}>Overall PO Achievement:</span>
+              <span className={`text-2xl font-extrabold ${overallAchievement >= 75 ? 'text-green-500' : 'text-orange-500'}`}>
+                  {overallAchievement}%
+              </span>
+          </div>
+        )}
       </motion.div>
 
-      {/* PO Listesi */}
+      {/* PO Listesi - Always show grid structure */}
       <motion.div
         variants={container}
         initial="hidden"
         animate="show"
         className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
       >
-        {programOutcomesData.map((po, index) => {
+        {programOutcomesData.length > 0 ? (
+          programOutcomesData.map((po, index) => {
           const achievementRatio = po.current / po.target;
           const isTargetAchieved = po.current >= po.target;
           
@@ -212,17 +301,74 @@ export default function OutcomesPage() {
                   <h3 className={`text-sm font-semibold ${mutedText} flex items-center gap-1 mb-2`}>
                       <BookOpen className="w-4 h-4" /> Contributing Courses:
                   </h3>
-                  <div className="flex flex-wrap gap-2">
-                      {po.courses.map(course => (
-                          <span key={course} className={`px-3 py-1 text-xs font-medium rounded-full ${isDark ? 'bg-indigo-500/20 text-indigo-300' : 'bg-indigo-100 text-indigo-700'}`}>
-                              {course}
-                          </span>
-                      ))}
-                  </div>
+                  {po.courses.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                        {po.courses.map(course => (
+                            <span key={course} className={`px-3 py-1 text-xs font-medium rounded-full ${isDark ? 'bg-indigo-500/20 text-indigo-300' : 'bg-indigo-100 text-indigo-700'}`}>
+                                {course}
+                            </span>
+                        ))}
+                    </div>
+                  ) : (
+                    <p className={`text-xs ${mutedText}`}>No courses available</p>
+                  )}
               </div>
             </motion.div>
           );
-        })}
+          })
+        ) : (
+          /* Empty State - Show empty card structure */
+          !loading && !error && (
+            <motion.div
+              variants={item}
+              className={`p-6 rounded-xl ${themeClasses.card} shadow-lg transition-all border ${isDark ? 'border-white/10' : 'border-gray-200'} flex flex-col opacity-50`}
+            >
+              <div className="flex justify-between items-start mb-4">
+                <div className="flex items-center gap-3">
+                  <Target className={`w-6 h-6 ${mutedText}`} />
+                  <div>
+                    <h2 className={`text-xl font-bold ${whiteText}`}>No PO Available</h2>
+                    <p className={`text-sm ${mutedText}`}>Program outcomes data is not available.</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Chart placeholder */}
+              <div className="flex items-center gap-4 py-4 border-y border-gray-500/20 my-4">
+                <div className="w-28 h-28 relative flex items-center justify-center">
+                  <div className={`w-full h-full rounded-full border-4 ${isDark ? 'border-white/10' : 'border-gray-200'}`}></div>
+                  <div className={`absolute inset-0 flex items-center justify-center`}>
+                    <span className={`text-xl font-extrabold ${mutedText}`}>-</span>
+                  </div>
+                </div>
+                
+                {/* Empty metrics */}
+                <div className="flex-1 space-y-2 text-sm">
+                    <div className="flex justify-between">
+                        <span className={mutedText}>Target:</span>
+                        <span className={`font-semibold ${mutedText}`}>-</span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span className={mutedText}>Status:</span>
+                        <span className={`font-semibold ${mutedText}`}>-</span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span className={mutedText}>Performance Gap:</span>
+                        <span className={`font-semibold ${mutedText}`}>-</span>
+                    </div>
+                </div>
+              </div>
+              
+              {/* Empty courses */}
+              <div className="mt-auto pt-4">
+                  <h3 className={`text-sm font-semibold ${mutedText} flex items-center gap-1 mb-2`}>
+                      <BookOpen className="w-4 h-4" /> Contributing Courses:
+                  </h3>
+                  <p className={`text-xs ${mutedText}`}>No courses available</p>
+              </div>
+            </motion.div>
+          )
+        )}
       </motion.div>
     </div>
   );
