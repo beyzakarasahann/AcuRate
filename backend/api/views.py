@@ -14,7 +14,8 @@ from django.shortcuts import get_object_or_404
 
 from .models import (
     User, ProgramOutcome, Course, CoursePO,
-    Enrollment, Assessment, StudentGrade, StudentPOAchievement
+    Enrollment, Assessment, StudentGrade, StudentPOAchievement,
+    ContactRequest
 )
 from .serializers import (
     UserSerializer, UserDetailSerializer, UserCreateSerializer, LoginSerializer,
@@ -23,7 +24,8 @@ from .serializers import (
     EnrollmentSerializer, AssessmentSerializer,
     StudentGradeSerializer, StudentGradeDetailSerializer,
     StudentPOAchievementSerializer, StudentPOAchievementDetailSerializer,
-    StudentDashboardSerializer, TeacherDashboardSerializer, InstitutionDashboardSerializer
+    StudentDashboardSerializer, TeacherDashboardSerializer, InstitutionDashboardSerializer,
+    ContactRequestSerializer, ContactRequestCreateSerializer
 )
 
 
@@ -176,8 +178,65 @@ class UserViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def me(self, request):
         """Get current user info"""
-        serializer = self.get_serializer(request.user)
+        serializer = UserDetailSerializer(request.user)
         return Response(serializer.data)
+    
+    @action(detail=False, methods=['put', 'patch'])
+    def update_profile(self, request):
+        """Update current user's profile"""
+        user = request.user
+        serializer = UserDetailSerializer(user, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                'success': True,
+                'message': 'Profile updated successfully',
+                'user': serializer.data
+            })
+        return Response({
+            'success': False,
+            'errors': serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=False, methods=['post'])
+    def change_password(self, request):
+        """Change current user's password"""
+        user = request.user
+        old_password = request.data.get('old_password')
+        new_password = request.data.get('new_password')
+        new_password_confirm = request.data.get('new_password_confirm')
+        
+        if not old_password or not new_password or not new_password_confirm:
+            return Response({
+                'success': False,
+                'error': 'All password fields are required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        if new_password != new_password_confirm:
+            return Response({
+                'success': False,
+                'error': 'New passwords do not match'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        if not user.check_password(old_password):
+            return Response({
+                'success': False,
+                'error': 'Current password is incorrect'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        if len(new_password) < 8:
+            return Response({
+                'success': False,
+                'error': 'New password must be at least 8 characters long'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        user.set_password(new_password)
+        user.save()
+        
+        return Response({
+            'success': True,
+            'message': 'Password changed successfully'
+        })
 
 
 # =============================================================================
@@ -270,7 +329,7 @@ class CourseViewSet(viewsets.ModelViewSet):
         course = self.get_object()
         enrollments = Enrollment.objects.filter(
             course=course,
-            status=Enrollment.Status.ENROLLED
+            is_active=True
         ).select_related('student')
         
         serializer = EnrollmentSerializer(enrollments, many=True)
@@ -297,8 +356,8 @@ class EnrollmentViewSet(viewsets.ModelViewSet):
     serializer_class = EnrollmentSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [filters.OrderingFilter]
-    ordering_fields = ['enrollment_date', 'final_grade']
-    ordering = ['-enrollment_date']
+    ordering_fields = ['enrolled_at', 'final_grade']
+    ordering = ['-enrolled_at']
     
     def get_queryset(self):
         """Filter enrollments based on user role"""
@@ -354,7 +413,7 @@ class AssessmentViewSet(viewsets.ModelViewSet):
         elif user.role == User.Role.STUDENT:
             enrolled_courses = Enrollment.objects.filter(
                 student=user,
-                status=Enrollment.Status.ENROLLED
+                is_active=True
             ).values_list('course_id', flat=True)
             queryset = queryset.filter(course_id__in=enrolled_courses)
         
@@ -396,7 +455,7 @@ class StudentGradeViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Filter grades based on user role"""
         user = self.request.user
-        queryset = StudentGrade.objects.select_related('student', 'assessment', 'graded_by')
+        queryset = StudentGrade.objects.select_related('student', 'assessment')
         
         # Students see only their grades
         if user.role == User.Role.STUDENT:
@@ -418,8 +477,8 @@ class StudentGradeViewSet(viewsets.ModelViewSet):
         return queryset
     
     def perform_create(self, serializer):
-        """Set graded_by to current user"""
-        serializer.save(graded_by=self.request.user)
+        """Save grade"""
+        serializer.save()
 
 
 # =============================================================================
@@ -434,8 +493,8 @@ class StudentPOAchievementViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = StudentPOAchievement.objects.all()
     permission_classes = [IsAuthenticated]
     filter_backends = [filters.OrderingFilter]
-    ordering_fields = ['achievement_percentage', 'year', 'semester']
-    ordering = ['-year', '-semester']
+    ordering_fields = ['current_percentage', 'created_at']
+    ordering = ['-created_at']
     
     def get_serializer_class(self):
         if self.action == 'retrieve':
@@ -485,7 +544,7 @@ def student_dashboard(request):
     # Get student's enrollments
     enrollments = Enrollment.objects.filter(
         student=user,
-        status=Enrollment.Status.ENROLLED
+        is_active=True
     ).select_related('course')
     
     # Get PO achievements
@@ -496,12 +555,12 @@ def student_dashboard(request):
     # Get recent grades
     recent_grades = StudentGrade.objects.filter(
         student=user
-    ).select_related('assessment', 'graded_by').order_by('-graded_at')[:10]
+    ).select_related('assessment').order_by('-created_at')[:10]
     
     # Calculate GPA and stats
     completed_enrollments = Enrollment.objects.filter(
         student=user,
-        status=Enrollment.Status.COMPLETED,
+        is_active=False,
         final_grade__isnull=False
     )
     
@@ -513,6 +572,27 @@ def student_dashboard(request):
     else:
         overall_gpa = 0
     
+    # Calculate student ranking (anonymous) - Optimized version
+    # Get all students' GPAs in one query using aggregation
+    students_with_gpa = User.objects.filter(
+        role=User.Role.STUDENT,
+        is_active=True
+    ).annotate(
+        avg_gpa=Avg('enrollments__final_grade', filter=Q(enrollments__is_active=False, enrollments__final_grade__isnull=False))
+    ).filter(avg_gpa__isnull=False).values('id', 'avg_gpa').order_by('-avg_gpa')
+    
+    # Convert to list and find user's rank
+    all_students_gpa = list(students_with_gpa)
+    total_students_with_gpa = len(all_students_gpa)
+    
+    user_rank = None
+    percentile = 0
+    
+    if overall_gpa > 0 and total_students_with_gpa > 0:
+        # Find rank (students with higher GPA)
+        user_rank = next((i + 1 for i, s in enumerate(all_students_gpa) if float(s['avg_gpa']) <= overall_gpa), total_students_with_gpa)
+        percentile = round(((total_students_with_gpa - user_rank + 1) / total_students_with_gpa) * 100)
+
     data = {
         'student': user,
         'enrollments': enrollments,
@@ -520,11 +600,16 @@ def student_dashboard(request):
         'recent_grades': recent_grades,
         'overall_gpa': round(overall_gpa, 2),
         'total_credits': total_credits,
-        'completed_courses': completed_courses
+        'completed_courses': completed_courses,
+        'gpa_ranking': {
+            'rank': user_rank,
+            'total_students': total_students_with_gpa,
+            'percentile': percentile
+        } if user_rank else None
     }
     
-    serializer = StudentDashboardSerializer(data)
-    return Response(serializer.data)
+    serializer = StudentDashboardSerializer()
+    return Response(serializer.to_representation(data))
 
 
 @api_view(['GET'])
@@ -574,8 +659,8 @@ def teacher_dashboard(request):
         'recent_submissions': recent_submissions
     }
     
-    serializer = TeacherDashboardSerializer(data)
-    return Response(serializer.data)
+    serializer = TeacherDashboardSerializer()
+    return Response(serializer.to_representation(data))
 
 
 @api_view(['GET'])
@@ -597,7 +682,7 @@ def institution_dashboard(request):
     total_students = User.objects.filter(role=User.Role.STUDENT, is_active=True).count()
     total_teachers = User.objects.filter(role=User.Role.TEACHER, is_active=True).count()
     total_courses = Course.objects.filter(is_active=True).count()
-    active_enrollments = Enrollment.objects.filter(status=Enrollment.Status.ENROLLED).count()
+    active_enrollments = Enrollment.objects.filter(is_active=True).count()
     
     # PO achievements statistics
     po_achievements = ProgramOutcome.objects.filter(is_active=True).annotate(
@@ -628,5 +713,74 @@ def institution_dashboard(request):
         'department_stats': list(department_stats)
     }
     
-    serializer = InstitutionDashboardSerializer(data)
-    return Response(serializer.data)
+    serializer = InstitutionDashboardSerializer()
+    return Response(serializer.to_representation(data))
+
+
+# =============================================================================
+# CONTACT REQUEST VIEWS
+# =============================================================================
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def create_contact_request(request):
+    """
+    Create a new contact request (public endpoint)
+    
+    POST /api/contact/
+    Body: {
+        "institution_name": "...",
+        "institution_type": "university",
+        "contact_name": "...",
+        "contact_email": "...",
+        "contact_phone": "...",
+        "request_type": "demo",
+        "message": "..."
+    }
+    """
+    serializer = ContactRequestCreateSerializer(data=request.data)
+    if serializer.is_valid():
+        contact_request = serializer.save()
+        return Response({
+            'success': True,
+            'message': 'Your request has been received. Our team will contact you within 24 hours.',
+            'request_id': contact_request.id
+        }, status=status.HTTP_201_CREATED)
+    return Response({
+        'success': False,
+        'errors': serializer.errors
+    }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ContactRequestViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for ContactRequest CRUD operations (admin only)
+    """
+    queryset = ContactRequest.objects.all()
+    serializer_class = ContactRequestSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['institution_name', 'contact_name', 'contact_email', 'message']
+    ordering_fields = ['created_at', 'status', 'institution_name']
+    ordering = ['-created_at']
+    
+    def get_queryset(self):
+        """Filter requests based on user permissions"""
+        user = self.request.user
+        
+        # Only staff/admin can view all requests
+        if not user.is_staff:
+            return ContactRequest.objects.none()
+        
+        # Filter by status if provided
+        status_filter = self.request.query_params.get('status', None)
+        if status_filter:
+            return ContactRequest.objects.filter(status=status_filter)
+        
+        return ContactRequest.objects.all()
+    
+    def get_permissions(self):
+        """Only allow staff/admin to access"""
+        # Public create is handled by create_contact_request view
+        # This ViewSet is only for admin CRUD operations
+        return [IsAdminUser()]

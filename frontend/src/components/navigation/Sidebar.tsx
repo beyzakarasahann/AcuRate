@@ -4,14 +4,11 @@
 import { motion, AnimatePresence } from 'framer-motion'; 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation'; 
-import { ChevronLeft, Home, BookOpen, Award, BarChart, Settings, Sun, Moon, LogOut, ChevronDown } from 'lucide-react'; 
+import { ChevronLeft, Home, BookOpen, Award, BarChart, Settings, Sun, Moon, LogOut, ChevronDown, Loader2 } from 'lucide-react'; 
 import { useState, useEffect } from 'react';
 import { useTheme } from 'next-themes'; 
 import { useThemeColors } from '../../hooks/useThemeColors'; 
-
-// --- MOCK VE SABİTLER ---
-
-const studentInfoLocal = { name: 'Elara Vesper' };
+import { api, TokenManager, type User } from '@/lib/api';
 
 const baseNavItems = [
     { name: 'Home', icon: Home, slug: 'home' },
@@ -27,6 +24,8 @@ export default function Sidebar() {
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
     const [mounted, setMounted] = useState(false);
+    const [user, setUser] = useState<User | null>(null);
+    const [loading, setLoading] = useState(true);
     
     const pathname = usePathname();
     const router = useRouter(); 
@@ -34,7 +33,34 @@ export default function Sidebar() {
 
     useEffect(() => {
         setMounted(true);
+        fetchUser();
     }, []);
+
+    const fetchUser = async () => {
+        try {
+            setLoading(true);
+            // First try to get from localStorage
+            const cachedUser = TokenManager.getUser();
+            if (cachedUser) {
+                setUser(cachedUser);
+                setLoading(false);
+                return;
+            }
+            
+            // If not in cache, fetch from API
+            const currentUser = await api.getCurrentUser();
+            setUser(currentUser);
+        } catch (err) {
+            console.error('Failed to fetch user:', err);
+            // Fallback to localStorage if API fails
+            const cachedUser = TokenManager.getUser();
+            if (cachedUser) {
+                setUser(cachedUser);
+            }
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const { 
         isDark, 
@@ -55,10 +81,22 @@ export default function Sidebar() {
     };
     const toggleTheme = () => setTheme(isDark ? 'light' : 'dark');
 
-    const handleLogout = () => {
-        alert("Çıkış yapılıyor... (Simülasyon)");
-        router.push('/login'); 
-        setIsUserMenuOpen(false);
+    const handleLogout = async () => {
+        try {
+            await api.logout();
+        } catch (err) {
+            console.error('Logout error:', err);
+        } finally {
+            // Clear cookies
+            document.cookie = 'user_role=; path=/; max-age=0';
+            document.cookie = 'username=; path=/; max-age=0';
+            document.cookie = 'auth_token=; path=/; max-age=0';
+            // Clear tokens
+            TokenManager.clearTokens();
+            // Redirect to login
+            router.push('/login');
+            setIsUserMenuOpen(false);
+        }
     };
     
     // Stil Sabitleri
@@ -184,8 +222,17 @@ export default function Sidebar() {
                         className="w-full p-3 rounded-xl text-white font-medium shadow-md shadow-indigo-500/30 flex justify-between items-center transition-all hover:opacity-90"
                         whileHover={{ scale: 1.01 }}
                     >
-                        Welcome, {studentInfoLocal.name.split(' ')[0]}
-                        <ChevronDown className={`w-4 h-4 transition-transform ${isUserMenuOpen ? 'rotate-180' : 'rotate-0'}`} />
+                        {loading ? (
+                            <div className="flex items-center gap-2">
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                <span>Loading...</span>
+                            </div>
+                        ) : (
+                            <>
+                                Welcome, {user ? (user.first_name || user.username) : 'User'}
+                                <ChevronDown className={`w-4 h-4 transition-transform ${isUserMenuOpen ? 'rotate-180' : 'rotate-0'}`} />
+                            </>
+                        )}
                     </motion.button>
                 ) : (
                     // Dar Menü Modu (Sadece Avatar/İkon)

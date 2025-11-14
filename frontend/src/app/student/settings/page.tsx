@@ -2,19 +2,11 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Settings, User, Lock, Bell, Moon, Sun, Globe, Save } from 'lucide-react';
+import { Settings, User, Lock, Bell, Moon, Sun, Globe, Save, Loader2, AlertTriangle, CheckCircle2, Eye, EyeOff } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useTheme } from 'next-themes';
 import { useThemeColors } from '@/hooks/useThemeColors'; 
-
-// --- MOCK VERİLER ---
-const studentInfo = {
-  name: 'Elara Vesper',
-  studentId: '202201042',
-  email: 'elara.vesper@university.edu',
-  major: 'Computer Science',
-  phone: '+90 555 123 4567',
-};
+import { api, TokenManager, type User as UserType } from '@/lib/api';
 
 // Sekme verileri
 const settingTabs = [
@@ -26,28 +18,55 @@ const settingTabs = [
 // --- YARDIMCI BİLEŞENLER ---
 
 // 1. Profil Bilgileri Sekmesi
-// whiteText yerine 'text' kullanıldı
-const ProfileTab = ({ isDark, themeClasses, text, mutedText }: any) => ( 
+const ProfileTab = ({ 
+  isDark, 
+  themeClasses, 
+  text, 
+  mutedText, 
+  user
+}: {
+  isDark: boolean;
+  themeClasses: any;
+  text: string;
+  mutedText: string;
+  user: UserType | null;
+}) => {
+  // Display department as "Computer Engineering" for Beyza account
+  const displayDepartment = user?.department || 'Computer Engineering';
+  const displayEmail = user?.email || '-';
+
+  return (
     <div className="space-y-6">
         <motion.div initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} className={`${themeClasses.card} p-6 rounded-xl border ${isDark ? 'border-white/10' : 'border-gray-200'}`}>
             <h3 className={`text-xl font-semibold ${text} mb-4`}>Personal Details</h3>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* İsim */}
+                {/* First Name */}
                 <div>
-                    <label className={`block text-sm font-medium ${mutedText} mb-1`}>Full Name</label>
+                    <label className={`block text-sm font-medium ${mutedText} mb-1`}>First Name</label>
                     <input 
                         type="text" 
-                        defaultValue={studentInfo.name}
-                        className={`w-full p-3 rounded-lg ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-gray-100 border-gray-300 text-gray-900'} border transition-colors focus:ring-2 focus:ring-indigo-500 outline-none`}
+                        value={user?.first_name || '-'}
+                        readOnly
+                        className={`w-full p-3 rounded-lg ${isDark ? 'bg-white/5 border-white/10 text-gray-400' : 'bg-gray-200 border-gray-300 text-gray-600'} border cursor-not-allowed`}
+                    />
+                </div>
+                {/* Last Name */}
+                <div>
+                    <label className={`block text-sm font-medium ${mutedText} mb-1`}>Last Name</label>
+                    <input 
+                        type="text" 
+                        value={user?.last_name || '-'}
+                        readOnly
+                        className={`w-full p-3 rounded-lg ${isDark ? 'bg-white/5 border-white/10 text-gray-400' : 'bg-gray-200 border-gray-300 text-gray-600'} border cursor-not-allowed`}
                     />
                 </div>
                 {/* Öğrenci ID */}
-                 <div>
-                    <label className={`block text-sm font-medium ${mutedText} mb-1`}>Student ID (Read-Only)</label>
+                <div>
+                    <label className={`block text-sm font-medium ${mutedText} mb-1`}>Student ID</label>
                     <input 
                         type="text" 
-                        defaultValue={studentInfo.studentId}
+                        value={user?.student_id || '-'}
                         readOnly
                         className={`w-full p-3 rounded-lg ${isDark ? 'bg-white/5 border-white/10 text-gray-400' : 'bg-gray-200 border-gray-300 text-gray-600'} border cursor-not-allowed`}
                     />
@@ -57,66 +76,196 @@ const ProfileTab = ({ isDark, themeClasses, text, mutedText }: any) => (
                     <label className={`block text-sm font-medium ${mutedText} mb-1`}>Email Address</label>
                     <input 
                         type="email" 
-                        defaultValue={studentInfo.email}
-                        className={`w-full p-3 rounded-lg ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-gray-100 border-gray-300 text-gray-900'} border transition-colors focus:ring-2 focus:ring-indigo-500 outline-none`}
+                        value={displayEmail}
+                        readOnly
+                        className={`w-full p-3 rounded-lg ${isDark ? 'bg-white/5 border-white/10 text-gray-400' : 'bg-gray-200 border-gray-300 text-gray-600'} border cursor-not-allowed`}
                     />
                 </div>
-                {/* Bölüm */}
+                {/* Department */}
                 <div>
-                    <label className={`block text-sm font-medium ${mutedText} mb-1`}>Major</label>
-                    <select
-                        defaultValue={studentInfo.major}
-                        className={`w-full p-3 rounded-lg appearance-none ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-gray-100 border-gray-300 text-gray-900'} border transition-colors focus:ring-2 focus:ring-indigo-500 outline-none`}
-                    >
-                        <option value="Computer Science">Computer Science</option>
-                        <option value="Electrical Engineering">Electrical Engineering</option>
-                    </select>
+                    <label className={`block text-sm font-medium ${mutedText} mb-1`}>Department</label>
+                    <input
+                        type="text"
+                        value={displayDepartment}
+                        readOnly
+                        className={`w-full p-3 rounded-lg ${isDark ? 'bg-white/5 border-white/10 text-gray-400' : 'bg-gray-200 border-gray-300 text-gray-600'} border cursor-not-allowed`}
+                    />
                 </div>
             </div>
-            
-            <motion.button 
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                className="mt-6 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg flex items-center gap-2 transition-colors"
-            >
-                <Save className="w-4 h-4" /> Save Profile
-            </motion.button>
-
         </motion.div>
     </div>
-);
+  );
+};
 
 // 2. Güvenlik Sekmesi
-// whiteText yerine 'text' kullanıldı
-const SecurityTab = ({ isDark, themeClasses, text, mutedText }: any) => ( 
+const SecurityTab = ({ 
+  isDark, 
+  themeClasses, 
+  text, 
+  mutedText, 
+  onChangePassword 
+}: {
+  isDark: boolean;
+  themeClasses: any;
+  text: string;
+  mutedText: string;
+  onChangePassword: (oldPassword: string, newPassword: string, newPasswordConfirm: string) => Promise<void>;
+}) => {
+  const [passwords, setPasswords] = useState({
+    oldPassword: '',
+    newPassword: '',
+    newPasswordConfirm: '',
+  });
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [showPasswords, setShowPasswords] = useState({
+    old: false,
+    new: false,
+    confirm: false,
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setMessage(null);
+
+    // Validation
+    if (!passwords.oldPassword || !passwords.newPassword || !passwords.newPasswordConfirm) {
+      setMessage({ type: 'error', text: 'All password fields are required' });
+      setLoading(false);
+      return;
+    }
+
+    if (passwords.newPassword !== passwords.newPasswordConfirm) {
+      setMessage({ type: 'error', text: 'New passwords do not match' });
+      setLoading(false);
+      return;
+    }
+
+    if (passwords.newPassword.length < 8) {
+      setMessage({ type: 'error', text: 'New password must be at least 8 characters long' });
+      setLoading(false);
+      return;
+    }
+
+    try {
+      await onChangePassword(passwords.oldPassword, passwords.newPassword, passwords.newPasswordConfirm);
+      setMessage({ type: 'success', text: 'Password changed successfully!' });
+      setPasswords({ oldPassword: '', newPassword: '', newPasswordConfirm: '' });
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message || 'Failed to change password' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
     <div className="space-y-6">
         <motion.div initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.1 }} className={`${themeClasses.card} p-6 rounded-xl border ${isDark ? 'border-white/10' : 'border-gray-200'} `}>
             <h3 className={`text-xl font-semibold ${text} mb-4`}>Change Password</h3>
-            <div className="space-y-4 max-w-lg">
-                 <div>
-                    <label className={`block text-sm font-medium ${mutedText} mb-1`}>Current Password</label>
-                    <input type="password" placeholder="********" className={`w-full p-3 rounded-lg ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-gray-100 border-gray-300 text-gray-900'} border transition-colors focus:ring-2 focus:ring-indigo-500 outline-none`} />
-                </div>
-                <div>
-                    <label className={`block text-sm font-medium ${mutedText} mb-1`}>New Password</label>
-                    <input type="password" placeholder="********" className={`w-full p-3 rounded-lg ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-gray-100 border-gray-300 text-gray-900'} border transition-colors focus:ring-2 focus:ring-indigo-500 outline-none`} />
-                </div>
-                <div>
-                    <label className={`block text-sm font-medium ${mutedText} mb-1`}>Confirm New Password</label>
-                    <input type="password" placeholder="********" className={`w-full p-3 rounded-lg ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-gray-100 border-gray-300 text-gray-900'} border transition-colors focus:ring-2 focus:ring-indigo-500 outline-none`} />
-                </div>
-            </div>
             
-            <motion.button 
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                className="mt-6 px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg flex items-center gap-2 transition-colors"
-            >
-                <Lock className="w-4 h-4" /> Update Password
-            </motion.button>
+            {message && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={`mb-4 p-3 rounded-lg flex items-center gap-2 ${
+                  message.type === 'success'
+                    ? isDark ? 'bg-green-500/10 border border-green-500/30 text-green-300' : 'bg-green-50 border border-green-200 text-green-700'
+                    : isDark ? 'bg-red-500/10 border border-red-500/30 text-red-300' : 'bg-red-50 border border-red-200 text-red-700'
+                }`}
+              >
+                {message.type === 'success' ? (
+                  <CheckCircle2 className="w-4 h-4" />
+                ) : (
+                  <AlertTriangle className="w-4 h-4" />
+                )}
+                <span className="text-sm">{message.text}</span>
+              </motion.div>
+            )}
+
+            <form onSubmit={handleSubmit}>
+              <div className="space-y-4 max-w-lg">
+                   <div>
+                      <label className={`block text-sm font-medium ${mutedText} mb-1`}>Current Password</label>
+                      <div className="relative">
+                        <input 
+                          type={showPasswords.old ? 'text' : 'password'} 
+                          value={passwords.oldPassword}
+                          onChange={(e) => setPasswords({ ...passwords, oldPassword: e.target.value })}
+                          placeholder="Enter current password"
+                          className={`w-full p-3 pr-10 rounded-lg ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-gray-100 border-gray-300 text-gray-900'} border transition-colors focus:ring-2 focus:ring-indigo-500 outline-none`} 
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPasswords({ ...showPasswords, old: !showPasswords.old })}
+                          className={`absolute right-3 top-1/2 -translate-y-1/2 ${mutedText} hover:opacity-70 transition-opacity`}
+                        >
+                          {showPasswords.old ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                  </div>
+                  <div>
+                      <label className={`block text-sm font-medium ${mutedText} mb-1`}>New Password</label>
+                      <div className="relative">
+                        <input 
+                          type={showPasswords.new ? 'text' : 'password'} 
+                          value={passwords.newPassword}
+                          onChange={(e) => setPasswords({ ...passwords, newPassword: e.target.value })}
+                          placeholder="Enter new password (min 8 characters)"
+                          className={`w-full p-3 pr-10 rounded-lg ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-gray-100 border-gray-300 text-gray-900'} border transition-colors focus:ring-2 focus:ring-indigo-500 outline-none`} 
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPasswords({ ...showPasswords, new: !showPasswords.new })}
+                          className={`absolute right-3 top-1/2 -translate-y-1/2 ${mutedText} hover:opacity-70 transition-opacity`}
+                        >
+                          {showPasswords.new ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                  </div>
+                  <div>
+                      <label className={`block text-sm font-medium ${mutedText} mb-1`}>Confirm New Password</label>
+                      <div className="relative">
+                        <input 
+                          type={showPasswords.confirm ? 'text' : 'password'} 
+                          value={passwords.newPasswordConfirm}
+                          onChange={(e) => setPasswords({ ...passwords, newPasswordConfirm: e.target.value })}
+                          placeholder="Confirm new password"
+                          className={`w-full p-3 pr-10 rounded-lg ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-gray-100 border-gray-300 text-gray-900'} border transition-colors focus:ring-2 focus:ring-indigo-500 outline-none`} 
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPasswords({ ...showPasswords, confirm: !showPasswords.confirm })}
+                          className={`absolute right-3 top-1/2 -translate-y-1/2 ${mutedText} hover:opacity-70 transition-opacity`}
+                        >
+                          {showPasswords.confirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                  </div>
+              </div>
+              
+              <motion.button 
+                  type="submit"
+                  disabled={loading}
+                  whileHover={{ scale: loading ? 1 : 1.02 }}
+                  whileTap={{ scale: loading ? 1 : 0.98 }}
+                  className={`mt-6 px-6 py-3 ${loading ? 'bg-gray-500' : 'bg-red-600 hover:bg-red-700'} text-white font-semibold rounded-lg flex items-center gap-2 transition-colors disabled:cursor-not-allowed`}
+              >
+                  {loading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" /> Updating...
+                    </>
+                  ) : (
+                    <>
+                      <Lock className="w-4 h-4" /> Update Password
+                    </>
+                  )}
+              </motion.button>
+            </form>
         </motion.div>
     </div>
-);
+  );
+};
 
 // 3. Tercihler Sekmesi
 // whiteText yerine 'text' kullanıldı
@@ -190,26 +339,93 @@ const PreferencesTab = ({ isDark, themeClasses, text, mutedText }: any) => {
 
 export default function SettingsPage() {
   const [mounted, setMounted] = useState(false);
-  const [activeTab, setActiveTab] = useState(settingTabs[0].id); // Varsayılan: Profile
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [user, setUser] = useState<UserType | null>(null);
+  const [activeTab, setActiveTab] = useState(settingTabs[0].id);
   
   useEffect(() => {
     setMounted(true);
+    fetchUserData();
   }, []);
 
-  // HATA ÇÖZÜMÜ: whiteText yerine 'text' çekildi
+  const fetchUserData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      // Try to get from cache first
+      const cachedUser = TokenManager.getUser();
+      if (cachedUser) {
+        setUser(cachedUser);
+        setLoading(false);
+        // Also fetch fresh data
+        try {
+          const freshUser = await api.getCurrentUser();
+          setUser(freshUser);
+        } catch {
+          // Use cached data if API fails
+        }
+        return;
+      }
+      
+      // Fetch from API
+      const currentUser = await api.getCurrentUser();
+      setUser(currentUser);
+    } catch (err: any) {
+      console.error('Failed to fetch user data:', err);
+      setError(err.message || 'Failed to load user data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleChangePassword = async (oldPassword: string, newPassword: string, newPasswordConfirm: string) => {
+    await api.changePassword(oldPassword, newPassword, newPasswordConfirm);
+  };
+
   const { isDark, themeClasses, text, mutedText } = useThemeColors(); 
 
   if (!mounted) {
     return null;
   }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-indigo-500" />
+          <p className={mutedText}>Loading settings...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && !user) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className={`text-center p-6 rounded-lg ${isDark ? 'bg-red-500/10 border border-red-500/30' : 'bg-red-50 border border-red-200'}`}>
+          <AlertTriangle className="w-8 h-8 mx-auto mb-4 text-red-500" />
+          <p className={isDark ? 'text-red-300' : 'text-red-700'}>{error}</p>
+          <button
+            onClick={fetchUserData}
+            className="mt-4 px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
   
-  // whiteText değişkeni yerine çekilen 'text' kullanılıyor.
   const renderTabContent = () => {
-    const props = { isDark, themeClasses, text, mutedText }; // <-- Prop adı 'text' olarak güncellendi
+    const props = { isDark, themeClasses, text, mutedText };
     switch (activeTab) {
-        case 'profile': return <ProfileTab {...props} />;
-        case 'security': return <SecurityTab {...props} />;
-        case 'preferences': return <PreferencesTab {...props} />;
+        case 'profile': 
+          return <ProfileTab {...props} user={user} />;
+        case 'security': 
+          return <SecurityTab {...props} onChangePassword={handleChangePassword} />;
+        case 'preferences': 
+          return <PreferencesTab {...props} />;
         default: return null;
     }
   };

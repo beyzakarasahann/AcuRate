@@ -2,9 +2,10 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { BookOpen, Users, Award, TrendingUp, ArrowUpRight, ArrowDownRight, CheckCircle2, AlertTriangle, FileText, BarChart3, Clock, Target } from 'lucide-react';
+import { BookOpen, Users, Award, TrendingUp, ArrowUpRight, ArrowDownRight, CheckCircle2, AlertTriangle, FileText, BarChart3, Clock, Target, Loader2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { useThemeColors } from '@/hooks/useThemeColors'; 
+import { useThemeColors } from '@/hooks/useThemeColors';
+import { api, type DashboardData, type Course } from '@/lib/api'; 
 import { 
     Chart as ChartJS, 
     CategoryScale, 
@@ -30,35 +31,13 @@ ChartJS.register(
   LineElement
 );
 
-// --- MOCK VERİLER ---
-
-const teacherInfo = {
-  name: 'Dr. Sarah Mitchell',
-  department: 'Computer Science',
-  email: 's.mitchell@university.edu',
-  totalCourses: 4,
-  totalStudents: 125
-};
-
-const performanceStats = [
-  { title: 'Active Courses', value: '4', change: '+1', trend: 'up', icon: BookOpen, color: 'from-blue-500 to-cyan-500' },
-  { title: 'Total Students', value: '125', change: '+12', trend: 'up', icon: Users, color: 'from-purple-500 to-pink-500' },
-  { title: 'Avg Grade', value: '82.5%', change: '+2.3%', trend: 'up', icon: Award, color: 'from-green-500 to-emerald-500' },
-  { title: 'PO Achievement', value: '87%', change: '+4%', trend: 'up', icon: Target, color: 'from-orange-500 to-red-500' }
-];
-
-const currentCourses = [
-  { code: 'CS301', name: 'Data Structures', students: 32, avgGrade: 85.2, poAchievement: 90, status: 'excellent' },
-  { code: 'SE405', name: 'Software Engineering', students: 28, avgGrade: 80.5, poAchievement: 85, status: 'good' },
-  { code: 'CS201', name: 'Programming Fundamentals', students: 45, avgGrade: 78.8, poAchievement: 82, status: 'good' },
-  { code: 'CS401', name: 'Advanced Algorithms', students: 20, avgGrade: 88.5, poAchievement: 92, status: 'excellent' },
-];
-
-const recentActivities = [
-  { type: 'grade', title: 'Graded CS301 Midterm', time: '2 hours ago', icon: FileText, color: 'blue' },
-  { type: 'feedback', title: 'Provided feedback to 5 students', time: '5 hours ago', icon: CheckCircle2, color: 'green' },
-  { type: 'alert', title: 'SE405 - 3 students below threshold', time: '1 day ago', icon: AlertTriangle, color: 'orange' },
-];
+// --- TYPES ---
+interface CourseWithStats extends Course {
+  students?: number;
+  avgGrade?: number;
+  poAchievement?: number;
+  status?: 'excellent' | 'good' | 'average';
+}
 
 const gradeDistributionData = {
   labels: ['A (90-100)', 'B (80-89)', 'C (70-79)', 'D (60-69)', 'F (<60)'],
@@ -85,43 +64,7 @@ const gradeDistributionData = {
   ]
 };
 
-const poAchievementData = {
-  labels: ['PO1', 'PO2', 'PO3', 'PO4', 'PO5'],
-  datasets: [
-    {
-      label: 'Achievement (%)',
-      data: [90, 88, 85, 87, 82],
-      backgroundColor: 'rgba(99, 102, 241, 0.2)',
-      borderColor: 'rgb(99, 102, 241)',
-      pointBackgroundColor: 'rgb(99, 102, 241)',
-      pointBorderColor: '#fff',
-      pointHoverBackgroundColor: '#fff',
-      pointHoverBorderColor: 'rgb(99, 102, 241)',
-      tension: 0.4
-    }
-  ]
-};
-
-const coursePerformanceData = {
-  labels: currentCourses.map(c => c.code),
-  datasets: [
-    {
-      label: 'Average Grade (%)',
-      data: currentCourses.map(c => c.avgGrade),
-      backgroundColor: currentCourses.map(c => 
-        c.avgGrade >= 85 ? 'rgba(16, 185, 129, 0.8)' : 
-        c.avgGrade >= 80 ? 'rgba(59, 130, 246, 0.8)' : 
-        'rgba(251, 191, 36, 0.8)'
-      ),
-      borderColor: currentCourses.map(c => 
-        c.avgGrade >= 85 ? 'rgb(16, 185, 129)' : 
-        c.avgGrade >= 80 ? 'rgb(59, 130, 246)' : 
-        'rgb(251, 191, 36)'
-      ),
-      borderWidth: 2
-    }
-  ]
-};
+// Chart data will be generated dynamically in the component
 
 // --- YARDIMCI FONKSİYONLAR VE SABİTLER ---
 
@@ -204,11 +147,29 @@ const doughnutOptions = (isDark: boolean, mutedText: string) => ({
 
 // --- ANA DASHBOARD BİLEŞENİ ---
 export default function TeacherHomePage() {
-  const [mounted, setMounted] = useState(false); 
+  const [mounted, setMounted] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   
   useEffect(() => {
     setMounted(true);
+    fetchDashboardData();
   }, []);
+
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await api.getTeacherDashboard();
+      setDashboardData(data);
+    } catch (err: any) {
+      console.error('Failed to fetch dashboard data:', err);
+      setError(err.message || 'Failed to load dashboard data');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const { 
     isDark, 
@@ -223,6 +184,212 @@ export default function TeacherHomePage() {
   if (!mounted || !themeMounted) {
     return null;
   }
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-indigo-500" />
+          <p className={mutedText}>Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error || !dashboardData) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className={`text-center p-6 rounded-lg ${isDark ? 'bg-red-500/10 border border-red-500/30' : 'bg-red-50 border border-red-200'}`}>
+          <AlertTriangle className="w-8 h-8 mx-auto mb-4 text-red-500" />
+          <p className={isDark ? 'text-red-300' : 'text-red-700'}>{error || 'Failed to load dashboard data'}</p>
+          <button
+            onClick={fetchDashboardData}
+            className="mt-4 px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Extract data
+  const teacher = dashboardData.teacher;
+  const courses = dashboardData.courses || [];
+  const totalStudents = dashboardData.total_students || 0;
+  const pendingAssessments = dashboardData.pending_assessments || 0;
+
+  // Calculate stats
+  const totalCourses = courses.length;
+  
+  // Calculate average grade from enrollments
+  let totalGradeSum = 0;
+  let totalGradeCount = 0;
+  courses.forEach((course: any) => {
+    const enrollments = course.enrollments || [];
+    enrollments.forEach((enrollment: any) => {
+      if (enrollment.final_grade) {
+        totalGradeSum += enrollment.final_grade;
+        totalGradeCount++;
+      }
+    });
+  });
+  const avgGrade = totalGradeCount > 0 ? totalGradeSum / totalGradeCount : 0;
+
+  // Prepare course data with stats
+  const currentCourses: CourseWithStats[] = courses.map(course => {
+    const enrollments = (course as any).enrollments || [];
+    const students = enrollments.length;
+    const avgGrade = enrollments.length > 0
+      ? enrollments.reduce((sum: number, e: any) => sum + (e.final_grade || 0), 0) / enrollments.length
+      : 0;
+    
+    let status: 'excellent' | 'good' | 'average' = 'average';
+    if (avgGrade >= 85) status = 'excellent';
+    else if (avgGrade >= 75) status = 'good';
+
+    return {
+      ...course,
+      students,
+      avgGrade: Math.round(avgGrade * 10) / 10,
+      poAchievement: 85, // TODO: Calculate from PO achievements
+      status
+    };
+  });
+
+  // Performance stats
+  const performanceStats: Array<{
+    title: string;
+    value: string;
+    change: string;
+    trend: 'up' | 'down' | 'stable';
+    icon: any;
+    color: string;
+  }> = [
+    { title: 'Active Courses', value: totalCourses > 0 ? totalCourses.toString() : '-', change: '', trend: 'up', icon: BookOpen, color: 'from-blue-500 to-cyan-500' },
+    { title: 'Total Students', value: totalStudents > 0 ? totalStudents.toString() : '-', change: '', trend: 'up', icon: Users, color: 'from-purple-500 to-pink-500' },
+    { title: 'Avg Grade', value: avgGrade > 0 ? `${Math.round(avgGrade * 10) / 10}%` : '-', change: '', trend: 'up', icon: Award, color: 'from-green-500 to-emerald-500' },
+    { title: 'Pending Assessments', value: pendingAssessments > 0 ? pendingAssessments.toString() : '-', change: '', trend: 'up', icon: Target, color: 'from-orange-500 to-red-500' }
+  ];
+
+  // Recent activities from recent submissions (if available)
+  const recentSubmissions = (dashboardData as any).recent_submissions || [];
+  const recentActivities = recentSubmissions.slice(0, 3).map((submission: any) => ({
+    type: 'grade' as const,
+    title: `Graded ${submission.assessment_title || 'Assessment'}`,
+    time: submission.graded_at ? new Date(submission.graded_at).toLocaleString() : '-',
+    icon: FileText,
+    color: 'blue' as const
+  }));
+
+  // Calculate grade distribution from actual grades
+  const gradeDistribution = {
+    A: 0, // 90-100
+    B: 0, // 80-89
+    C: 0, // 70-79
+    D: 0, // 60-69
+    F: 0  // <60
+  };
+
+  // Calculate from enrollments' final grades
+  courses.forEach((course: any) => {
+    const enrollments = course.enrollments || [];
+    enrollments.forEach((enrollment: any) => {
+      if (enrollment.final_grade !== null && enrollment.final_grade !== undefined) {
+        const grade = enrollment.final_grade;
+        if (grade >= 90) gradeDistribution.A++;
+        else if (grade >= 80) gradeDistribution.B++;
+        else if (grade >= 70) gradeDistribution.C++;
+        else if (grade >= 60) gradeDistribution.D++;
+        else gradeDistribution.F++;
+      }
+    });
+  });
+
+  const hasGradeData = gradeDistribution.A + gradeDistribution.B + gradeDistribution.C + gradeDistribution.D + gradeDistribution.F > 0;
+
+  const gradeDistributionData = {
+    labels: ['A (90-100)', 'B (80-89)', 'C (70-79)', 'D (60-69)', 'F (<60)'],
+    datasets: [
+      {
+        label: 'Students',
+        data: hasGradeData 
+          ? [gradeDistribution.A, gradeDistribution.B, gradeDistribution.C, gradeDistribution.D, gradeDistribution.F]
+          : [],
+        backgroundColor: [
+          'rgba(16, 185, 129, 0.8)',
+          'rgba(59, 130, 246, 0.8)',
+          'rgba(251, 191, 36, 0.8)',
+          'rgba(249, 115, 22, 0.8)',
+          'rgba(239, 68, 68, 0.8)',
+        ],
+        borderColor: [
+          'rgb(16, 185, 129)',
+          'rgb(59, 130, 246)',
+          'rgb(251, 191, 36)',
+          'rgb(249, 115, 22)',
+          'rgb(239, 68, 68)',
+        ],
+        borderWidth: 2
+      }
+    ]
+  };
+
+  // PO Achievement data from actual PO achievements
+  const poAchievements = dashboardData.po_achievements || [];
+  const poLabels: string[] = [];
+  const poData: number[] = [];
+
+  if (poAchievements.length > 0) {
+    poAchievements.forEach((po: any) => {
+      poLabels.push(po.po_code || 'PO');
+      poData.push(po.achievement_percentage || 0);
+    });
+  }
+
+  const hasPOData = poData.length > 0;
+
+  const poAchievementData = {
+    labels: hasPOData ? poLabels : [],
+    datasets: [
+      {
+        label: 'Achievement (%)',
+        data: hasPOData ? poData : [],
+        backgroundColor: 'rgba(99, 102, 241, 0.2)',
+        borderColor: 'rgb(99, 102, 241)',
+        pointBackgroundColor: 'rgb(99, 102, 241)',
+        pointBorderColor: '#fff',
+        pointHoverBackgroundColor: '#fff',
+        pointHoverBorderColor: 'rgb(99, 102, 241)',
+        tension: 0.4
+      }
+    ]
+  };
+
+  // Course performance data
+  const hasCourseData = currentCourses.length > 0;
+  const coursePerformanceData = {
+    labels: hasCourseData ? currentCourses.map(c => c.code) : [],
+    datasets: [
+      {
+        label: 'Average Grade (%)',
+        data: hasCourseData ? currentCourses.map(c => c.avgGrade || 0) : [],
+        backgroundColor: hasCourseData ? currentCourses.map(c => 
+          (c.avgGrade || 0) >= 85 ? 'rgba(16, 185, 129, 0.8)' : 
+          (c.avgGrade || 0) >= 80 ? 'rgba(59, 130, 246, 0.8)' : 
+          'rgba(251, 191, 36, 0.8)'
+        ) : [],
+        borderColor: hasCourseData ? currentCourses.map(c => 
+          (c.avgGrade || 0) >= 85 ? 'rgb(16, 185, 129)' : 
+          (c.avgGrade || 0) >= 80 ? 'rgb(59, 130, 246)' : 
+          'rgb(251, 191, 36)'
+        ) : [],
+        borderWidth: 2
+      }
+    ]
+  };
   
   const whiteTextClass = text;
   const accentIconClass = isDark ? 'text-indigo-400' : 'text-indigo-600';
@@ -246,10 +413,10 @@ export default function TeacherHomePage() {
         >
             <div>
                 <h1 className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">
-                    Welcome back, {teacherInfo.name.split(' ')[0]}
+                    Welcome back, {teacher?.first_name || '-'}
                 </h1>
                 <p className={`${secondaryTextClass} text-sm mt-1`}>
-                    {teacherInfo.department} • {teacherInfo.totalCourses} Courses • {teacherInfo.totalStudents} Students
+                    {teacher?.department || '-'} • {totalCourses} Courses • {totalStudents} Students
                 </p>
             </div>
         </motion.div>
@@ -279,14 +446,16 @@ export default function TeacherHomePage() {
                             >
                                 <stat.icon className="w-6 h-6 text-white" />
                             </div>
-                            <div className={`flex items-center gap-1 text-sm font-medium ${stat.trend === 'up' ? 'text-green-500' : stat.trend === 'down' ? 'text-red-500' : 'text-yellow-500'}`}>
-                                {stat.trend === 'up' && <ArrowUpRight className="w-4 h-4" />}
-                                {stat.trend === 'down' && <ArrowDownRight className="w-4 h-4" />}
-                                {stat.change}
-                            </div>
+                            {stat.change && (
+                              <div className={`flex items-center gap-1 text-sm font-medium ${stat.trend === 'up' ? 'text-green-500' : stat.trend === 'down' ? 'text-red-500' : 'text-yellow-500'}`}>
+                                  {stat.trend === 'up' && <ArrowUpRight className="w-4 h-4" />}
+                                  {stat.trend === 'down' && <ArrowDownRight className="w-4 h-4" />}
+                                  {stat.change}
+                              </div>
+                            )}
                         </div>
                         <h3 className={`${secondaryTextClass} text-sm mb-1`}>{stat.title}</h3>
-                        <p className={`text-3xl font-bold ${whiteTextClass}`}>{stat.value}</p>
+                        <p className={`text-3xl font-bold ${whiteTextClass}`}>{stat.value || '-'}</p>
                     </motion.div>
                 );
             })}
@@ -309,7 +478,13 @@ export default function TeacherHomePage() {
                         Course Performance Overview
                     </h2>
                     <div className="h-72">
-                        <Bar data={coursePerformanceData} options={dynamicBarOptions} />
+                        {hasCourseData ? (
+                            <Bar data={coursePerformanceData} options={dynamicBarOptions} />
+                        ) : (
+                            <div className="flex items-center justify-center h-full">
+                                <p className={secondaryTextClass}>No course data available</p>
+                            </div>
+                        )}
                     </div>
                 </motion.div>
 
@@ -325,7 +500,13 @@ export default function TeacherHomePage() {
                         Program Outcomes Achievement
                     </h2>
                     <div className="h-72">
-                        <Line data={poAchievementData} options={dynamicLineOptions} />
+                        {hasPOData ? (
+                            <Line data={poAchievementData} options={dynamicLineOptions} />
+                        ) : (
+                            <div className="flex items-center justify-center h-full">
+                                <p className={secondaryTextClass}>No PO achievement data available</p>
+                            </div>
+                        )}
                     </div>
                 </motion.div>
 
@@ -341,7 +522,7 @@ export default function TeacherHomePage() {
                         Current Courses
                     </h2>
                     <div className="space-y-4">
-                        {currentCourses.map((course, index) => (
+                        {currentCourses.length > 0 ? currentCourses.map((course, index) => (
                             <motion.div
                                 key={index}
                                 initial={{ opacity: 0, x: -20 }}
@@ -364,7 +545,7 @@ export default function TeacherHomePage() {
                                         <div className={`flex gap-4 text-sm ${mutedText}`}>
                                             <span>{course.students} students</span>
                                             <span>•</span>
-                                            <span>Avg Grade: {course.avgGrade}%</span>
+                                            <span>Avg Grade: {course.avgGrade !== undefined ? `${course.avgGrade}%` : '-'}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -372,17 +553,17 @@ export default function TeacherHomePage() {
                                 <div className="space-y-2">
                                     <div className="flex items-center justify-between text-sm">
                                         <span className={`${mutedText}`}>PO Achievement</span>
-                                        <span className={`font-semibold ${whiteTextClass}`}>{course.poAchievement}%</span>
+                                        <span className={`font-semibold ${whiteTextClass}`}>{course.poAchievement !== undefined ? `${course.poAchievement}%` : '-'}</span>
                                     </div>
                                     <div className={`h-2 ${isDark ? 'bg-white/10' : 'bg-gray-200'} rounded-full overflow-hidden`}>
                                         <motion.div
                                             initial={{ width: 0 }}
-                                            animate={{ width: `${course.poAchievement}%` }}
+                                            animate={{ width: `${course.poAchievement || 0}%` }}
                                             transition={{ duration: 1, delay: 0.6 + index * 0.1 }}
                                             style={{
                                                 backgroundImage: `linear-gradient(to right, 
-                                                    ${course.poAchievement >= 90 ? '#10B981' : '#3B82F6'}, 
-                                                    ${course.poAchievement >= 90 ? '#059669' : '#06B6D4'}
+                                                    ${(course.poAchievement || 0) >= 90 ? '#10B981' : '#3B82F6'}, 
+                                                    ${(course.poAchievement || 0) >= 90 ? '#059669' : '#06B6D4'}
                                                 )` 
                                             }}
                                             className="h-full rounded-full"
@@ -390,7 +571,11 @@ export default function TeacherHomePage() {
                                     </div>
                                 </div>
                             </motion.div>
-                        ))}
+                        )) : (
+                            <div className="text-center py-8">
+                                <p className={secondaryTextClass}>No courses available</p>
+                            </div>
+                        )}
                     </div>
                 </motion.div>
             </div>
@@ -410,7 +595,13 @@ export default function TeacherHomePage() {
                         Grade Distribution
                     </h2>
                     <div className="h-72">
-                        <Doughnut data={gradeDistributionData} options={dynamicDoughnutOptions} />
+                        {hasGradeData ? (
+                            <Doughnut data={gradeDistributionData} options={dynamicDoughnutOptions} />
+                        ) : (
+                            <div className="flex items-center justify-center h-full">
+                                <p className={secondaryTextClass}>No grade data available</p>
+                            </div>
+                        )}
                     </div>
                 </motion.div>
                 
@@ -426,31 +617,37 @@ export default function TeacherHomePage() {
                         Recent Activities
                     </h2>
                     <div className="space-y-3">
-                        {recentActivities.map((activity, index) => {
-                            const colorClasses = {
-                                blue: 'bg-blue-500/10 border-blue-500/30 text-blue-700 dark:text-blue-300',
-                                green: 'bg-green-500/10 border-green-500/30 text-green-700 dark:text-green-300',
-                                orange: 'bg-orange-500/10 border-orange-500/30 text-orange-700 dark:text-orange-300',
-                            };
-                            return (
-                                <motion.div
-                                    key={index}
-                                    initial={{ opacity: 0, x: 20 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    transition={{ delay: 0.6 + index * 0.1 }}
-                                    whileHover={{ scale: 1.02 }}
-                                    className={`p-3 rounded-xl border ${colorClasses[activity.color as keyof typeof colorClasses]} ${isDark ? 'hover:bg-white/10' : 'hover:bg-gray-100'} transition-all cursor-pointer`}
-                                >
-                                    <div className="flex items-start gap-3">
-                                        <activity.icon className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                                        <div className="flex-1">
-                                            <h3 className={`font-medium text-sm mb-1 ${whiteTextClass}`}>{activity.title}</h3>
-                                            <span className="text-xs text-gray-500">{activity.time}</span>
+                        {recentActivities.length > 0 ? (
+                            recentActivities.map((activity: { type: string; title: string; time: string; icon: any; color: string }, index: number) => {
+                                const colorClasses = {
+                                    blue: 'bg-blue-500/10 border-blue-500/30 text-blue-700 dark:text-blue-300',
+                                    green: 'bg-green-500/10 border-green-500/30 text-green-700 dark:text-green-300',
+                                    orange: 'bg-orange-500/10 border-orange-500/30 text-orange-700 dark:text-orange-300',
+                                };
+                                return (
+                                    <motion.div
+                                        key={index}
+                                        initial={{ opacity: 0, x: 20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        transition={{ delay: 0.6 + index * 0.1 }}
+                                        whileHover={{ scale: 1.02 }}
+                                        className={`p-3 rounded-xl border ${colorClasses[activity.color as keyof typeof colorClasses]} ${isDark ? 'hover:bg-white/10' : 'hover:bg-gray-100'} transition-all cursor-pointer`}
+                                    >
+                                        <div className="flex items-start gap-3">
+                                            <activity.icon className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                                            <div className="flex-1">
+                                                <h3 className={`font-medium text-sm mb-1 ${whiteTextClass}`}>{activity.title}</h3>
+                                                <span className="text-xs text-gray-500">{activity.time}</span>
+                                            </div>
                                         </div>
-                                    </div>
-                                </motion.div>
-                            );
-                        })}
+                                    </motion.div>
+                                );
+                            })
+                        ) : (
+                            <div className="text-center py-4">
+                                <p className={secondaryTextClass}>-</p>
+                            </div>
+                        )}
                     </div>
                 </motion.div>
 

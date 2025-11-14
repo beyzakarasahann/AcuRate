@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { User, Lock, Eye, EyeOff, GraduationCap, Users as UsersIcon, Building2, Sun, Moon } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 // ✨ TEMA ENTEGRASYONU: next-themes ve kendi renk hook'umuzu import ediyoruz
 import { useTheme } from 'next-themes'; 
@@ -14,10 +15,6 @@ import { api } from '@/lib/api';
 
 type Role = 'student' | 'teacher' | 'institution';
 
-interface DemoCredentials {
-  username: string;
-  password: string;
-}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -43,36 +40,23 @@ export default function LoginPage() {
       name: 'Student',
       icon: GraduationCap,
       description: 'View your courses and performance',
-      color: 'from-blue-500 to-cyan-500', 
-      credentials: { username: 'student1', password: 'student123' }
+      color: 'from-blue-500 to-cyan-500'
     },
     {
       id: 'teacher' as Role,
       name: 'Teacher',
       icon: UsersIcon,
       description: 'Manage courses and grade students',
-      color: 'from-purple-500 to-pink-500',
-      credentials: { username: 'teacher1', password: 'teacher123' }
+      color: 'from-purple-500 to-pink-500'
     },
     {
       id: 'institution' as Role,
       name: 'Institution',
       icon: Building2,
       description: 'View analytics and reports',
-      color: 'from-indigo-500 to-purple-600',
-      credentials: { username: 'admin', password: 'admin123' }
+      color: 'from-indigo-500 to-purple-600'
     }
   ];
-
-  const selectedRoleData = roles.find(r => r.id === selectedRole);
-
-  const fillDemoCredentials = () => {
-    const creds = selectedRoleData?.credentials;
-    if (creds) {
-      setUsername(creds.username);
-      setPassword(creds.password);
-    }
-  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -102,7 +86,16 @@ export default function LoginPage() {
         setLoading(false);
       }
     } catch (err: any) {
-      setError(err.message || 'An error occurred. Please try again.');
+      // Show user-friendly error message
+      const errorMessage = err.message || 'An error occurred. Please try again.';
+      // If it's a network error or generic error, show a friendly message
+      if (errorMessage.includes('Failed to fetch') || errorMessage.includes('Network')) {
+        setError('Unable to connect to the server. Please check your internet connection and try again.');
+      } else if (errorMessage.includes('status 400') || errorMessage.includes('status 401')) {
+        setError('Incorrect username or password');
+      } else {
+        setError(errorMessage);
+      }
       setLoading(false);
     }
   };
@@ -249,37 +242,6 @@ export default function LoginPage() {
                 </motion.div>
               ))}
             </div>
-
-            {/* Demo Credentials Display */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-              className={`backdrop-blur-xl rounded-2xl p-5 ${isDark ? 'bg-blue-500/10 border border-blue-500/30' : 'bg-blue-50 border border-blue-300'}`}
-            >
-              <h3 className={`font-semibold mb-3 text-sm ${isDark ? 'text-blue-300' : 'text-blue-600'}`}>Demo Credentials</h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className={mutedTextColorClass}>Username:</span>
-                  <code className={`font-mono ${isDark ? 'text-blue-300' : 'text-blue-600'}`}>{selectedRoleData?.credentials.username}</code>
-                </div>
-                <div className="flex justify-between">
-                  <span className={mutedTextColorClass}>Password:</span>
-                  <code className={`font-mono ${isDark ? 'text-blue-300' : 'text-blue-600'}`}>{selectedRoleData?.credentials.password}</code>
-                </div>
-              </div>
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={fillDemoCredentials}
-                className={`w-full mt-4 px-4 py-2 rounded-xl border text-sm font-medium transition-all ${isDark 
-                    ? 'bg-blue-500/20 border-blue-500/30 hover:bg-blue-500/30 text-blue-300' 
-                    : 'bg-blue-200/50 border-blue-400 hover:bg-blue-200 text-blue-800'
-                }`}
-              >
-                Fill Demo Credentials
-              </motion.button>
-            </motion.div>
           </div>
 
           {/* Right Side - Login Form */}
@@ -404,10 +366,10 @@ export default function LoginPage() {
             {/* Footer */}
             <div className={`mt-8 pt-6 border-t text-center ${isDark ? 'border-white/10' : 'border-gray-200'}`}>
               <p className={`text-sm ${mutedTextColorClass}`}>
-                Don't have an account?{' '}
-                <button className="text-indigo-600 hover:text-indigo-800 font-medium transition-colors">
-                  Contact Admin
-                </button>
+                Don't you have an account?{' '}
+                <Link href="/contact" className="text-indigo-500 hover:text-indigo-600 font-semibold underline">
+                  Contact us
+                </Link>
               </p>
             </div>
           </motion.div>
