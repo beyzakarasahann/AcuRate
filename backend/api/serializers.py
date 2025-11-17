@@ -143,40 +143,52 @@ class CoursePOSerializer(serializers.ModelSerializer):
 
 class CourseSerializer(serializers.ModelSerializer):
     """Serializer for Course model"""
-    teacher_name = serializers.CharField(source='teacher.get_full_name', read_only=True)
+    teacher_name = serializers.SerializerMethodField()
     semester_display = serializers.CharField(source='get_semester_display', read_only=True)
     
     class Meta:
         model = Course
         fields = [
             'id', 'code', 'name', 'description', 'credits',
-            'semester', 'semester_display', 'year',
-            'teacher', 'teacher_name', 'is_active',
+            'semester', 'semester_display', 'academic_year',
+            'department', 'teacher', 'teacher_name',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+    
+    def get_teacher_name(self, obj):
+        """Safely get teacher's full name, handling null teacher"""
+        if obj.teacher:
+            return obj.teacher.get_full_name() or obj.teacher.username
+        return None
 
 
 class CourseDetailSerializer(serializers.ModelSerializer):
     """Detailed course serializer with PO mappings"""
-    teacher_name = serializers.CharField(source='teacher.get_full_name', read_only=True)
+    teacher_name = serializers.SerializerMethodField()
     semester_display = serializers.CharField(source='get_semester_display', read_only=True)
-    program_outcomes = CoursePOSerializer(source='coursepo_set', many=True, read_only=True)
+    program_outcomes = CoursePOSerializer(source='course_pos', many=True, read_only=True)
     enrollment_count = serializers.SerializerMethodField()
     
     class Meta:
         model = Course
         fields = [
             'id', 'code', 'name', 'description', 'credits',
-            'semester', 'semester_display', 'year',
-            'teacher', 'teacher_name', 'program_outcomes',
-            'enrollment_count', 'is_active',
+            'semester', 'semester_display', 'academic_year',
+            'department', 'teacher', 'teacher_name', 'program_outcomes',
+            'enrollment_count',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
     
+    def get_teacher_name(self, obj):
+        """Safely get teacher's full name, handling null teacher"""
+        if obj.teacher:
+            return obj.teacher.get_full_name() or obj.teacher.username
+        return None
+    
     def get_enrollment_count(self, obj):
-        return obj.enrollment_set.filter(status=Enrollment.Status.ENROLLED).count()
+        return obj.enrollments.filter(is_active=True).count()
 
 
 # =============================================================================
@@ -209,17 +221,40 @@ class AssessmentSerializer(serializers.ModelSerializer):
     """Serializer for Assessment model"""
     course_code = serializers.CharField(source='course.code', read_only=True)
     course_name = serializers.CharField(source='course.name', read_only=True)
-    type_display = serializers.CharField(source='get_type_display', read_only=True)
+    type_display = serializers.CharField(source='get_assessment_type_display', read_only=True)
+    related_pos = serializers.PrimaryKeyRelatedField(
+        many=True, 
+        queryset=ProgramOutcome.objects.all(),
+        required=False
+    )
     
     class Meta:
         model = Assessment
         fields = [
             'id', 'course', 'course_code', 'course_name',
-            'title', 'description', 'type', 'type_display',
-            'weight', 'max_score', 'due_date',
-            'created_at', 'updated_at'
+            'title', 'description', 'assessment_type', 'type_display',
+            'weight', 'max_score', 'due_date', 'is_active',
+            'related_pos', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+    
+    def create(self, validated_data):
+        """Handle ManyToMany relationship for related_pos"""
+        related_pos = validated_data.pop('related_pos', [])
+        assessment = Assessment.objects.create(**validated_data)
+        if related_pos:
+            assessment.related_pos.set(related_pos)
+        return assessment
+    
+    def update(self, instance, validated_data):
+        """Handle ManyToMany relationship for related_pos"""
+        related_pos = validated_data.pop('related_pos', None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        if related_pos is not None:
+            instance.related_pos.set(related_pos)
+        return instance
 
 
 # =============================================================================

@@ -72,13 +72,18 @@ export default function TeacherGradesPage() {
     try {
       setLoading(true);
       setError(null);
-      const [coursesData] = await Promise.all([
-        api.getCourses()
-      ]);
-      setCourses(coursesData);
+      const coursesData = await api.getCourses();
+      // Ensure coursesData is an array
+      if (Array.isArray(coursesData)) {
+        setCourses(coursesData);
+      } else {
+        console.error('Expected array but got:', typeof coursesData, coursesData);
+        setCourses([]);
+      }
     } catch (err: any) {
       console.error('Failed to fetch data:', err);
       setError(err.message || 'Failed to load data');
+      setCourses([]); // Set empty array on error
     } finally {
       setLoading(false);
     }
@@ -87,18 +92,32 @@ export default function TeacherGradesPage() {
   const fetchAssessments = async (courseId: number) => {
     try {
       const assessmentsData = await api.getAssessments({ course: courseId });
-      setAssessments(assessmentsData);
+      // Ensure assessmentsData is an array
+      if (Array.isArray(assessmentsData)) {
+        setAssessments(assessmentsData);
+      } else {
+        console.error('Expected array but got:', typeof assessmentsData, assessmentsData);
+        setAssessments([]);
+      }
     } catch (err: any) {
       console.error('Failed to fetch assessments:', err);
+      setAssessments([]); // Set empty array on error
     }
   };
 
   const fetchEnrollments = async (courseId: number) => {
     try {
       const enrollmentsData = await api.getEnrollments({ course: courseId });
-      setEnrollments(enrollmentsData);
+      // Ensure enrollmentsData is an array
+      if (Array.isArray(enrollmentsData)) {
+        setEnrollments(enrollmentsData);
+      } else {
+        console.error('Expected array but got:', typeof enrollmentsData, enrollmentsData);
+        setEnrollments([]);
+      }
     } catch (err: any) {
       console.error('Failed to fetch enrollments:', err);
+      setEnrollments([]); // Set empty array on error
     }
   };
 
@@ -106,14 +125,16 @@ export default function TeacherGradesPage() {
     try {
       // Get all assessments for this course first
       const assessmentsData = await api.getAssessments({ course: courseId });
-      if (assessmentsData.length > 0 && selectedAssessment) {
+      if (Array.isArray(assessmentsData) && assessmentsData.length > 0 && selectedAssessment) {
         // Get grades only for selected assessment
         const assessmentGrades = await api.getGrades({ assessment: selectedAssessment });
-        setExistingGrades(assessmentGrades);
+        // Ensure assessmentGrades is an array
+        const gradesArray = Array.isArray(assessmentGrades) ? assessmentGrades : [];
+        setExistingGrades(gradesArray);
         
         // Pre-populate grades state with existing grades for selected assessment
         const gradesMap: Record<number, { score: string; feedback: string }> = {};
-        assessmentGrades.forEach(grade => {
+        gradesArray.forEach(grade => {
           if (grade.assessment === selectedAssessment) {
             gradesMap[grade.student] = {
               score: grade.score.toString(),
@@ -128,6 +149,8 @@ export default function TeacherGradesPage() {
       }
     } catch (err: any) {
       console.error('Failed to fetch grades:', err);
+      setExistingGrades([]);
+      setGrades({});
     }
   };
 
@@ -187,14 +210,16 @@ export default function TeacherGradesPage() {
   const accentIconClass = isDark ? 'text-indigo-400' : 'text-indigo-600';
 
   // Get students from enrollments
-  const students = enrollments
-    .filter(e => e.is_active)
-    .map(e => ({
-      id: e.student,
-      studentId: e.student_id || '-',
-      name: e.student_name,
-      email: `${e.student_id || e.student}@student.edu` // Fallback email
-    }));
+  const students = Array.isArray(enrollments) 
+    ? enrollments
+        .filter(e => e.is_active)
+        .map(e => ({
+          id: e.student,
+          studentId: e.student_id || '-',
+          name: e.student_name,
+          email: `${e.student_id || e.student}@student.edu` // Fallback email
+        }))
+    : [];
 
   // Filtrelenmiş öğrenciler
   const filteredStudents = students.filter(student =>
@@ -204,7 +229,7 @@ export default function TeacherGradesPage() {
   );
 
   // Seçili derse ait assessment'lar
-  const availableAssessments = selectedCourse
+  const availableAssessments = selectedCourse && Array.isArray(assessments)
     ? assessments.filter(a => a.course === selectedCourse)
     : [];
 
@@ -347,7 +372,7 @@ export default function TeacherGradesPage() {
 
   // Seçili assessment bilgisi
   const currentAssessment = availableAssessments.find(a => a.id === selectedAssessment);
-  const selectedCourseData = courses.find(c => c.id === selectedCourse);
+  const selectedCourseData = Array.isArray(courses) ? courses.find(c => c.id === selectedCourse) : undefined;
   
   // Assessment type label'ını al
   const getAssessmentTypeLabel = (type: string) => {
@@ -366,8 +391,27 @@ export default function TeacherGradesPage() {
     return { graded, total, average: Math.round(average * 10) / 10 };
   };
 
+  // Helper function to safely convert weight to number
+  const parseWeight = (weight: any): number => {
+    if (typeof weight === 'string') {
+      return parseFloat(weight) || 0;
+    }
+    if (typeof weight === 'number') {
+      return weight;
+    }
+    return 0;
+  };
+
   // Toplam weight hesapla
-  const totalWeight = availableAssessments.reduce((sum, a) => sum + a.weight, 0);
+  // Ensure weight is converted to number (it might come as string from backend Decimal field)
+  const totalWeight = availableAssessments.reduce((sum, a) => {
+    return sum + parseWeight(a.weight);
+  }, 0);
+
+  // Calculate total weight including new assessment (for create assessment form)
+  const calculateTotalWeightWithNew = (newWeight: any): number => {
+    return totalWeight + parseWeight(newWeight);
+  };
 
   return (
     <div className="container mx-auto py-0">
@@ -425,7 +469,7 @@ export default function TeacherGradesPage() {
               className={`w-full px-4 py-3 rounded-xl ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'} border focus:outline-none focus:ring-2 focus:ring-indigo-500`}
             >
               <option value="">-- Select a course --</option>
-              {courses.length > 0 ? courses.map(course => (
+              {Array.isArray(courses) && courses.length > 0 ? courses.map(course => (
                 <option key={course.id} value={course.id}>
                   {course.code} - {course.name} {course.semester_display ? `(${course.semester_display})` : ''}
                 </option>
@@ -1149,7 +1193,7 @@ export default function TeacherGradesPage() {
                         className={`w-full p-3 rounded-lg ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'} border transition-colors focus:ring-2 focus:ring-indigo-500 outline-none`}
                       />
                       <div className={`mt-2 p-2 rounded-lg ${
-                        (availableAssessments.reduce((sum, a) => sum + a.weight, 0) + newAssessment.weight) > 100
+                        calculateTotalWeightWithNew(newAssessment.weight) > 100
                           ? isDark ? 'bg-red-500/10 border-red-500/30' : 'bg-red-50 border-red-200'
                           : isDark ? 'bg-blue-500/10 border-blue-500/30' : 'bg-blue-50 border-blue-200'
                       } border`}>
@@ -1158,11 +1202,11 @@ export default function TeacherGradesPage() {
                           <span>
                             <span className="font-semibold text-red-500">Important:</span> All assessment weights must total exactly <span className="font-semibold">100%</span>. 
                             Current total: <span className={`font-semibold ${
-                              (availableAssessments.reduce((sum, a) => sum + a.weight, 0) + newAssessment.weight) > 100 ? 'text-red-500' : 'text-blue-500'
+                              calculateTotalWeightWithNew(newAssessment.weight) > 100 ? 'text-red-500' : 'text-blue-500'
                             }`}>
-                              {(availableAssessments.reduce((sum, a) => sum + a.weight, 0) + newAssessment.weight).toFixed(1)}%
+                              {calculateTotalWeightWithNew(newAssessment.weight).toFixed(1)}%
                             </span>
-                            {(availableAssessments.reduce((sum, a) => sum + a.weight, 0) + newAssessment.weight) > 100 && (
+                            {calculateTotalWeightWithNew(newAssessment.weight) > 100 && (
                               <span className="block mt-1 text-red-500 font-semibold">
                                 ⚠ Exceeds 100% - Cannot save!
                               </span>
@@ -1222,11 +1266,11 @@ export default function TeacherGradesPage() {
                     disabled={
                       !newAssessment.title || 
                       !newAssessment.type || 
-                      (availableAssessments.reduce((sum, a) => sum + a.weight, 0) + newAssessment.weight) > 100
+                      calculateTotalWeightWithNew(newAssessment.weight) > 100
                     }
                     className={`px-6 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed`}
                     title={
-                      (availableAssessments.reduce((sum, a) => sum + a.weight, 0) + newAssessment.weight) > 100
+                      calculateTotalWeightWithNew(newAssessment.weight) > 100
                         ? 'Total weight exceeds 100% - Cannot create assessment'
                         : ''
                     }

@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { User, Lock, Eye, EyeOff, GraduationCap, Users as UsersIcon, Building2, Sun, Moon } from 'lucide-react';
+import { User, Lock, Eye, EyeOff, GraduationCap, Users as UsersIcon, Building2, Sun, Moon, ArrowLeft } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -106,17 +106,19 @@ export default function LoginPage() {
   };
   
   // 3. ✨ GÜNCELLEME: Mounted kontrolü (Hidrasyon Çözümü)
+  // Server-side render'da tema bilgisi olmadığı için sabit bir değer kullanıyoruz
   if (!mounted) {
-    // Background sınıfını hook'tan alıyoruz (Mounted olana kadar default koyu tema)
-    const initialBackground = themeClasses.background || 'from-slate-950 via-blue-950 to-slate-950';
+    // Server-side render için sabit bir background (client-side ile aynı olmalı)
+    // Default olarak dark theme kullanıyoruz çünkü hook'ta da default dark
     return (
-      <div className={`min-h-screen bg-gradient-to-br ${initialBackground} flex items-center justify-center`}>
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-950 flex items-center justify-center">
         <div className="text-white text-xl">Loading...</div>
       </div>
     );
   }
 
   // 4. ✨ GÜNCELLEME: Tüm Tema sınıflarını hook'tan alınan değerlerle güncelliyoruz
+  // Bu kod sadece client-side'da çalışır (mounted === true olduğunda)
   const backgroundClass = themeClasses.background;
   const textColorClass = isDark ? 'text-white' : 'text-gray-900';
   const mutedTextColorClass = isDark ? 'text-gray-400' : 'text-gray-500';
@@ -161,14 +163,29 @@ export default function LoginPage() {
         />
       </div>
 
-      {/* Tema Değiştirme Düğmesi */}
+      {/* Geri Butonu - Sol Üst */}
       <motion.button
-        onClick={toggleTheme} // ✨ GÜNCELLEME: toggleTheme fonksiyonu
-        initial={{ scale: 0 }}
-        animate={{ scale: 1 }}
+        onClick={() => router.push('/')}
+        initial={{ scale: 0, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ delay: 0.1 }}
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.9 }}
-        className={`absolute top-6 right-6 p-3 rounded-full transition-colors duration-300 shadow-xl ${isDark ? 'bg-white/10 text-white hover:bg-white/20' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+        className={`absolute top-6 left-6 p-3 rounded-full transition-colors duration-300 shadow-xl backdrop-blur-sm z-20 ${isDark ? 'bg-white/10 text-white hover:bg-white/20 border border-white/20' : 'bg-white/80 text-gray-700 hover:bg-white border border-gray-200'}`}
+        title="Ana Sayfaya Dön"
+      >
+        <ArrowLeft className="w-5 h-5" />
+      </motion.button>
+
+      {/* Tema Değiştirme Düğmesi - Sağ Üst */}
+      <motion.button
+        onClick={toggleTheme}
+        initial={{ scale: 0, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ delay: 0.2 }}
+        whileHover={{ scale: 1.1 }}
+        whileTap={{ scale: 0.9 }}
+        className={`absolute top-6 right-6 p-3 rounded-full transition-colors duration-300 shadow-xl backdrop-blur-sm z-20 ${isDark ? 'bg-white/10 text-white hover:bg-white/20 border border-white/20' : 'bg-white/80 text-gray-700 hover:bg-white border border-gray-200'}`}
         title={isDark ? "Açık Tema" : "Koyu Tema"}
       >
         {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}

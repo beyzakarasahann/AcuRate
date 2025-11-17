@@ -57,12 +57,14 @@ export interface Course {
   name: string;
   description: string;
   credits: number;
-  semester: string;
+  semester: number;
   semester_display: string;
-  year: number;
+  academic_year: string;
+  department: string;
   teacher: number;
   teacher_name: string;
-  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Enrollment {
@@ -88,11 +90,14 @@ export interface Assessment {
   title: string;
   description?: string;
   assessment_type: string;
+  type_display?: string;
   weight: number;
   max_score: number;
   due_date?: string;
   is_active: boolean;
   related_pos?: number[];
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface StudentGrade {
@@ -218,10 +223,14 @@ class ApiClient {
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
     const token = TokenManager.getAccessToken();
+    const method = options.method || 'GET';
+    
+    // Store endpoint for error handling
+    const requestEndpoint = endpoint;
 
-    const headers: HeadersInit = {
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      ...(options.headers || {}),
+      ...(options.headers as Record<string, string> || {}),
     };
 
     if (token) {
@@ -272,29 +281,52 @@ class ApiClient {
           throw new Error('Failed to parse JSON response. The server may be down or returned an invalid response.');
         }
       } else {
+        // Non-JSON response (likely HTML error page from Django)
         const text = await response.text();
         if (!response.ok) {
-          throw new Error(`Server error: ${response.status} ${response.statusText}. ${text.substring(0, 200)}`);
+          // Extract meaningful error info from HTML if possible
+          let errorInfo = '';
+          if (text.includes('<title>')) {
+            // Try to extract title from HTML
+            const titleMatch = text.match(/<title>([^<]+)<\/title>/i);
+            if (titleMatch) {
+              errorInfo = titleMatch[1].trim();
+            }
+          }
+          // For 500 errors, provide a user-friendly message with endpoint info
+          if (response.status === 500) {
+            throw new Error(`Server error (500): The backend encountered an internal error on ${method} ${endpoint}. Please check the backend logs.`);
+          }
+          throw new Error(`Server error: ${response.status} ${response.statusText} on ${method} ${endpoint}. ${errorInfo || text.substring(0, 100)}`);
         }
         throw new Error('Expected JSON response but received non-JSON content');
       }
 
       if (!response.ok) {
+        // Handle server errors (500, 502, 503, etc.)
+        if (response.status >= 500) {
+          const errorMessage = data?.error || data?.message || data?.detail || 
+            `Server error (${response.status}): The backend encountered an internal error on ${method} ${endpoint}. Please check the backend logs or try again later.`;
+          throw new Error(errorMessage);
+        }
+        
         // Handle authentication errors (400, 401) with user-friendly messages
         if (response.status === 400 || response.status === 401) {
-          // Check if it's a login/authentication error
-          const errorDetail = data?.detail || data?.error || data?.message;
-          if (errorDetail && (
-            typeof errorDetail === 'string' && (
-              errorDetail.toLowerCase().includes('invalid') ||
-              errorDetail.toLowerCase().includes('credential') ||
-              errorDetail.toLowerCase().includes('password') ||
-              errorDetail.toLowerCase().includes('username') ||
-              errorDetail.toLowerCase().includes('authentication')
-            )
-          )) {
-            throw new Error('Incorrect username or password');
+          // Check for error field first (new backend format)
+          const errorMessage = data?.error || data?.message || data?.detail;
+          if (errorMessage && typeof errorMessage === 'string') {
+            if (
+              errorMessage.toLowerCase().includes('invalid') ||
+              errorMessage.toLowerCase().includes('credential') ||
+              errorMessage.toLowerCase().includes('password') ||
+              errorMessage.toLowerCase().includes('username') ||
+              errorMessage.toLowerCase().includes('authentication')
+            ) {
+              throw new Error('Incorrect username or password');
+            }
+            throw new Error(errorMessage);
           }
+          
           // Check for non_field_errors (Django REST Framework format)
           if (data?.non_field_errors && Array.isArray(data.non_field_errors) && data.non_field_errors.length > 0) {
             const firstError = data.non_field_errors[0];
@@ -308,9 +340,11 @@ class ApiClient {
             }
             throw new Error(firstError);
           }
+          
+          // Default error message
           throw new Error('Incorrect username or password');
         }
-        const errorMessage = data?.error || data?.message || data?.detail || `Request failed with status ${response.status}`;
+        const errorMessage = data?.error || data?.message || data?.detail || `Request failed with status ${response.status} on ${method} ${endpoint}`;
         throw new Error(errorMessage);
       }
 
@@ -329,15 +363,38 @@ class ApiClient {
                            error.message === 'Authentication failed' ||
                            error.message.toLowerCase().includes('incorrect username or password');
         
+        // Clean up error messages that might contain HTML
+        let cleanMessage = error.message;
+        if (cleanMessage.includes('<!DOCTYPE') || cleanMessage.includes('<html')) {
+          // Extract meaningful info from HTML error if possible
+          const titleMatch = cleanMessage.match(/<title>([^<]+)<\/title>/i);
+          if (titleMatch) {
+            cleanMessage = `Server Error: ${titleMatch[1].trim()}`;
+          } else {
+            // Try to extract endpoint from error message if available
+            const endpointMatch = cleanMessage.match(/(GET|POST|PUT|DELETE|PATCH)\s+([^\s]+)/);
+            const endpointInfo = endpointMatch ? ` on ${endpointMatch[1]} ${endpointMatch[2]}` : '';
+            cleanMessage = `Server error: The backend encountered an internal error${endpointInfo}. Please check the backend logs.`;
+          }
+        }
+        
         if (!isAuthError) {
-          console.error('API Error:', error.message);
+          console.error('API Error:', cleanMessage);
+        }
+        
+        // Update error message if it was cleaned
+        if (cleanMessage !== error.message) {
+          throw new Error(cleanMessage);
         }
         throw error;
       }
       
       // Handle unknown errors
       console.error('API Error:', error);
-      throw new Error('An unexpected error occurred');
+      // Include endpoint info if available
+      const endpointInfo = requestEndpoint ? ` on ${method} ${requestEndpoint}` : '';
+      const errorDetails = error instanceof Error ? error.message : String(error);
+      throw new Error(`An unexpected error occurred${endpointInfo}: ${errorDetails}. Please check the console for details.`);
     }
   }
 
@@ -497,7 +554,9 @@ class ApiClient {
 
   // Program Outcomes
   async getProgramOutcomes(): Promise<ProgramOutcome[]> {
-    return await this.request<ProgramOutcome[]>('/program-outcomes/');
+    const response = await this.request<ProgramOutcome[]>('/program-outcomes/');
+    // Ensure response is an array (ViewSet returns array directly)
+    return Array.isArray(response) ? response : [];
   }
 
   async getProgramOutcome(id: number): Promise<ProgramOutcome> {
@@ -505,10 +564,33 @@ class ApiClient {
   }
 
   // Courses
-  async getCourses(params?: { semester?: string; year?: number }): Promise<Course[]> {
+  async getCourses(params?: { semester?: string; academic_year?: string }): Promise<Course[]> {
     const queryParams = new URLSearchParams(params as any).toString();
     const endpoint = `/courses/${queryParams ? `?${queryParams}` : ''}`;
-    return await this.request<Course[]>(endpoint);
+    const response = await this.request<any>(endpoint);
+    console.log('🔵 API: getCourses response:', response);
+    console.log('🔵 API: Response type:', typeof response);
+    console.log('🔵 API: Is array?', Array.isArray(response));
+    console.log('🔵 API: Has results?', response && 'results' in response);
+    
+    // Handle paginated response (DRF returns { results: [...] })
+    if (response && typeof response === 'object' && 'results' in response && Array.isArray(response.results)) {
+      console.log('🔵 API: Returning paginated results:', response.results.length);
+      return response.results;
+    }
+    // If it's already an array, return as is
+    if (Array.isArray(response)) {
+      console.log('🔵 API: Returning direct array:', response.length);
+      return response;
+    }
+    // If response is an empty object or unexpected format, return empty array
+    if (response && typeof response === 'object' && Object.keys(response).length === 0) {
+      console.warn('⚠️ API: Empty object response from getCourses');
+      return [];
+    }
+    // Fallback: return empty array
+    console.warn('⚠️ API: Unexpected response format from getCourses:', response);
+    return [];
   }
 
   async getCourse(id: number): Promise<Course> {
@@ -519,21 +601,51 @@ class ApiClient {
   async getEnrollments(params?: { course?: number; student?: number }): Promise<Enrollment[]> {
     const queryParams = new URLSearchParams(params as any).toString();
     const endpoint = `/enrollments/${queryParams ? `?${queryParams}` : ''}`;
-    return await this.request<Enrollment[]>(endpoint);
+    const response = await this.request<any>(endpoint);
+    console.log('🔵 API: getEnrollments response:', response);
+    // Handle paginated response (DRF returns { results: [...] })
+    if (response && typeof response === 'object' && 'results' in response && Array.isArray(response.results)) {
+      console.log('🔵 API: Returning paginated enrollments:', response.results.length);
+      return response.results;
+    }
+    // If it's already an array, return as is
+    if (Array.isArray(response)) {
+      console.log('🔵 API: Returning direct enrollments array:', response.length);
+      return response;
+    }
+    // Fallback: return empty array
+    console.warn('⚠️ API: Unexpected response format from getEnrollments:', response);
+    return [];
   }
 
   // Grades
   async getGrades(params?: { student?: number; assessment?: number }): Promise<StudentGrade[]> {
     const queryParams = new URLSearchParams(params as any).toString();
     const endpoint = `/grades/${queryParams ? `?${queryParams}` : ''}`;
-    return await this.request<StudentGrade[]>(endpoint);
+    const response = await this.request<any>(endpoint);
+    console.log('🔵 API: getGrades response:', response);
+    // Handle paginated response (DRF returns { results: [...] })
+    if (response && typeof response === 'object' && 'results' in response && Array.isArray(response.results)) {
+      console.log('🔵 API: Returning paginated grades:', response.results.length);
+      return response.results;
+    }
+    // If it's already an array, return as is
+    if (Array.isArray(response)) {
+      console.log('🔵 API: Returning direct grades array:', response.length);
+      return response;
+    }
+    // Fallback: return empty array
+    console.warn('⚠️ API: Unexpected response format from getGrades:', response);
+    return [];
   }
 
   // PO Achievements
   async getPOAchievements(params?: { student?: number; program_outcome?: number }): Promise<StudentPOAchievement[]> {
     const queryParams = new URLSearchParams(params as any).toString();
     const endpoint = `/po-achievements/${queryParams ? `?${queryParams}` : ''}`;
-    return await this.request<StudentPOAchievement[]>(endpoint);
+    const response = await this.request<StudentPOAchievement[]>(endpoint);
+    // Ensure response is an array (ViewSet returns array directly)
+    return Array.isArray(response) ? response : [];
   }
 
   // Assessments
@@ -586,6 +698,61 @@ class ApiClient {
     return await this.request<void>(`/grades/${id}/`, {
       method: 'DELETE',
     });
+  }
+
+  // Course Analytics
+  async getCourseAnalytics(): Promise<{
+    success: boolean;
+    courses: Array<{
+      course_id: number;
+      course_code: string;
+      course_name: string;
+      instructor: string;
+      semester: string;
+      class_average: number;
+      class_median: number;
+      class_size: number;
+      user_score: number | null;
+      user_percentile: number | null;
+      trend: 'up' | 'down' | 'neutral';
+    }>;
+  }> {
+    return await this.request('/course-analytics/');
+  }
+
+  async getCourseAnalyticsDetail(courseId: number): Promise<{
+    success: boolean;
+    course: {
+      id: number;
+      code: string;
+      name: string;
+      instructor: string;
+      semester: string;
+    };
+    analytics: {
+      class_average: number;
+      class_median: number;
+      class_size: number;
+      highest_score: number;
+      lowest_score: number;
+      user_score: number | null;
+      user_percentile: number | null;
+      score_distribution: number[];
+      boxplot_data: {
+        min: number;
+        q1: number;
+        median: number;
+        q3: number;
+        max: number;
+      };
+      assessment_comparison: Array<{
+        assessment: string;
+        class_average: number;
+        user_score: number | null;
+      }>;
+    };
+  }> {
+    return await this.request(`/course-analytics/${courseId}/`);
   }
 }
 

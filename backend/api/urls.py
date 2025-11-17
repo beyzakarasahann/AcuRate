@@ -11,6 +11,8 @@ from .views import (
     login_view, logout_view, current_user_view, register_view,
     # Dashboard views
     student_dashboard, teacher_dashboard, institution_dashboard,
+    # Course Analytics views
+    course_analytics_overview, course_analytics_detail,
     # Contact views
     create_contact_request,
     # ViewSets
@@ -44,6 +46,10 @@ urlpatterns = [
     path('dashboard/student/', student_dashboard, name='student-dashboard'),
     path('dashboard/teacher/', teacher_dashboard, name='teacher-dashboard'),
     path('dashboard/institution/', institution_dashboard, name='institution-dashboard'),
+    
+    # Course Analytics endpoints
+    path('course-analytics/', course_analytics_overview, name='course-analytics-overview'),
+    path('course-analytics/<int:course_id>/', course_analytics_detail, name='course-analytics-detail'),
     
     # Contact endpoints
     path('contact/', create_contact_request, name='create-contact-request'),

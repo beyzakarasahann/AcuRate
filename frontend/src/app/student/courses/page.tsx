@@ -91,6 +91,12 @@ export default function CoursesPage() {
         // For other errors, continue with empty arrays
       }
 
+      // Ensure all responses are arrays (defensive programming)
+      enrollments = Array.isArray(enrollments) ? enrollments : [];
+      allGrades = Array.isArray(allGrades) ? allGrades : [];
+      poAchievements = Array.isArray(poAchievements) ? poAchievements : [];
+      allAssessments = Array.isArray(allAssessments) ? allAssessments : [];
+
       // Transform enrollments to course data
       const courses: CourseData[] = enrollments.map((enrollment) => {
         // Get grades for this course

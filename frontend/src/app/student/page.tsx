@@ -5,7 +5,8 @@ import { motion } from 'framer-motion';
 import { Award, BookOpen, CheckSquare, Trophy, ArrowUpRight, ArrowDownRight, TrendingUp, AlertTriangle, Loader2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useThemeColors } from '@/hooks/useThemeColors';
-import { api, type DashboardData, type Enrollment, type StudentPOAchievement } from '@/lib/api'; 
+import { api, type DashboardData, type Enrollment, type StudentPOAchievement } from '@/lib/api';
+import Link from 'next/link'; 
 import { 
     Chart as ChartJS, 
     CategoryScale, 
@@ -379,26 +380,79 @@ export default function StudentHomePage() {
                 </motion.div>
             </div>
 
-            {/* Sağ Sütun (Course Bar Chart ve Alerts) */}
+            {/* Sağ Sütun (My Courses & Grades ve Alerts) */}
             <div className="space-y-6">
 
-                 {/* Current Course Grades Bar Chart */}
+                 {/* My Courses & Grades */}
                  <motion.div
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.4 }}
-                    className={`backdrop-blur-xl ${themeClasses.card} p-6 shadow-2xl h-96`}
+                    className={`backdrop-blur-xl ${themeClasses.card} p-6 shadow-2xl`}
                 >
-                    <h2 className={`text-xl font-bold ${whiteTextClass} mb-4 flex items-center gap-2`}>
-                        <BookOpen className={`w-5 h-5 ${accentIconClass}`} />
-                        Current Courses PO Performance
-                    </h2>
-                    <div className="h-72">
-                        {hasCourseData ? (
-                            <Bar data={courseGradesData} options={dynamicBarOptions} />
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className={`text-xl font-bold ${whiteTextClass} flex items-center gap-2`}>
+                            <BookOpen className={`w-5 h-5 ${accentIconClass}`} />
+                            My Courses & Grades
+                        </h2>
+                        <Link 
+                            href="/student/courses"
+                            className={`text-sm ${accentIconClass} hover:underline flex items-center gap-1`}
+                        >
+                            View All
+                            <ArrowUpRight className="w-4 h-4" />
+                        </Link>
+                    </div>
+                    <div className="space-y-3">
+                        {activeCourses.length > 0 ? (
+                            activeCourses.slice(0, 5).map((enrollment, index) => {
+                                // Find grades for this course
+                                const courseGrades = dashboardData.recent_grades?.filter(g => {
+                                    // We need to check if grade's assessment belongs to this course
+                                    // For now, we'll show enrollment info
+                                    return true; // Simplified for now
+                                }) || [];
+                                
+                                const finalGrade = enrollment.final_grade !== null && enrollment.final_grade !== undefined
+                                    ? enrollment.final_grade
+                                    : '-';
+                                
+                                return (
+                                    <motion.div
+                                        key={enrollment.id || index}
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ delay: 0.5 + index * 0.1 }}
+                                        className={`p-4 rounded-xl border ${isDark ? 'bg-white/5 border-white/10 hover:bg-white/10' : 'bg-gray-50 border-gray-200 hover:bg-gray-100'} transition-all`}
+                                    >
+                                        <div className="flex items-start justify-between">
+                                            <div className="flex-1">
+                                                <h3 className={`font-semibold ${whiteTextClass} mb-1`}>
+                                                    {enrollment.course_code || 'N/A'}
+                                                </h3>
+                                                <p className={`text-sm ${secondaryTextClass} mb-2`}>
+                                                    {enrollment.course_name || 'Unknown Course'}
+                                                </p>
+                                                <div className="flex items-center gap-4 text-sm">
+                                                    <span className={secondaryTextClass}>
+                                                        Status: <span className={enrollment.is_active ? 'text-green-500' : 'text-gray-500'}>
+                                                            {enrollment.is_active ? 'In Progress' : 'Completed'}
+                                                        </span>
+                                                    </span>
+                                                    <span className={secondaryTextClass}>
+                                                        Grade: <span className={`font-semibold ${whiteTextClass}`}>
+                                                            {typeof finalGrade === 'number' ? finalGrade.toFixed(1) : finalGrade}
+                                                        </span>
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </motion.div>
+                                );
+                            })
                         ) : (
-                            <div className="flex items-center justify-center h-full">
-                                <p className={secondaryTextClass}>No course data available</p>
+                            <div className="flex items-center justify-center py-8">
+                                <p className={secondaryTextClass}>No courses enrolled</p>
                             </div>
                         )}
                     </div>
@@ -420,11 +474,15 @@ export default function StudentHomePage() {
                             poAchievements
                                 .filter(po => (po.achievement_percentage || 0) < (po.target_percentage || 0))
                                 .slice(0, 2)
-                                .map((po, index) => (
-                                    <p key={index} className={`${secondaryTextClass} text-sm p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-700 dark:text-red-300`}>
-                                        <strong>{po.po_code}</strong> PO Achievement is below target. Current: {po.achievement_percentage?.toFixed(1)}%, Target: {po.target_percentage?.toFixed(1)}%
-                                    </p>
-                                ))
+                                .map((po, index) => {
+                                    const achievement = Number(po.achievement_percentage) || 0;
+                                    const target = Number(po.target_percentage) || 0;
+                                    return (
+                                        <p key={index} className={`${secondaryTextClass} text-sm p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-700 dark:text-red-300`}>
+                                            <strong>{po.po_code}</strong> PO Achievement is below target. Current: {achievement.toFixed(1)}%, Target: {target.toFixed(1)}%
+                                        </p>
+                                    );
+                                })
                         ) : (
                             <p className={`${secondaryTextClass} text-sm p-3 rounded-xl ${isDark ? 'bg-gray-500/10 border-gray-500/30' : 'bg-gray-100 border-gray-200'}`}>
                                 No notifications

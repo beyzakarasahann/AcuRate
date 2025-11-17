@@ -17,7 +17,9 @@ export function useThemeColors() {
     setMounted(true); 
   }, []);
 
-  const isDark = resolvedTheme === "dark";
+  // Server-side render'da resolvedTheme undefined olabilir, bu yüzden default olarak dark kullanıyoruz
+  // Bu, server ve client arasındaki hydration mismatch'i önler
+  const isDark = mounted ? (resolvedTheme === "dark") : true; // Default: dark theme
 
   // Renk hesaplamaları (Öncekiyle aynı, sadece mounted geri döndürülecek)
   const ACCENT_GRADIENT_START = isDark ? "#4F46E5" : "#4F46E5"; // indigo-600

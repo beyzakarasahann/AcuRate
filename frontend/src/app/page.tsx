@@ -45,15 +45,19 @@ export default function HomePage() {
     themeClasses, 
     accentGradientClass, 
     accentStart,
-    accentEnd 
+    accentEnd
   } = useThemeColors();
 
   // Parallax efekti için scroll verisini alıyoruz
   const { scrollYProgress } = useScroll({ target: mainRef });
   const yParallax = useTransform(scrollYProgress, [0, 1], ["0px", "200px"]);
 
-  // Dinamik olarak değişen Blur rengi sınıfı
-  const blurColorClass = isDark ? 'dark:bg-purple-900/20' : 'bg-indigo-200/50';
+  // Dinamik olarak değişen Blur rengi sınıfı - SSR uyumluluğu için her iki tema sınıfını da kullan
+  // Bu şekilde sunucu ve istemcide aynı className render edilir, Tailwind dark mode otomatik çalışır
+  const blurColorClass = 'bg-indigo-200/50 dark:bg-purple-900/20';
+  
+  // Background gradient sınıfı - SSR uyumluluğu için her iki tema sınıfını da kullan
+  const backgroundClass = 'from-gray-50 via-white to-gray-100 dark:from-slate-950 dark:via-blue-950 dark:to-slate-950';
   
   // Feature Card Hover Gölge Stilleri (HEX kodlarına ihtiyacımız olduğu için dinamik stil)
   // 3. Hidrasyon hatasını önlemek için dinamik stilleri sadece 'mounted' ise hesapla.
@@ -75,9 +79,9 @@ export default function HomePage() {
 
       <main
         ref={mainRef}
-        // ✅ GÜNCELLEME 1: Arka plan gradient sınıfı hook'tan alındı.
+        // ✅ GÜNCELLEME 1: Arka plan gradient sınıfı hook'tan alındı, SSR uyumlu.
         className={`relative flex flex-col items-center justify-start overflow-x-hidden 
-                   bg-gradient-to-br ${themeClasses.background} 
+                   bg-gradient-to-br ${backgroundClass} 
                    text-center selection:bg-indigo-600/10 dark:selection:text-indigo-300 dark:text-white`}
       >
         {/* === BACKGROUND LAYERS === */}
@@ -86,7 +90,7 @@ export default function HomePage() {
         {/* Blur Circle (Parallax) */}
         <motion.div
           style={{ y: yParallax }}
-          // ✅ GÜNCELLEME 2: Blur rengi, dinamik değişkene atandı.
+          // ✅ GÜNCELLEME 2: Blur rengi, dinamik değişkene atandı, SSR uyumlu.
           className={`absolute -top-48 left-1/2 -translate-x-1/2 w-[900px] h-[900px] 
                      ${blurColorClass} blur-[160px] rounded-full opacity-70 z-10`}
         />
