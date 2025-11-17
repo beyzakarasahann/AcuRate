@@ -5,11 +5,12 @@ AcuRate, üniversiteler, okullar ve eğitim kurumları için kapsamlı bir akade
 ## 🎯 Özellikler
 
 ### 👨‍🎓 Öğrenci Paneli
-- **Dashboard**: Genel performans özeti, GPA, tamamlanan dersler, aktif kurslar
-- **Kurslar**: Aldığı dersler, notlar, assessment'lar, final notları
-- **Program Çıktıları**: PO başarıları, hedef karşılaştırmaları, ilerleme takibi
-- **Analytics**: GPA trendleri, kategori bazlı performans, anonim sıralama
-- **Settings**: Profil yönetimi, şifre değiştirme
+- **Dashboard**: Genel performans özeti, GPA, tamamlanan dersler, aktif kurslar (✅ API entegre)
+- **Kurslar**: Aldığı dersler, notlar, assessment'lar, final notları (✅ API entegre)
+- **Program Çıktıları**: PO başarıları, hedef karşılaştırmaları, ilerleme takibi (✅ API entegre)
+- **Analytics**: GPA trendleri, kategori bazlı performans, anonim sıralama (✅ API entegre)
+- **Course Analytics**: Kurs bazlı detaylı analitikler, sınıf ortalaması, percentile karşılaştırması (🆕 YENİ)
+- **Settings**: Profil yönetimi, şifre değiştirme (✅ API entegre)
 
 ### 👨‍🏫 Öğretmen Paneli
 - **Dashboard**: Kurs istatistikleri, öğrenci sayıları, bekleyen değerlendirmeler
@@ -137,6 +138,12 @@ AcuRate/
 │   │   ├── app/           # Next.js App Router pages
 │   │   │   ├── login/     # Login sayfası
 │   │   │   ├── student/   # Öğrenci sayfaları
+│   │   │   │   ├── page.tsx              # Dashboard (✅ API)
+│   │   │   │   ├── analytics/            # Analytics (✅ API)
+│   │   │   │   ├── courses/             # Courses (✅ API)
+│   │   │   │   ├── outcomes/            # PO Outcomes (✅ API)
+│   │   │   │   ├── course-analytics/    # Course Analytics (🆕 YENİ)
+│   │   │   │   └── settings/            # Settings (✅ API)
 │   │   │   ├── teacher/   # Öğretmen sayfaları
 │   │   │   ├── institution/ # Kurum sayfaları
 │   │   │   └── contact/   # İletişim formu
@@ -153,9 +160,10 @@ AcuRate/
 Test verileri oluşturulduktan sonra şu hesaplarla giriş yapabilirsiniz:
 
 ### Öğrenci
-- **Username**: `beyza.karasahan` veya `beyza2`
-- **Password**: `beyza123`
+- **Username**: `beyza.karasahan` veya `beyza2` veya `student1`
+- **Password**: `beyza123` veya `student123`
 - **Email**: `beyza.karasahan@live.acibadem.edu.tr`
+- **Not**: Tüm öğrenciler için kapsamlı test verileri mevcut (kurslar, notlar, PO başarıları)
 
 ### Öğretmen
 - **Username**: `teacher1` veya `teacher2`
@@ -178,6 +186,10 @@ Test verileri oluşturulduktan sonra şu hesaplarla giriş yapabilirsiniz:
 - `GET /api/dashboard/teacher/` - Öğretmen dashboard
 - `GET /api/dashboard/institution/` - Kurum dashboard
 
+### Course Analytics (🆕 YENİ)
+- `GET /api/course-analytics/` - Öğrencinin tüm kurslarının analitik özeti
+- `GET /api/course-analytics/<course_id>/` - Belirli bir kursun detaylı analitiği
+
 ### CRUD Endpoints
 - `/api/users/` - Kullanıcı yönetimi
 - `/api/courses/` - Kurs yönetimi
@@ -191,6 +203,11 @@ Test verileri oluşturulduktan sonra şu hesaplarla giriş yapabilirsiniz:
 ### Contact
 - `POST /api/contact/` - İletişim formu gönderimi (public)
 
+### User Management
+- `GET /api/users/me/` - Mevcut kullanıcı bilgisi
+- `PATCH /api/users/me/` - Profil güncelleme
+- `POST /api/users/me/change-password/` - Şifre değiştirme
+
 ## 🎨 Özellikler ve Özelleştirmeler
 
 ### Tema Sistemi
@@ -203,6 +220,7 @@ Test verileri oluşturulduktan sonra şu hesaplarla giriş yapabilirsiniz:
 - Bar charts (Kurs performansları)
 - Doughnut charts (PO başarıları)
 - Stat cards (Özet bilgiler)
+- Course analytics charts (🆕 Sınıf ortalaması, percentile karşılaştırmaları)
 
 ### Form Validasyonları
 - Assessment weight toplamı %100 kontrolü
@@ -299,7 +317,28 @@ npm run lint
 
 ## 📝 Son Yapılan Değişiklikler
 
-### Backend
+### 🆕 Yeni Özellikler (Son Güncellemeler)
+
+#### Course Analytics (Kurs Analitiği) - YENİ
+- ✅ **Backend**: Kurs bazlı analitik endpoint'leri eklendi
+  - `/api/course-analytics/` - Öğrencinin tüm kurslarının özet analitiği
+  - `/api/course-analytics/<course_id>/` - Detaylı kurs analitiği
+  - Sınıf ortalaması, öğrenci percentile, trend analizi
+- ✅ **Frontend**: Yeni sayfalar eklendi
+  - `/student/course-analytics` - Kurs listesi ve özet analitikler
+  - `/student/course-analytics/[courseId]` - Detaylı kurs analitiği sayfası
+  - Sınıf ortalaması karşılaştırması, percentile gösterimi
+
+#### Veri Zenginleştirme
+- ✅ **Migration 0004**: Tüm öğrenciler için kapsamlı test verileri
+  - Kurs kayıtları, assessment'lar, notlar
+  - PO başarı verileri
+  - Gerçekçi veri setleri
+- ✅ **Migration 0005**: beyza2 öğrencisi için çeşitli PO başarı yüzdeleri
+  - Bazı PO'lar yüksek (95%, 92%), bazıları düşük (65%)
+  - Daha gerçekçi test senaryoları
+
+### Backend Geliştirmeleri
 - ✅ PostgreSQL veritabanı entegrasyonu
 - ✅ Contact Request modeli ve API endpoint'i
 - ✅ User profile update ve password change endpoint'leri
@@ -307,16 +346,37 @@ npm run lint
 - ✅ Field error düzeltmeleri (enrollment_date → enrolled_at)
 - ✅ PO Achievement serializer düzeltmeleri
 - ✅ Admin panel iyileştirmeleri
+- ✅ **Course Analytics API endpoints** (🆕 YENİ)
+- ✅ **Kapsamlı test verisi migration'ları** (🆕 YENİ)
 
-### Frontend
+### Frontend Geliştirmeleri
 - ✅ Tüm mock data'lar kaldırıldı, backend entegrasyonu tamamlandı
 - ✅ Contact sayfası (B2B landing page)
 - ✅ Navbar ve Footer entegrasyonu
-- ✅ Student analytics sayfası (ranking eklendi)
-- ✅ Student settings sayfası (profil ve şifre değiştirme)
+- ✅ Student analytics sayfası (ranking eklendi) - **API entegre**
+- ✅ Student settings sayfası (profil ve şifre değiştirme) - **API entegre**
+- ✅ Student dashboard - **API entegre**
+- ✅ Student courses sayfası - **API entegre**
+- ✅ Student outcomes sayfası - **API entegre**
+- ✅ **Course Analytics sayfaları** (🆕 YENİ) - **API entegre**
 - ✅ Error handling iyileştirmeleri
 - ✅ Empty state'ler ve loading state'ler
 - ✅ Interface güncellemeleri (backend ile uyumlu)
+
+### 📊 Entegrasyon Durumu
+
+| Sayfa/Özellik | Durum | Notlar |
+|--------------|-------|--------|
+| Login | ✅ %100 | JWT authentication çalışıyor |
+| Student Dashboard | ✅ %100 | API'den veri çekiyor |
+| Student Analytics | ✅ %100 | API'den veri çekiyor |
+| Student Courses | ✅ %100 | API'den veri çekiyor |
+| Student Outcomes | ✅ %100 | API'den veri çekiyor |
+| Student Course Analytics | ✅ %100 | 🆕 YENİ - API entegre |
+| Student Settings | ✅ %100 | Profil ve şifre güncelleme çalışıyor |
+| Teacher Dashboard | 🔄 %50 | Placeholder, API'ye bağlanacak |
+| Institution Dashboard | 🔄 %50 | Placeholder, API'ye bağlanacak |
+| Contact Form | ✅ %100 | API entegre |
 
 ## 🤝 Katkıda Bulunma
 
@@ -340,6 +400,177 @@ Bu proje özel bir projedir.
 ## 📞 İletişim
 
 Kurumsal demo talepleri için: `/contact` sayfasını kullanın.
+
+## 📚 Ek Dokümantasyon
+
+Proje hakkında daha detaylı bilgi için:
+- `API_INTEGRATION_GUIDE.md` - API kullanım kılavuzu ve örnekler
+- `QUICK_START.md` - Hızlı başlangıç rehberi
+- `NEXT_STEPS.md` - Devam edilecek işler ve roadmap
+- `SESSION_SUMMARY.md` - Geliştirme süreci özeti
+- `TROUBLESHOOTING.md` - Sorun giderme rehberi
+
+## 🎯 Proje Durumu
+
+**Mevcut Versiyon**: v1.2.0  
+**Son Güncelleme**: Kasım 2024
+
+### Tamamlanan Özellikler ✅
+- ✅ Backend REST API (35+ endpoint)
+- ✅ JWT Authentication sistemi
+- ✅ PostgreSQL veritabanı
+- ✅ Student paneli (tüm sayfalar API entegre)
+- ✅ Course Analytics özelliği
+- ✅ Contact form
+- ✅ Role-based routing ve middleware
+- ✅ Dark/Light mode
+- ✅ Responsive design
+
+### Devam Eden Geliştirmeler 🔄
+- 🔄 Teacher paneli API entegrasyonu
+- 🔄 Institution paneli API entegrasyonu
+- 🔄 API dokümantasyonu (Swagger)
+- 🔄 Unit testler
+- 🔄 Performance optimizasyonu
+
+## 🔍 İncelenmesi ve Geliştirilmesi Gereken Kısımlar
+
+### 🚨 Yüksek Öncelikli Eksikler
+
+#### Backend
+- [ ] **API Dokümantasyonu**: Swagger/OpenAPI entegrasyonu yok
+- [ ] **Unit Testler**: Test coverage %0, hiç test yazılmamış
+- [ ] **Production Ayarları**: `DEBUG=True` production'da açık, güvenlik riski
+- [ ] **Error Handling**: Detaylı hata mesajları ve logging eksik
+- [ ] **Rate Limiting**: API rate limiting yok, DDoS riski
+- [ ] **Input Validation**: Bazı endpoint'lerde yeterli validasyon yok
+- [ ] **File Upload**: Profil resmi ve dosya yükleme endpoint'leri eksik
+- [ ] **Bulk Operations**: Toplu not girişi, CSV import/export yok
+
+#### Frontend - Teacher Paneli
+- [ ] **Teacher Dashboard**: PO achievement hesaplama TODO olarak işaretli (satır 257)
+- [ ] **Teacher PO Management**: Mock data kullanıyor, API entegrasyonu yok
+- [ ] **Teacher Settings**: Sayfa eksik, implement edilmemiş
+- [ ] **Teacher Courses**: Detaylı kurs yönetimi sayfası eksik
+- [ ] **Grade Export/Import**: Export ve Import butonları var ama fonksiyonel değil
+
+#### Frontend - Institution Paneli
+- [ ] **Institution Dashboard**: Mock data kullanıyor, API'ye bağlanmamış
+- [ ] **Institution Analytics**: Sayfa eksik veya mock data ile çalışıyor
+- [ ] **Institution Reports**: Export functionality eksik
+- [ ] **Department Statistics**: API'den veri çekilmiyor
+
+### ⚠️ Orta Öncelikli İyileştirmeler
+
+#### UI/UX
+- [ ] **Toast Notifications**: Başarı/hata bildirimleri için toast sistemi yok
+- [ ] **Loading Skeletons**: Skeleton screens yerine basit spinner kullanılıyor
+- [ ] **Empty States**: Bazı sayfalarda empty state tasarımları eksik
+- [ ] **Confirmation Modals**: Silme/önemli işlemler için onay modal'ları eksik
+- [ ] **Form Validation**: Client-side form validasyon mesajları eksik
+- [ ] **Accessibility**: ARIA labels, keyboard navigation eksik
+- [ ] **Mobile Responsiveness**: Bazı sayfalar mobilde test edilmemiş
+
+#### Backend Performance
+- [ ] **Database Query Optimization**: N+1 query problemleri olabilir
+- [ ] **Caching**: Redis cache entegrasyonu yok
+- [ ] **Pagination**: Bazı list endpoint'lerinde pagination eksik
+- [ ] **Database Indexing**: Performans için index'ler optimize edilmeli
+
+#### Frontend Performance
+- [ ] **Data Caching**: React Query veya SWR kullanılmıyor
+- [ ] **Code Splitting**: Lazy loading eksik, bundle size büyük olabilir
+- [ ] **Image Optimization**: Next.js Image component kullanılmıyor
+- [ ] **API Request Optimization**: Gereksiz API çağrıları olabilir
+
+### 📋 Düşük Öncelikli Özellikler
+
+#### Advanced Features
+- [ ] **Real-time Updates**: WebSocket entegrasyonu yok
+- [ ] **Notification System**: Bildirim sistemi eksik
+- [ ] **Search & Filters**: Gelişmiş arama ve filtreleme eksik
+- [ ] **Data Export**: PDF, Excel, CSV export fonksiyonları eksik
+- [ ] **Multi-language Support**: i18n entegrasyonu yok
+- [ ] **Advanced Analytics**: Karşılaştırma raporları, trend analizi eksik
+- [ ] **Custom Report Builder**: Özel rapor oluşturma özelliği yok
+- [ ] **Email Notifications**: Email bildirim sistemi yok
+
+#### Security & Compliance
+- [ ] **Security Audit**: Güvenlik denetimi yapılmamış
+- [ ] **XSS Protection**: Input sanitization kontrol edilmeli
+- [ ] **SQL Injection**: ORM kullanılıyor ama ek kontroller gerekebilir
+- [ ] **CSRF Protection**: Django CSRF var ama frontend'de kontrol edilmeli
+- [ ] **Password Policy**: Şifre güvenlik kuralları eksik
+- [ ] **Audit Logging**: Kullanıcı aktivite logları eksik
+
+#### DevOps & Deployment
+- [ ] **CI/CD Pipeline**: Otomatik test ve deploy pipeline yok
+- [ ] **Docker**: Containerization yok
+- [ ] **Environment Management**: Production/staging environment setup eksik
+- [ ] **Monitoring**: Application monitoring (Sentry, LogRocket vb.) yok
+- [ ] **Backup Strategy**: Veritabanı yedekleme stratejisi yok
+
+### 🐛 Bilinen Sorunlar ve TODO'lar
+
+#### Kod İçinde TODO İşaretleri
+- `frontend/src/app/student/page.tsx:261` - PO data hesaplama TODO
+- `frontend/src/app/teacher/page.tsx:257` - PO achievement hesaplama TODO
+- `backend/api/views.py:619` - GPA hesaplama notu (4.0 scale conversion)
+
+#### Mock Data Kullanılan Yerler
+- `frontend/src/app/institution/page.tsx` - Tüm veriler mock
+- `frontend/src/app/teacher/po-management/page.tsx` - Mock courses ve PO'lar
+- Teacher dashboard'da bazı statik veriler
+
+#### Eksik Sayfalar
+- `/teacher/settings` - Teacher settings sayfası yok
+- `/teacher/courses` - Detaylı kurs yönetimi sayfası eksik
+- `/institution/analytics` - Analytics sayfası eksik veya mock data
+- `/institution/reports` - Reports sayfası eksik
+
+### 📊 Öncelik Matrisi
+
+| Öncelik | Kategori | Özellik | Durum |
+|---------|----------|---------|-------|
+| 🔴 Yüksek | Backend | API Dokümantasyonu | ❌ Eksik |
+| 🔴 Yüksek | Backend | Unit Testler | ❌ Eksik |
+| 🔴 Yüksek | Backend | Production Security | ⚠️ DEBUG=True |
+| 🔴 Yüksek | Frontend | Institution API Entegrasyonu | ❌ Mock Data |
+| 🔴 Yüksek | Frontend | Teacher PO Management API | ❌ Mock Data |
+| 🟡 Orta | UI/UX | Toast Notifications | ❌ Eksik |
+| 🟡 Orta | UI/UX | Loading Skeletons | ⚠️ Basit Spinner |
+| 🟡 Orta | Performance | Caching (Redis) | ❌ Eksik |
+| 🟡 Orta | Performance | Database Optimization | ⚠️ İyileştirilebilir |
+| 🟢 Düşük | Advanced | Real-time Updates | ❌ Eksik |
+| 🟢 Düşük | Advanced | Email Notifications | ❌ Eksik |
+| 🟢 Düşük | DevOps | CI/CD Pipeline | ❌ Eksik |
+| 🟢 Düşük | DevOps | Docker | ❌ Eksik |
+
+### 🎯 Önerilen Geliştirme Sırası
+
+1. **Phase 1 (Kritik)**: Production hazırlığı
+   - Production security ayarları (DEBUG=False)
+   - API dokümantasyonu (Swagger)
+   - Temel unit testler
+   - Error handling iyileştirmeleri
+
+2. **Phase 2 (Yüksek Öncelik)**: Eksik entegrasyonlar
+   - Institution dashboard API entegrasyonu
+   - Teacher PO Management API entegrasyonu
+   - Teacher Settings sayfası
+   - Grade Export/Import fonksiyonları
+
+3. **Phase 3 (Orta Öncelik)**: UI/UX iyileştirmeleri
+   - Toast notification sistemi
+   - Loading skeletons
+   - Form validasyonları
+   - Accessibility iyileştirmeleri
+
+4. **Phase 4 (Düşük Öncelik)**: Advanced features
+   - Real-time updates
+   - Email notifications
+   - Advanced analytics
+   - Multi-language support
 
 ---
 
