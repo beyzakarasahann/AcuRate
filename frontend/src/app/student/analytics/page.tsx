@@ -191,6 +191,12 @@ export default function AnalyticsPage() {
         // For other errors, continue with empty arrays
       }
 
+      // Ensure all responses are arrays (defensive programming)
+      enrollmentsData = Array.isArray(enrollmentsData) ? enrollmentsData : [];
+      gradesData = Array.isArray(gradesData) ? gradesData : [];
+      assessmentsData = Array.isArray(assessmentsData) ? assessmentsData : [];
+      coursesData = Array.isArray(coursesData) ? coursesData : [];
+
       setDashboardData(dashboard);
       setEnrollments(enrollmentsData);
       setGrades(gradesData);
@@ -223,7 +229,7 @@ export default function AnalyticsPage() {
         const course = courses.find(c => c.id === e.course);
         // Use course semester/year or enrollment date
         const semester = course 
-          ? `${course.semester_display || course.semester || ''} ${course.year || ''}`.trim() || `Semester ${index + 1}`
+          ? `${course.semester_display || course.semester || ''} ${course.academic_year || ''}`.trim() || `Semester ${index + 1}`
           : `Semester ${index + 1}`;
         return {
           semester: semester,
@@ -252,11 +258,10 @@ export default function AnalyticsPage() {
   }));
 
   // Calculate projections
+  // Backend now returns GPA on 4.0 scale
   const currentCGPA = dashboardData?.overall_gpa || 0;
   const totalCredits = dashboardData?.total_credits || 0;
   const completedCourses = dashboardData?.completed_courses || 0;
-  const requiredCredits = 128; // Default, can be adjusted
-  const remainingCredits = Math.max(0, requiredCredits - totalCredits);
   
   // Project future GPA (simple linear projection)
   const projectedFinalCGPA = gpaHistory.length >= 2
@@ -329,7 +334,7 @@ export default function AnalyticsPage() {
         variants={container}
         initial="hidden"
         animate="show"
-        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-8"
+        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8"
       >
         {/* Mevcut CGPA */}
         <motion.div variants={item} className={`${themeClasses.card} p-6 shadow-2xl rounded-xl border ${isDark ? 'border-white/10' : 'border-gray-200'} text-center`}>
@@ -352,14 +357,6 @@ export default function AnalyticsPage() {
             <p className={mutedText}>Completed Courses</p>
             <p className={`text-4xl font-extrabold ${whiteText} mt-2 flex justify-center items-center gap-2`}>
                 <Award className="w-6 h-6 text-blue-500" /> {completedCourses > 0 ? completedCourses : '-'}
-            </p>
-        </motion.div>
-        
-        {/* Kalan Krediler */}
-        <motion.div variants={item} className={`${themeClasses.card} p-6 shadow-2xl rounded-xl border ${isDark ? 'border-white/10' : 'border-gray-200'} text-center`}>
-            <p className={mutedText}>Remaining Credits</p>
-            <p className={`text-4xl font-extrabold ${whiteText} mt-2`}>
-                {remainingCredits > 0 ? remainingCredits : '-'} / {requiredCredits}
             </p>
         </motion.div>
 

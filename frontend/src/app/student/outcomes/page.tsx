@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import { useThemeColors } from '@/hooks/useThemeColors'; 
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Doughnut } from 'react-chartjs-2';
-import { api, type ProgramOutcome, type StudentPOAchievement, type Enrollment, type Assessment } from '@/lib/api';
+import { api, TokenManager, type ProgramOutcome, type StudentPOAchievement, type Enrollment, type Assessment } from '@/lib/api';
 
 // Doughnut Chart'ı kaydetme
 ChartJS.register(ArcElement, Tooltip, Legend);
@@ -69,40 +69,155 @@ export default function OutcomesPage() {
       setLoading(true);
       setError(null);
       
-      // Fetch all required data
+      // Fetch all required data with individual error handling
       let programOutcomes: ProgramOutcome[] = [];
       let poAchievements: StudentPOAchievement[] = [];
       let enrollments: Enrollment[] = [];
       let assessments: Assessment[] = [];
 
-      try {
-        [programOutcomes, poAchievements, enrollments, assessments] = await Promise.all([
-          api.getProgramOutcomes(),
-          api.getPOAchievements(),
-          api.getEnrollments(),
-          api.getAssessments()
-        ]);
-      } catch (apiError: any) {
-        console.error('API Error:', apiError);
-        // If API fails, show empty state
-        if (apiError.message?.includes('500') || apiError.message?.includes('enrollment')) {
-          setProgramOutcomesData([]);
-          setLoading(false);
-          return;
+      // Check authentication first
+      const isAuthenticated = TokenManager.isAuthenticated();
+      const token = TokenManager.getAccessToken();
+      console.log('🔐 Authentication check:', isAuthenticated);
+      console.log('🔐 Token exists:', !!token);
+      console.log('🔐 Token preview:', token ? `${token.substring(0, 20)}...` : 'none');
+      
+      if (!isAuthenticated || !token) {
+        console.error('❌ User is not authenticated! Redirecting to login...');
+        setError('Please log in to view program outcomes.');
+        setLoading(false);
+        if (typeof window !== 'undefined') {
+          window.location.href = '/login';
         }
-        // For other errors, continue with empty arrays
+        return;
       }
 
-      // Filter only active POs
-      const activePOs = programOutcomes.filter(po => po.is_active);
+      // Fetch each API call individually to better handle errors
+      try {
+        console.log('📡 Starting API call to getProgramOutcomes...');
+        programOutcomes = await api.getProgramOutcomes();
+        console.log('✅ ProgramOutcomes fetched:', programOutcomes?.length || 0);
+        console.log('✅ ProgramOutcomes data:', programOutcomes);
+      } catch (err: any) {
+        console.error('❌ Error fetching ProgramOutcomes:', err);
+        console.error('❌ Error type:', typeof err);
+        console.error('❌ Error message:', err?.message);
+        console.error('❌ Error stack:', err?.stack);
+        
+        // If 401, redirect to login
+        if (err?.message?.includes('401') || 
+            err?.message?.includes('Authentication') || 
+            err?.message?.includes('credentials') ||
+            err?.message?.includes('not provided')) {
+          console.error('❌ Authentication failed! Redirecting to login...');
+          TokenManager.clearTokens();
+          if (typeof window !== 'undefined') {
+            window.location.href = '/login';
+          }
+          return;
+        }
+        
+        // If network error, show helpful message
+        if (err?.message?.includes('fetch') || err?.message?.includes('Network')) {
+          console.error('❌ Network error - Backend may be down');
+          setError('Cannot connect to server. Please check if the backend is running.');
+        }
+        
+        programOutcomes = [];
+      }
+
+      try {
+        poAchievements = await api.getPOAchievements();
+        console.log('✅ POAchievements fetched:', poAchievements?.length || 0);
+      } catch (err: any) {
+        console.error('❌ Error fetching POAchievements:', err);
+        poAchievements = [];
+      }
+
+      try {
+        enrollments = await api.getEnrollments();
+        console.log('✅ Enrollments fetched:', enrollments?.length || 0);
+      } catch (err: any) {
+        console.error('❌ Error fetching Enrollments:', err);
+        enrollments = [];
+      }
+
+      try {
+        assessments = await api.getAssessments();
+        console.log('✅ Assessments fetched:', assessments?.length || 0);
+      } catch (err: any) {
+        console.error('❌ Error fetching Assessments:', err);
+        assessments = [];
+      }
+
+      // Ensure all responses are arrays (defensive programming)
+      programOutcomes = Array.isArray(programOutcomes) ? programOutcomes : [];
+      poAchievements = Array.isArray(poAchievements) ? poAchievements : [];
+      enrollments = Array.isArray(enrollments) ? enrollments : [];
+      assessments = Array.isArray(assessments) ? assessments : [];
+
+      console.log('📊 Summary:', {
+        programOutcomes: programOutcomes.length,
+        poAchievements: poAchievements.length,
+        enrollments: enrollments.length,
+        assessments: assessments.length
+      });
+
+      console.log('🔍 First PO:', programOutcomes[0]);
+      console.log('🔍 First Achievement:', poAchievements[0]);
+
+      // If no program outcomes, try to show a helpful error
+      if (programOutcomes.length === 0) {
+        console.error('⚠️ No Program Outcomes found!');
+        console.error('This could mean:');
+        console.error('1. API endpoint is not accessible');
+        console.error('2. Authentication token is missing or invalid');
+        console.error('3. Backend server is not running');
+        console.error('4. User does not have permission to view POs');
+        
+        // Don't set error immediately - try to show fallback
+        // setError('No program outcomes available. Please contact your administrator.');
+        // setProgramOutcomesData([]);
+        // setLoading(false);
+        // return;
+      }
+
+      // Filter only active POs (if is_active is undefined, include it)
+      // Also handle case where is_active might be a string "true"/"false"
+      const activePOs = programOutcomes.filter(po => {
+        if (po.is_active === undefined || po.is_active === null) return true;
+        if (typeof po.is_active === 'string') {
+          const isActiveStr = po.is_active as string;
+          return isActiveStr.toLowerCase() === 'true';
+        }
+        return po.is_active === true;
+      });
+      
+      console.log('📈 Stats:', {
+        totalPOs: programOutcomes.length,
+        activePOs: activePOs.length,
+        achievements: poAchievements.length
+      });
+
+      // If no active POs, show all POs (fallback)
+      const POsToShow = activePOs.length > 0 ? activePOs : programOutcomes;
+      console.log('✅ POs to show:', POsToShow.length);
 
       // Transform to POData format
-      const poDataList: POData[] = activePOs.map(po => {
+      const poDataList: POData[] = POsToShow.map(po => {
         // Find student's achievement for this PO
-        const achievement = poAchievements.find(a => a.program_outcome === po.id);
+        const achievement = poAchievements.find(a => {
+          // Try both number and string comparison
+          const poId = typeof po.id === 'string' ? parseInt(po.id) : po.id;
+          const achievementPoId = typeof a.program_outcome === 'string' ? parseInt(a.program_outcome) : a.program_outcome;
+          return achievementPoId === poId;
+        });
+        console.log(`PO ${po.code} (id: ${po.id}, type: ${typeof po.id}):`, 
+          achievement ? `Found (achievement PO id: ${achievement.program_outcome}, type: ${typeof achievement.program_outcome})` : 'Not found');
         
-        const current = achievement ? achievement.achievement_percentage : 0;
-        const target = po.target_percentage;
+        // Convert Decimal strings to numbers
+        const current = achievement ? Number(achievement.achievement_percentage) : 0;
+        const target = Number(po.target_percentage);
 
         // Determine status
         let status: 'Achieved' | 'Needs Attention' | 'Excellent';
@@ -116,16 +231,64 @@ export default function OutcomesPage() {
 
         // Find courses that contribute to this PO
         // Get all assessments related to this PO
-        const relatedAssessments = assessments.filter(a => 
-          a.related_pos?.includes(po.id)
-        );
+        const relatedAssessments = assessments.filter(a => {
+          if (!a.related_pos) return false;
+          // Handle both array and single value
+          const relatedPosArray = Array.isArray(a.related_pos) ? a.related_pos : [a.related_pos];
+          return relatedPosArray.some((posId: any) => {
+            const posIdNum = typeof posId === 'string' ? parseInt(posId) : posId;
+            const poIdNum = typeof po.id === 'string' ? parseInt(po.id) : po.id;
+            return posIdNum === poIdNum;
+          });
+        });
 
-        // Get unique course codes from enrollments that have these assessments
-        const courseIds = new Set(relatedAssessments.map(a => a.course));
+        console.log(`PO ${po.code}: Found ${relatedAssessments.length} related assessments`);
+
+        // Get unique course IDs from assessments
+        // Assessment.course is a number (course ID)
+        const assessmentCourseIds = new Set(
+          relatedAssessments
+            .map(a => {
+              // Handle both number and object (for safety)
+              if (typeof a.course === 'object' && a.course !== null) {
+                return (a.course as any).id;
+              }
+              return typeof a.course === 'string' ? parseInt(a.course) : a.course;
+            })
+            .filter((id): id is number => typeof id === 'number' && !isNaN(id))
+        );
+        
+        console.log(`PO ${po.code}: Assessment course IDs:`, Array.from(assessmentCourseIds));
+
+        // Get contributing courses from enrollments
+        // Enrollment.course is a number (course ID)
         const contributingCourses = enrollments
-          .filter(e => courseIds.has(e.course))
-          .map(e => e.course_code)
-          .filter((code, index, self) => code && self.indexOf(code) === index); // Remove duplicates
+          .filter(e => {
+            // Handle both number and object (for safety)
+            let enrollmentCourseId: number | null = null;
+            if (typeof e.course === 'object' && e.course !== null) {
+              enrollmentCourseId = (e.course as any).id;
+            } else if (typeof e.course === 'string') {
+              enrollmentCourseId = parseInt(e.course);
+            } else if (typeof e.course === 'number') {
+              enrollmentCourseId = e.course;
+            }
+            
+            if (enrollmentCourseId === null || isNaN(enrollmentCourseId)) {
+              return false;
+            }
+            
+            const matches = assessmentCourseIds.has(enrollmentCourseId);
+            if (matches) {
+              console.log(`PO ${po.code}: Found matching course for enrollment`, e.course_code, `(ID: ${enrollmentCourseId})`);
+            }
+            return matches;
+          })
+          .map(e => e.course_code || '')
+          .filter((code): code is string => !!code && code !== '')
+          .filter((code, index, self) => self.indexOf(code) === index); // Remove duplicates
+        
+        console.log(`PO ${po.code}: Contributing courses:`, contributingCourses);
 
         return {
           code: po.code,
@@ -139,7 +302,57 @@ export default function OutcomesPage() {
         };
       });
 
-      setProgramOutcomesData(poDataList);
+      console.log('✅ Final PO Data List:', poDataList.length, 'items');
+      
+      // Always show POs if they exist, even without achievements
+      if (poDataList.length === 0 && POsToShow.length > 0) {
+        console.warn('⚠️ POs exist but no data was created. Creating fallback data...');
+        const fallbackData: POData[] = POsToShow.map(po => {
+          // Try to find achievement even if matching failed
+          const achievement = poAchievements.find(a => {
+            const aPoId = typeof a.program_outcome === 'string' ? parseInt(a.program_outcome) : a.program_outcome;
+            const poId = typeof po.id === 'string' ? parseInt(po.id) : po.id;
+            return aPoId === poId;
+          });
+          
+          return {
+            code: po.code || 'PO',
+            title: po.title || 'Program Outcome',
+            description: po.description || '',
+            target: Number(po.target_percentage) || 70,
+            current: achievement ? Number(achievement.achievement_percentage) : 0,
+            status: (achievement && Number(achievement.achievement_percentage) >= (Number(po.target_percentage) || 70)) 
+              ? 'Achieved' as const 
+              : 'Needs Attention' as const,
+            courses: [],
+            poId: po.id
+          };
+        });
+        console.log('✅ Fallback data created:', fallbackData.length, 'items');
+        setProgramOutcomesData(fallbackData);
+      } else if (poDataList.length > 0) {
+        console.log('✅ Setting PO data:', poDataList.length, 'items');
+        setProgramOutcomesData(poDataList);
+      } else if (programOutcomes.length === 0) {
+        console.error('❌ No Program Outcomes available from API!');
+        setError('Unable to load program outcomes. Please check your connection and try again.');
+        setProgramOutcomesData([]);
+      } else {
+        console.error('❌ No PO data to display despite having POs!');
+        // Last resort: create minimal data from programOutcomes
+        const minimalData: POData[] = programOutcomes.map(po => ({
+          code: po.code || 'PO',
+          title: po.title || 'Program Outcome',
+          description: po.description || '',
+          target: Number(po.target_percentage) || 70,
+          current: 0,
+          status: 'Needs Attention' as const,
+          courses: [],
+          poId: po.id
+        }));
+        console.log('✅ Created minimal data:', minimalData.length, 'items');
+        setProgramOutcomesData(minimalData);
+      }
     } catch (err: any) {
       console.error('Failed to fetch outcomes data:', err);
       if (err.message?.includes('404') || err.message?.includes('No')) {

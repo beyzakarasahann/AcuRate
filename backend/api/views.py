@@ -9,7 +9,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
-from django.db.models import Q, Avg, Count, F
+from django.db.models import Q, Avg, Count, F, Min, Max, StdDev
 from django.shortcuts import get_object_or_404
 
 from .models import (
@@ -59,9 +59,22 @@ def login_view(request):
             }
         })
     
+    # Format errors for better frontend handling
+    errors = serializer.errors
+    error_message = None
+    
+    # Check for non_field_errors or __all__ errors (Django REST Framework format)
+    if 'non_field_errors' in errors:
+        error_message = errors['non_field_errors'][0] if errors['non_field_errors'] else None
+    elif '__all__' in errors:
+        error_message = errors['__all__'][0] if errors['__all__'] else None
+    elif 'username' in errors or 'password' in errors:
+        error_message = 'Invalid username or password'
+    
     return Response({
         'success': False,
-        'errors': serializer.errors
+        'error': error_message or 'Invalid credentials',
+        'errors': errors
     }, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -262,6 +275,12 @@ class ProgramOutcomeViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(is_active=True)
         return queryset
     
+    def list(self, request, *args, **kwargs):
+        """Override list to ensure proper response format"""
+        queryset = self.filter_queryset(self.get_queryset())
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+    
     @action(detail=False, methods=['get'])
     def statistics(self, request):
         """Get PO statistics with achievement data"""
@@ -291,7 +310,7 @@ class CourseViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['code', 'name', 'description']
-    ordering_fields = ['code', 'semester', 'year', 'created_at']
+    ordering_fields = ['code', 'semester', 'academic_year', 'created_at']
     ordering = ['code']
     
     def get_serializer_class(self):
@@ -302,26 +321,28 @@ class CourseViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Filter courses based on user role"""
         user = self.request.user
-        queryset = Course.objects.all()
+        queryset = Course.objects.select_related('teacher')
         
         # Filter by teacher
         if user.role == User.Role.TEACHER:
             queryset = queryset.filter(teacher=user)
         
-        # Filter by semester/year if specified
+        # Filter by semester/academic_year if specified
         semester = self.request.query_params.get('semester', None)
-        year = self.request.query_params.get('year', None)
+        academic_year = self.request.query_params.get('academic_year', None)
         
         if semester:
             queryset = queryset.filter(semester=semester)
-        if year:
-            queryset = queryset.filter(year=year)
-        
-        # Only active courses for non-admin
-        if not user.is_staff:
-            queryset = queryset.filter(is_active=True)
+        if academic_year:
+            queryset = queryset.filter(academic_year=academic_year)
         
         return queryset
+    
+    def list(self, request, *args, **kwargs):
+        """Override list to ensure proper response format"""
+        queryset = self.filter_queryset(self.get_queryset())
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
     
     @action(detail=True, methods=['get'])
     def students(self, request, pk=None):
@@ -382,6 +403,12 @@ class EnrollmentViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(student_id=student_id)
         
         return queryset
+    
+    def list(self, request, *args, **kwargs):
+        """Override list to ensure proper response format"""
+        queryset = self.filter_queryset(self.get_queryset())
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
 
 
 # =============================================================================
@@ -423,6 +450,12 @@ class AssessmentViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(course_id=course_id)
         
         return queryset
+    
+    def list(self, request, *args, **kwargs):
+        """Override list to ensure proper response format"""
+        queryset = self.filter_queryset(self.get_queryset())
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
     
     @action(detail=True, methods=['get'])
     def grades(self, request, pk=None):
@@ -475,6 +508,12 @@ class StudentGradeViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(assessment_id=assessment_id)
         
         return queryset
+    
+    def list(self, request, *args, **kwargs):
+        """Override list to ensure proper response format"""
+        queryset = self.filter_queryset(self.get_queryset())
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
     
     def perform_create(self, serializer):
         """Save grade"""
@@ -568,36 +607,61 @@ def student_dashboard(request):
     completed_courses = completed_enrollments.count()
     
     if completed_enrollments.exists():
-        overall_gpa = completed_enrollments.aggregate(Avg('final_grade'))['final_grade__avg'] or 0
+        # Calculate GPA on 4.0 scale (final_grade is 0-100, convert to 0-4.0)
+        avg_grade_100 = completed_enrollments.aggregate(Avg('final_grade'))['final_grade__avg'] or 0
+        # Convert Decimal to float for calculation
+        overall_gpa = float(avg_grade_100) / 100.0 * 4.0 if avg_grade_100 else 0.0
     else:
-        overall_gpa = 0
+        overall_gpa = 0.0
     
     # Calculate student ranking (anonymous) - Optimized version
     # Get all students' GPAs in one query using aggregation
+    # Note: avg_gpa is calculated from final_grade (0-100), we'll convert to 4.0 scale
     students_with_gpa = User.objects.filter(
         role=User.Role.STUDENT,
         is_active=True
     ).annotate(
-        avg_gpa=Avg('enrollments__final_grade', filter=Q(enrollments__is_active=False, enrollments__final_grade__isnull=False))
-    ).filter(avg_gpa__isnull=False).values('id', 'avg_gpa').order_by('-avg_gpa')
+        avg_grade_100=Avg('enrollments__final_grade', filter=Q(enrollments__is_active=False, enrollments__final_grade__isnull=False))
+    ).filter(avg_grade_100__isnull=False).values('id', 'avg_grade_100')
     
-    # Convert to list and find user's rank
-    all_students_gpa = list(students_with_gpa)
+    # Convert to list and calculate GPA on 4.0 scale, then sort
+    all_students_gpa = []
+    for student_data in students_with_gpa:
+        avg_grade_100 = float(student_data['avg_grade_100'])
+        avg_gpa_4_0 = (avg_grade_100 / 100) * 4.0
+        all_students_gpa.append({
+            'id': student_data['id'],
+            'avg_gpa': avg_gpa_4_0
+        })
+    
+    # Sort by GPA descending (highest first)
+    all_students_gpa.sort(key=lambda x: x['avg_gpa'], reverse=True)
     total_students_with_gpa = len(all_students_gpa)
     
     user_rank = None
     percentile = 0
     
     if overall_gpa > 0 and total_students_with_gpa > 0:
-        # Find rank (students with higher GPA)
-        user_rank = next((i + 1 for i, s in enumerate(all_students_gpa) if float(s['avg_gpa']) <= overall_gpa), total_students_with_gpa)
+        # Find user's rank in the sorted list (highest GPA = rank 1)
+        for i, student_data in enumerate(all_students_gpa):
+            if student_data['id'] == user.id:
+                user_rank = i + 1
+                break
+        
+        # If user not found in list (shouldn't happen), calculate rank by GPA
+        if user_rank is None:
+            # Count students with higher GPA
+            students_with_higher_gpa = sum(1 for s in all_students_gpa if s['avg_gpa'] > overall_gpa)
+            user_rank = students_with_higher_gpa + 1
+        
         percentile = round(((total_students_with_gpa - user_rank + 1) / total_students_with_gpa) * 100)
 
-    data = {
-        'student': user,
-        'enrollments': enrollments,
-        'po_achievements': po_achievements,
-        'recent_grades': recent_grades,
+    # Serialize nested objects
+    serializer_data = {
+        'student': UserDetailSerializer(user).data,
+        'enrollments': [EnrollmentSerializer(e).data for e in enrollments],
+        'po_achievements': [StudentPOAchievementSerializer(po).data for po in po_achievements],
+        'recent_grades': [StudentGradeSerializer(g).data for g in recent_grades],
         'overall_gpa': round(overall_gpa, 2),
         'total_credits': total_credits,
         'completed_courses': completed_courses,
@@ -608,8 +672,7 @@ def student_dashboard(request):
         } if user_rank else None
     }
     
-    serializer = StudentDashboardSerializer()
-    return Response(serializer.to_representation(data))
+    return Response(serializer_data)
 
 
 @api_view(['GET'])
@@ -629,21 +692,20 @@ def teacher_dashboard(request):
     
     # Get teacher's courses
     courses = Course.objects.filter(
-        teacher=user,
-        is_active=True
-    ).prefetch_related('enrollment_set')
+        teacher=user
+    ).prefetch_related('enrollments')
     
-    # Calculate total students
+    # Calculate total students (active enrollments)
     total_students = Enrollment.objects.filter(
         course__teacher=user,
-        status=Enrollment.Status.ENROLLED
+        is_active=True
     ).values('student').distinct().count()
     
     # Pending assessments (assessments with no grades yet)
     pending_assessments = Assessment.objects.filter(
         course__teacher=user
     ).annotate(
-        grade_count=Count('studentgrade')
+        grade_count=Count('grades')
     ).filter(grade_count=0).count()
     
     # Recent submissions
@@ -651,16 +713,16 @@ def teacher_dashboard(request):
         assessment__course__teacher=user
     ).select_related('student', 'assessment').order_by('-graded_at')[:10]
     
-    data = {
+    # Serialize data
+    serializer = TeacherDashboardSerializer({
         'teacher': user,
         'courses': courses,
         'total_students': total_students,
         'pending_assessments': pending_assessments,
         'recent_submissions': recent_submissions
-    }
+    })
     
-    serializer = TeacherDashboardSerializer()
-    return Response(serializer.to_representation(data))
+    return Response(serializer.data)
 
 
 @api_view(['GET'])
@@ -784,3 +846,225 @@ class ContactRequestViewSet(viewsets.ModelViewSet):
         # Public create is handled by create_contact_request view
         # This ViewSet is only for admin CRUD operations
         return [IsAdminUser()]
+
+
+# =============================================================================
+# COURSE ANALYTICS VIEWS
+# =============================================================================
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def course_analytics_overview(request):
+    """
+    Get course analytics overview for all student's courses
+    
+    GET /api/course-analytics/
+    Returns anonymized, aggregated analytics for each course
+    """
+    user = request.user
+    
+    if user.role != User.Role.STUDENT:
+        return Response({
+            'error': 'This endpoint is only for students'
+        }, status=status.HTTP_403_FORBIDDEN)
+    
+    # Get student's enrollments
+    enrollments = Enrollment.objects.filter(
+        student=user
+    ).select_related('course', 'course__teacher')
+    
+    # Use a set to track unique course codes to avoid duplicates
+    seen_courses = set()
+    course_analytics_list = []
+    
+    for enrollment in enrollments:
+        course = enrollment.course
+        
+        # Create unique key: course_code + academic_year
+        course_key = f"{course.code}_{course.academic_year}"
+        
+        # Skip if we've already processed this course
+        if course_key in seen_courses:
+            continue
+        
+        seen_courses.add(course_key)
+        
+        # Get all enrollments for this course (for class statistics)
+        # Include both active and inactive enrollments with final grades
+        all_course_enrollments = Enrollment.objects.filter(
+            course=course,
+            final_grade__isnull=False
+        )
+        
+        # Calculate class statistics (anonymized)
+        class_stats = all_course_enrollments.aggregate(
+            avg=Avg('final_grade'),
+            count=Count('id'),
+            min_score=Min('final_grade'),
+            max_score=Max('final_grade')
+        )
+        
+        # Calculate median manually
+        scores_list = sorted([float(e.final_grade) for e in all_course_enrollments])
+        n = len(scores_list)
+        median = scores_list[n // 2] if n > 0 else 0
+        
+        # Calculate user's percentile
+        user_percentile = None
+        user_score = enrollment.final_grade
+        if user_score is not None and class_stats['count'] > 0:
+            students_below = all_course_enrollments.filter(final_grade__lt=user_score).count()
+            user_percentile = round((students_below / class_stats['count']) * 100)
+        
+        class_stats['median'] = median
+        
+        # Determine trend (simplified - compare with previous semester if available)
+        trend = 'neutral'  # Will be calculated based on historical data
+        
+        course_analytics_list.append({
+            'course_id': course.id,
+            'course_code': course.code,
+            'course_name': course.name,
+            'instructor': course.teacher.get_full_name() if course.teacher else 'TBA',
+            'semester': f"{course.get_semester_display()} {course.academic_year}",
+            'class_average': float(class_stats['avg']) if class_stats['avg'] else 0,
+            'class_median': float(class_stats.get('median', 0)),
+            'class_size': class_stats['count'],
+            'user_score': float(user_score) if user_score else None,
+            'user_percentile': user_percentile,
+            'trend': trend
+        })
+    
+    return Response({
+        'success': True,
+        'courses': course_analytics_list
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def course_analytics_detail(request, course_id):
+    """
+    Get detailed course analytics for a specific course
+    
+    GET /api/course-analytics/<course_id>/
+    Returns detailed, anonymized analytics including distributions and comparisons
+    """
+    user = request.user
+    
+    if user.role != User.Role.STUDENT:
+        return Response({
+            'error': 'This endpoint is only for students'
+        }, status=status.HTTP_403_FORBIDDEN)
+    
+    # Get course
+    course = get_object_or_404(Course, id=course_id)
+    
+    # Verify student is enrolled in this course
+    enrollment = Enrollment.objects.filter(
+        student=user,
+        course=course
+    ).first()
+    
+    if not enrollment:
+        return Response({
+            'error': 'You are not enrolled in this course'
+        }, status=status.HTTP_403_FORBIDDEN)
+    
+    # Get all enrollments for this course (for class statistics)
+    all_enrollments = Enrollment.objects.filter(
+        course=course,
+        is_active=False,
+        final_grade__isnull=False
+    )
+    
+    # Get all grades for this course's assessments
+    course_assessments = Assessment.objects.filter(course=course)
+    all_grades = StudentGrade.objects.filter(
+        assessment__in=course_assessments
+    ).select_related('assessment', 'student')
+    
+    # Calculate class statistics
+    class_stats = all_enrollments.aggregate(
+        avg=Avg('final_grade'),
+        count=Count('id'),
+        min_score=Min('final_grade'),
+        max_score=Max('final_grade'),
+        std_dev=StdDev('final_grade')
+    )
+    
+    # Calculate median manually
+    scores_list_for_median = sorted([float(e.final_grade) for e in all_enrollments])
+    n_median = len(scores_list_for_median)
+    median = scores_list_for_median[n_median // 2] if n_median > 0 else 0
+    class_stats['median'] = median
+    
+    # Calculate user's percentile
+    user_percentile = None
+    user_score = enrollment.final_grade
+    if user_score is not None and class_stats['count'] > 0:
+        students_below = all_enrollments.filter(final_grade__lt=user_score).count()
+        user_percentile = round((students_below / class_stats['count']) * 100)
+    
+    # Calculate score distribution (histogram bins: 0-20, 21-40, 41-60, 61-80, 81-100)
+    distribution = [0, 0, 0, 0, 0]
+    for enroll in all_enrollments:
+        score = float(enroll.final_grade)
+        if score <= 20:
+            distribution[0] += 1
+        elif score <= 40:
+            distribution[1] += 1
+        elif score <= 60:
+            distribution[2] += 1
+        elif score <= 80:
+            distribution[3] += 1
+        else:
+            distribution[4] += 1
+    
+    # Calculate boxplot data (simplified - using quartiles)
+    scores_list = sorted([float(e.final_grade) for e in all_enrollments])
+    n = len(scores_list)
+    boxplot_data = {
+        'min': float(class_stats['min_score']) if class_stats['min_score'] else 0,
+        'q1': scores_list[n // 4] if n > 0 else 0,
+        'median': scores_list[n // 2] if n > 0 else 0,
+        'q3': scores_list[3 * n // 4] if n > 0 else 0,
+        'max': float(class_stats['max_score']) if class_stats['max_score'] else 0
+    }
+    
+    # Calculate assessment comparison
+    assessment_comparison = []
+    for assessment in course_assessments:
+        assessment_grades = all_grades.filter(assessment=assessment)
+        if assessment_grades.exists():
+            class_avg = assessment_grades.aggregate(avg=Avg('score'))['avg']
+            user_grade = assessment_grades.filter(student=user).first()
+            
+            assessment_comparison.append({
+                'assessment': assessment.title,
+                'class_average': float(class_avg) if class_avg else 0,
+                'user_score': float(user_grade.score) if user_grade else None
+            })
+    
+    return Response({
+        'success': True,
+        'course': {
+            'id': course.id,
+            'code': course.code,
+            'name': course.name,
+            'instructor': course.teacher.get_full_name() if course.teacher else 'TBA',
+            'semester': f"{course.get_semester_display()} {course.academic_year}"
+        },
+        'analytics': {
+            'class_average': float(class_stats['avg']) if class_stats['avg'] else 0,
+            'class_median': float(class_stats.get('median', 0)),
+            'class_size': class_stats['count'],
+            'highest_score': float(class_stats['max_score']) if class_stats['max_score'] else 0,
+            'lowest_score': float(class_stats['min_score']) if class_stats['min_score'] else 0,
+            'user_score': float(user_score) if user_score else None,
+            'user_percentile': user_percentile,
+            'score_distribution': distribution,
+            'boxplot_data': boxplot_data,
+            'assessment_comparison': assessment_comparison
+        }
+    })

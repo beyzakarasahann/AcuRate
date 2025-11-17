@@ -1,17 +1,16 @@
 #!/usr/bin/env python
 """
-AcuRate - Test Data Generator
+AcuRate - Test Data Generator (Course Analytics Edition)
 
-This script creates comprehensive test data for the AcuRate system including:
+This script creates comprehensive test data for Course Analytics:
 - Program Outcomes (5 POs)
-- Teachers (2 users)
-- Students (5 users)
-- Courses (3 courses)
-- Course-PO mappings
-- Enrollments
-- Assessments
-- Student grades
-- Student PO achievements
+- Teacher: Ahmet Bulut
+- Students: 50 students (including beyza2 and beyza.karasahan)
+- Courses: Multiple courses taught by Ahmet Bulut
+- Enrollments: All students in same courses
+- Assessments: Midterm, Final, Project, Quiz, Assignment
+- Student grades: beyza2 (high), beyza.karasahan (low), others (medium)
+- Final grades calculated
 
 Usage:
     python create_test_data.py
@@ -23,6 +22,7 @@ import django
 from datetime import datetime, timedelta
 from decimal import Decimal
 import random
+from django.utils import timezone
 
 # Setup Django environment
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -45,7 +45,9 @@ def clear_existing_data():
     CoursePO.objects.all().delete()
     Course.objects.all().delete()
     ProgramOutcome.objects.all().delete()
-    User.objects.filter(is_superuser=False).delete()
+    # Keep superusers and existing users, but clear their enrollments
+    User.objects.filter(role=User.Role.STUDENT).exclude(username__in=['beyza2', 'beyza.karasahan']).delete()
+    User.objects.filter(role=User.Role.TEACHER).exclude(username__in=['ahmet.bulut']).delete()
     print("✅ Existing data cleared\n")
 
 
@@ -88,174 +90,214 @@ def create_program_outcomes():
     
     created_pos = []
     for po_data in pos:
-        po = ProgramOutcome.objects.create(
+        po, created = ProgramOutcome.objects.get_or_create(
             code=po_data['code'],
-            title=po_data['title'],
-            description=po_data['description'],
-            department='Computer Science',
-            target_percentage=po_data['target_percentage'],
-            is_active=True
+            defaults={
+                'title': po_data['title'],
+                'description': po_data['description'],
+                'department': 'Computer Science',
+                'target_percentage': po_data['target_percentage'],
+                'is_active': True
+            }
         )
-        created_pos.append(po)
-        print(f"  ✓ Created {po.code}: {po.title} (Target: {po.target_percentage}%)")
+        if created:
+            created_pos.append(po)
+            print(f"  ✓ Created {po.code}: {po.title} (Target: {po.target_percentage}%)")
+        else:
+            created_pos.append(po)
+            print(f"  → Using existing {po.code}: {po.title}")
     
-    print(f"✅ Created {len(created_pos)} Program Outcomes\n")
+    print(f"✅ Using {len(created_pos)} Program Outcomes\n")
     return created_pos
 
 
-def create_teachers():
-    """Create 2 teachers"""
-    print("👨‍🏫 Creating Teachers...")
+def create_teacher():
+    """Create teacher Ahmet Bulut"""
+    print("👨‍🏫 Creating Teacher...")
     
-    teachers_data = [
-        {
-            'username': 'teacher1',
-            'email': 'sarah.johnson@acurate.edu',
-            'first_name': 'Sarah',
-            'last_name': 'Johnson',
-            'department': 'Computer Science'
-        },
-        {
-            'username': 'teacher2',
-            'email': 'michael.chen@acurate.edu',
-            'first_name': 'Michael',
-            'last_name': 'Chen',
+    teacher, created = User.objects.get_or_create(
+        username='ahmet.bulut',
+        defaults={
+            'email': 'ahmet.bulut@acurate.edu',
+            'first_name': 'Ahmet',
+            'last_name': 'Bulut',
+            'role': User.Role.TEACHER,
             'department': 'Computer Science'
         }
-    ]
+    )
     
-    teachers = []
-    for teacher_data in teachers_data:
-        teacher = User.objects.create_user(
-            username=teacher_data['username'],
-            email=teacher_data['email'],
-            password='teacher123',
-            role=User.Role.TEACHER,
-            first_name=teacher_data['first_name'],
-            last_name=teacher_data['last_name'],
-            department=teacher_data['department']
-        )
-        teachers.append(teacher)
+    if created:
+        teacher.set_password('ahmet123')
+        teacher.save()
         print(f"  ✓ Created {teacher.get_full_name()} ({teacher.username})")
+    else:
+        # Update password in case it changed
+        teacher.set_password('ahmet123')
+        teacher.save()
+        print(f"  → Using existing {teacher.get_full_name()} ({teacher.username})")
     
-    print(f"✅ Created {len(teachers)} Teachers\n")
-    return teachers
+    print(f"✅ Teacher ready\n")
+    return teacher
 
 
 def create_students():
-    """Create 5 students"""
+    """Create 50 students including beyza2 and beyza.karasahan"""
     print("👨‍🎓 Creating Students...")
     
-    students_data = [
-        {
-            'username': 'student1',
-            'email': 'alice.smith@student.acurate.edu',
-            'first_name': 'Alice',
-            'last_name': 'Smith',
+    students = []
+    
+    # Get or create beyza2
+    beyza2, created = User.objects.get_or_create(
+        username='beyza2',
+        defaults={
+            'email': 'beyza2@student.acurate.edu',
+            'first_name': 'Beyza',
+            'last_name': 'Test',
+            'role': User.Role.STUDENT,
             'student_id': '2024001',
-            'year_of_study': 2
-        },
-        {
-            'username': 'student2',
-            'email': 'bob.wilson@student.acurate.edu',
-            'first_name': 'Bob',
-            'last_name': 'Wilson',
-            'student_id': '2024002',
-            'year_of_study': 2
-        },
-        {
-            'username': 'student3',
-            'email': 'charlie.brown@student.acurate.edu',
-            'first_name': 'Charlie',
-            'last_name': 'Brown',
-            'student_id': '2024003',
-            'year_of_study': 3
-        },
-        {
-            'username': 'student4',
-            'email': 'diana.prince@student.acurate.edu',
-            'first_name': 'Diana',
-            'last_name': 'Prince',
-            'student_id': '2024004',
-            'year_of_study': 1
-        },
-        {
-            'username': 'student5',
-            'email': 'emma.watson@student.acurate.edu',
-            'first_name': 'Emma',
-            'last_name': 'Watson',
-            'student_id': '2024005',
+            'department': 'Computer Science',
             'year_of_study': 2
         }
-    ]
+    )
+    if created:
+        beyza2.set_password('beyza123')
+        beyza2.save()
+        print(f"  ✓ Created {beyza2.username} ({beyza2.student_id})")
+    else:
+        beyza2.set_password('beyza123')
+        beyza2.save()
+        print(f"  → Using existing {beyza2.username}")
+    students.append(beyza2)
     
-    students = []
-    for student_data in students_data:
-        student = User.objects.create_user(
-            username=student_data['username'],
-            email=student_data['email'],
-            password='student123',
-            role=User.Role.STUDENT,
-            first_name=student_data['first_name'],
-            last_name=student_data['last_name'],
-            student_id=student_data['student_id'],
-            department='Computer Science',
-            year_of_study=student_data['year_of_study']
-        )
-        students.append(student)
-        print(f"  ✓ Created {student.get_full_name()} ({student.student_id}) - Year {student.year_of_study}")
+    # Get or create beyza.karasahan
+    beyza_karasahan, created = User.objects.get_or_create(
+        username='beyza.karasahan',
+        defaults={
+            'email': 'beyza.karasahan@student.acurate.edu',
+            'first_name': 'Beyza',
+            'last_name': 'Karasahan',
+            'role': User.Role.STUDENT,
+            'student_id': '2024002',
+            'department': 'Computer Science',
+            'year_of_study': 2
+        }
+    )
+    if created:
+        beyza_karasahan.set_password('beyza123')
+        beyza_karasahan.save()
+        print(f"  ✓ Created {beyza_karasahan.username} ({beyza_karasahan.student_id})")
+    else:
+        beyza_karasahan.set_password('beyza123')
+        beyza_karasahan.save()
+        print(f"  → Using existing {beyza_karasahan.username}")
+    students.append(beyza_karasahan)
     
-    print(f"✅ Created {len(students)} Students\n")
+    # Create 48 more students
+    # Get existing student IDs to avoid duplicates
+    existing_student_ids = set(User.objects.filter(role=User.Role.STUDENT).exclude(student_id__isnull=True).values_list('student_id', flat=True))
+    
+    student_counter = 3
+    created_count = 0
+    
+    while created_count < 48:
+        student_id = f'2024{student_counter:03d}'
+        username = f'student{student_counter}'
+        
+        # Skip if student_id already exists
+        if student_id in existing_student_ids:
+            student_counter += 1
+            continue
+        
+        first_names = ['Ali', 'Ayşe', 'Mehmet', 'Fatma', 'Mustafa', 'Zeynep', 'Ahmet', 'Elif', 'Hasan', 'Merve']
+        last_names = ['Yılmaz', 'Kaya', 'Demir', 'Şahin', 'Çelik', 'Yıldız', 'Arslan', 'Öztürk', 'Aydın', 'Özdemir']
+        
+        try:
+            student, created = User.objects.get_or_create(
+                username=username,
+                defaults={
+                    'email': f'{username}@student.acurate.edu',
+                    'first_name': random.choice(first_names),
+                    'last_name': random.choice(last_names),
+                    'role': User.Role.STUDENT,
+                    'student_id': student_id,
+                    'department': 'Computer Science',
+                    'year_of_study': random.randint(1, 4)
+                }
+            )
+            if created:
+                student.set_password('student123')
+                student.save()
+                students.append(student)
+                existing_student_ids.add(student_id)
+                created_count += 1
+                if created_count <= 10:  # Print first 10
+                    print(f"  ✓ Created {student.username} ({student.student_id})")
+        except Exception as e:
+            # Skip if there's an error (e.g., duplicate username)
+            pass
+        
+        student_counter += 1
+    
+    print(f"✅ Created/Using {len(students)} Students\n")
     return students
 
 
-def create_courses(teachers):
-    """Create 3 courses"""
+def create_courses(teacher):
+    """Create multiple courses taught by Ahmet Bulut"""
     print("📖 Creating Courses...")
     
     courses_data = [
         {
-            'code': 'CS101',
-            'name': 'Introduction to Programming',
-            'description': 'Fundamental programming concepts using Python. Variables, control structures, functions, and basic data structures.',
-            'credits': 3,
-            'semester': Course.Semester.FALL,
-            'teacher': teachers[0]
-        },
-        {
-            'code': 'CS201',
+            'code': 'CSE301',
             'name': 'Data Structures and Algorithms',
             'description': 'Study of fundamental data structures (arrays, linked lists, trees, graphs) and algorithms.',
             'credits': 4,
             'semester': Course.Semester.FALL,
-            'teacher': teachers[1]
+            'academic_year': '2024-2025'
         },
         {
-            'code': 'CS301',
-            'name': 'Algorithm Design and Analysis',
-            'description': 'Advanced algorithm design techniques: divide-and-conquer, dynamic programming, greedy algorithms.',
-            'credits': 4,
+            'code': 'CSE302',
+            'name': 'Database Systems',
+            'description': 'Introduction to database design, SQL, normalization, and database management systems.',
+            'credits': 3,
+            'semester': Course.Semester.FALL,
+            'academic_year': '2024-2025'
+        },
+        {
+            'code': 'CSE303',
+            'name': 'Software Engineering',
+            'description': 'Software development lifecycle, design patterns, testing, and project management.',
+            'credits': 3,
             'semester': Course.Semester.SPRING,
-            'teacher': teachers[0]
+            'academic_year': '2024-2025'
         }
     ]
     
     courses = []
     for course_data in courses_data:
-        course = Course.objects.create(
+        course, created = Course.objects.get_or_create(
             code=course_data['code'],
-            name=course_data['name'],
-            description=course_data['description'],
-            department='Computer Science',
-            credits=course_data['credits'],
-            semester=course_data['semester'],
-            academic_year='2024-2025',
-            teacher=course_data['teacher']
+            defaults={
+                'name': course_data['name'],
+                'description': course_data['description'],
+                'department': 'Computer Science',
+                'credits': course_data['credits'],
+                'semester': course_data['semester'],
+                'academic_year': course_data['academic_year'],
+                'teacher': teacher
+            }
         )
-        courses.append(course)
-        print(f"  ✓ Created {course.code}: {course.name} ({course.credits} credits)")
+        if created:
+            courses.append(course)
+            print(f"  ✓ Created {course.code}: {course.name} ({course.credits} credits)")
+        else:
+            # Update teacher
+            course.teacher = teacher
+            course.save()
+            courses.append(course)
+            print(f"  → Using existing {course.code}: {course.name}")
     
-    print(f"✅ Created {len(courses)} Courses\n")
+    print(f"✅ Using {len(courses)} Courses\n")
     return courses
 
 
@@ -263,20 +305,24 @@ def create_course_po_mappings(courses, pos):
     """Create Course-PO mappings"""
     print("🔗 Creating Course-PO Mappings...")
     
-    # CS101 → PO1, PO5
+    # Clear existing mappings for these courses
+    CoursePO.objects.filter(course__in=courses).delete()
+    
+    # CSE301 → PO1, PO2, PO5
     mappings = [
-        (courses[0], pos[0], Decimal('1.5')),  # CS101 → PO1 (weight 1.5)
-        (courses[0], pos[4], Decimal('1.0')),  # CS101 → PO5 (weight 1.0)
+        (courses[0], pos[0], Decimal('1.5')),  # CSE301 → PO1
+        (courses[0], pos[1], Decimal('1.5')),  # CSE301 → PO2
+        (courses[0], pos[4], Decimal('1.0')),  # CSE301 → PO5
         
-        # CS201 → PO1, PO2, PO5
-        (courses[1], pos[0], Decimal('1.0')),  # CS201 → PO1
-        (courses[1], pos[1], Decimal('1.5')),  # CS201 → PO2
-        (courses[1], pos[4], Decimal('1.2')),  # CS201 → PO5
+        # CSE302 → PO1, PO3, PO5
+        (courses[1], pos[0], Decimal('1.0')),  # CSE302 → PO1
+        (courses[1], pos[2], Decimal('1.5')),  # CSE302 → PO3
+        (courses[1], pos[4], Decimal('1.2')),  # CSE302 → PO5
         
-        # CS301 → PO2, PO3, PO4
-        (courses[2], pos[1], Decimal('1.5')),  # CS301 → PO2
-        (courses[2], pos[2], Decimal('1.3')),  # CS301 → PO3
-        (courses[2], pos[3], Decimal('1.0')),  # CS301 → PO4
+        # CSE303 → PO2, PO3, PO4
+        (courses[2], pos[1], Decimal('1.5')),  # CSE303 → PO2
+        (courses[2], pos[2], Decimal('1.3')),  # CSE303 → PO3
+        (courses[2], pos[3], Decimal('1.0')),  # CSE303 → PO4
     ]
     
     course_pos = []
@@ -294,60 +340,75 @@ def create_course_po_mappings(courses, pos):
 
 
 def create_enrollments(students, courses):
-    """Create enrollments (3 students x 3 courses = 9 enrollments)"""
+    """Create enrollments - all students in all courses"""
     print("📝 Creating Enrollments...")
     
+    # Clear existing enrollments
+    Enrollment.objects.filter(course__in=courses).delete()
+    
     enrollments = []
-    # Enroll first 3 students in all courses
-    for student in students[:3]:
+    for student in students:
         for course in courses:
-            enrollment = Enrollment.objects.create(
+            enrollment, created = Enrollment.objects.get_or_create(
                 student=student,
                 course=course,
-                is_active=True
+                defaults={'is_active': False}  # Completed courses for analytics
             )
             enrollments.append(enrollment)
-            print(f"  ✓ {student.username} enrolled in {course.code}")
+            if student.username in ['beyza2', 'beyza.karasahan']:
+                print(f"  ✓ {student.username} enrolled in {course.code}")
     
     print(f"✅ Created {len(enrollments)} Enrollments\n")
     return enrollments
 
 
 def create_assessments(courses, pos):
-    """Create assessments for each course"""
+    """Create detailed assessments for each course"""
     print("📋 Creating Assessments...")
     
-    assessments = []
+    # Clear existing assessments
+    Assessment.objects.filter(course__in=courses).delete()
     
-    # CS101 Assessments
-    cs101_assessments = [
+    assessments = []
+    now = timezone.now()
+    
+    # CSE301 Assessments
+    cse301_assessments = [
+        {
+            'title': 'Quiz 1',
+            'type': Assessment.AssessmentType.QUIZ,
+            'weight': Decimal('10.00'),
+            'max_score': Decimal('100.00'),
+            'pos': [pos[0]],
+            'due_date': now - timedelta(days=60)
+        },
         {
             'title': 'Midterm Exam',
             'type': Assessment.AssessmentType.MIDTERM,
             'weight': Decimal('30.00'),
             'max_score': Decimal('100.00'),
-            'pos': [pos[0]],  # PO1
-            'due_date': datetime.now() - timedelta(days=30)
+            'pos': [pos[0], pos[1]],
+            'due_date': now - timedelta(days=30)
+        },
+        {
+            'title': 'Project',
+            'type': Assessment.AssessmentType.PROJECT,
+            'weight': Decimal('20.00'),
+            'max_score': Decimal('100.00'),
+            'pos': [pos[1], pos[4]],
+            'due_date': now - timedelta(days=15)
         },
         {
             'title': 'Final Exam',
             'type': Assessment.AssessmentType.FINAL,
             'weight': Decimal('40.00'),
             'max_score': Decimal('100.00'),
-            'pos': [pos[0], pos[4]],  # PO1, PO5
-            'due_date': datetime.now() + timedelta(days=30)
-        },
-        {
-            'title': 'Programming Project',
-            'type': Assessment.AssessmentType.PROJECT,
-            'weight': Decimal('30.00'),
-            'max_score': Decimal('100.00'),
-            'pos': [pos[4]],  # PO5
-            'due_date': datetime.now() + timedelta(days=15)
+            'pos': [pos[0], pos[1], pos[4]],
+            'due_date': now - timedelta(days=5)
         }
     ]
     
-    for assess_data in cs101_assessments:
+    for assess_data in cse301_assessments:
         assessment = Assessment.objects.create(
             course=courses[0],
             title=assess_data['title'],
@@ -361,35 +422,43 @@ def create_assessments(courses, pos):
         assessments.append(assessment)
         print(f"  ✓ {courses[0].code}: {assessment.title}")
     
-    # CS201 Assessments
-    cs201_assessments = [
+    # CSE302 Assessments
+    cse302_assessments = [
+        {
+            'title': 'Assignment 1',
+            'type': Assessment.AssessmentType.HOMEWORK,
+            'weight': Decimal('15.00'),
+            'max_score': Decimal('100.00'),
+            'pos': [pos[0]],
+            'due_date': now - timedelta(days=55)
+        },
         {
             'title': 'Midterm Exam',
             'type': Assessment.AssessmentType.MIDTERM,
             'weight': Decimal('35.00'),
             'max_score': Decimal('100.00'),
-            'pos': [pos[1]],  # PO2
-            'due_date': datetime.now() - timedelta(days=25)
+            'pos': [pos[0], pos[2]],
+            'due_date': now - timedelta(days=25)
+        },
+        {
+            'title': 'Database Project',
+            'type': Assessment.AssessmentType.PROJECT,
+            'weight': Decimal('25.00'),
+            'max_score': Decimal('100.00'),
+            'pos': [pos[2], pos[4]],
+            'due_date': now - timedelta(days=10)
         },
         {
             'title': 'Final Exam',
             'type': Assessment.AssessmentType.FINAL,
-            'weight': Decimal('40.00'),
-            'max_score': Decimal('100.00'),
-            'pos': [pos[1], pos[4]],  # PO2, PO5
-            'due_date': datetime.now() + timedelta(days=35)
-        },
-        {
-            'title': 'Algorithm Implementation',
-            'type': Assessment.AssessmentType.PROJECT,
             'weight': Decimal('25.00'),
             'max_score': Decimal('100.00'),
-            'pos': [pos[0], pos[4]],  # PO1, PO5
-            'due_date': datetime.now() + timedelta(days=20)
+            'pos': [pos[0], pos[2], pos[4]],
+            'due_date': now - timedelta(days=3)
         }
     ]
     
-    for assess_data in cs201_assessments:
+    for assess_data in cse302_assessments:
         assessment = Assessment.objects.create(
             course=courses[1],
             title=assess_data['title'],
@@ -403,35 +472,43 @@ def create_assessments(courses, pos):
         assessments.append(assessment)
         print(f"  ✓ {courses[1].code}: {assessment.title}")
     
-    # CS301 Assessments
-    cs301_assessments = [
+    # CSE303 Assessments
+    cse303_assessments = [
+        {
+            'title': 'Quiz 1',
+            'type': Assessment.AssessmentType.QUIZ,
+            'weight': Decimal('10.00'),
+            'max_score': Decimal('100.00'),
+            'pos': [pos[1]],
+            'due_date': now - timedelta(days=50)
+        },
         {
             'title': 'Midterm Exam',
             'type': Assessment.AssessmentType.MIDTERM,
             'weight': Decimal('30.00'),
             'max_score': Decimal('100.00'),
-            'pos': [pos[1]],  # PO2
-            'due_date': datetime.now() + timedelta(days=40)
+            'pos': [pos[1], pos[2]],
+            'due_date': now - timedelta(days=20)
+        },
+        {
+            'title': 'Software Project',
+            'type': Assessment.AssessmentType.PROJECT,
+            'weight': Decimal('30.00'),
+            'max_score': Decimal('100.00'),
+            'pos': [pos[2], pos[3]],
+            'due_date': now - timedelta(days=8)
         },
         {
             'title': 'Final Exam',
             'type': Assessment.AssessmentType.FINAL,
-            'weight': Decimal('40.00'),
-            'max_score': Decimal('100.00'),
-            'pos': [pos[2], pos[3]],  # PO3, PO4
-            'due_date': datetime.now() + timedelta(days=70)
-        },
-        {
-            'title': 'Research Project',
-            'type': Assessment.AssessmentType.PROJECT,
             'weight': Decimal('30.00'),
             'max_score': Decimal('100.00'),
-            'pos': [pos[3]],  # PO4
-            'due_date': datetime.now() + timedelta(days=60)
+            'pos': [pos[1], pos[2], pos[3]],
+            'due_date': now - timedelta(days=1)
         }
     ]
     
-    for assess_data in cs301_assessments:
+    for assess_data in cse303_assessments:
         assessment = Assessment.objects.create(
             course=courses[2],
             title=assess_data['title'],
@@ -450,45 +527,111 @@ def create_assessments(courses, pos):
 
 
 def create_student_grades(students, assessments):
-    """Create random grades for students"""
+    """Create grades: beyza2 (high), beyza.karasahan (low), others (medium)"""
     print("💯 Creating Student Grades...")
     
-    grades = []
-    # Only grade students who are enrolled (first 3 students)
-    enrolled_students = students[:3]
+    # Clear existing grades
+    StudentGrade.objects.filter(assessment__course__in=[a.course for a in assessments]).delete()
     
-    for student in enrolled_students:
-        # Get assessments for enrolled courses
+    grades = []
+    beyza2 = None
+    beyza_karasahan = None
+    
+    for student in students:
+        if student.username == 'beyza2':
+            beyza2 = student
+        elif student.username == 'beyza.karasahan':
+            beyza_karasahan = student
+    
+    for student in students:
         for assessment in assessments:
-            # Check if student is enrolled in this course
-            if Enrollment.objects.filter(student=student, course=assessment.course).exists():
-                # Random score between 60-95 (realistic range)
-                score = Decimal(str(random.randint(60, 95)))
-                
-                grade = StudentGrade.objects.create(
-                    student=student,
-                    assessment=assessment,
-                    score=score,
-                    feedback=f"Good work! Keep it up."
-                )
-                grades.append(grade)
+            # Determine score range based on student
+            if student.username == 'beyza2':
+                # High scores: 85-100
+                score = Decimal(str(random.randint(85, 100)))
+                feedback = "Excellent work! Outstanding performance."
+            elif student.username == 'beyza.karasahan':
+                # Low scores: 30-50
+                score = Decimal(str(random.randint(30, 50)))
+                feedback = "Needs improvement. Please review the material and seek help."
+            else:
+                # Medium scores: 60-80 (normal distribution for better graphs)
+                score = Decimal(str(random.randint(60, 80)))
+                feedback = "Good work! Keep it up."
+            
+            grade = StudentGrade.objects.create(
+                student=student,
+                assessment=assessment,
+                score=score,
+                feedback=feedback
+            )
+            grades.append(grade)
+            
+            if student.username in ['beyza2', 'beyza.karasahan']:
                 print(f"  ✓ {student.username} - {assessment.course.code} {assessment.title}: {score}/{assessment.max_score}")
     
     print(f"✅ Created {len(grades)} Student Grades\n")
     return grades
 
 
+def calculate_final_grades(students, courses):
+    """Calculate and set final grades for enrollments"""
+    print("📊 Calculating Final Grades...")
+    
+    for student in students:
+        for course in courses:
+            enrollment = Enrollment.objects.get(student=student, course=course)
+            
+            # Get all assessments for this course
+            assessments = Assessment.objects.filter(course=course, is_active=True)
+            
+            # Calculate weighted average
+            total_weighted_score = Decimal('0.00')
+            total_weight = Decimal('0.00')
+            
+            for assessment in assessments:
+                try:
+                    grade = StudentGrade.objects.get(student=student, assessment=assessment)
+                    weight = assessment.weight
+                    percentage = (grade.score / assessment.max_score) * Decimal('100.00')
+                    total_weighted_score += percentage * weight
+                    total_weight += weight
+                except StudentGrade.DoesNotExist:
+                    pass
+            
+            if total_weight > 0:
+                final_grade = total_weighted_score / total_weight
+                enrollment.final_grade = final_grade
+                enrollment.is_active = False  # Mark as completed
+                enrollment.save()
+                
+                if student.username in ['beyza2', 'beyza.karasahan']:
+                    print(f"  ✓ {student.username} - {course.code}: {final_grade:.2f}")
+    
+    print(f"✅ Final Grades Calculated\n")
+
+
 def create_student_po_achievements(students, pos):
     """Create PO achievements for students"""
     print("🎯 Creating Student PO Achievements...")
     
-    achievements = []
-    enrolled_students = students[:3]
+    # Clear existing achievements
+    StudentPOAchievement.objects.filter(student__in=students).delete()
     
-    for student in enrolled_students:
+    achievements = []
+    
+    for student in students:
         for po in pos:
-            # Random achievement between 60-90
-            current_percentage = Decimal(str(random.randint(60, 90) + random.random()))
+            # Calculate achievement based on student performance
+            if student.username == 'beyza2':
+                # High achievement: 85-95
+                current_percentage = Decimal(str(random.randint(85, 95) + random.random()))
+            elif student.username == 'beyza.karasahan':
+                # Low achievement: 30-50
+                current_percentage = Decimal(str(random.randint(30, 50) + random.random()))
+            else:
+                # Medium achievement: 60-80
+                current_percentage = Decimal(str(random.randint(60, 80) + random.random()))
             
             # Count assessments related to this PO
             enrollments = Enrollment.objects.filter(student=student)
@@ -499,8 +642,13 @@ def create_student_po_achievements(students, pos):
                     related_pos=po
                 ).count()
             
-            # Completed assessments (80-100% of total)
-            completed = int(total_assessments * random.uniform(0.8, 1.0))
+            # Completed assessments
+            if student.username == 'beyza2':
+                completed = total_assessments  # All completed
+            elif student.username == 'beyza.karasahan':
+                completed = max(1, int(total_assessments * 0.6))  # 60% completed
+            else:
+                completed = int(total_assessments * random.uniform(0.8, 1.0))
             
             achievement = StudentPOAchievement.objects.create(
                 student=student,
@@ -511,14 +659,15 @@ def create_student_po_achievements(students, pos):
             )
             achievements.append(achievement)
             
-            status = "✓" if achievement.is_target_met else "✗"
-            print(f"  {status} {student.username} - {po.code}: {current_percentage:.1f}% ({completed}/{total_assessments})")
+            if student.username in ['beyza2', 'beyza.karasahan']:
+                status = "✓" if achievement.is_target_met else "✗"
+                print(f"  {status} {student.username} - {po.code}: {current_percentage:.1f}% ({completed}/{total_assessments})")
     
     print(f"✅ Created {len(achievements)} PO Achievements\n")
     return achievements
 
 
-def print_summary(pos, teachers, students, courses, enrollments, assessments, grades, achievements):
+def print_summary(pos, teacher, students, courses, enrollments, assessments, grades, achievements):
     """Print summary of created data"""
     print("\n" + "="*70)
     print("🎉 TEST DATA CREATION COMPLETED!")
@@ -526,7 +675,7 @@ def print_summary(pos, teachers, students, courses, enrollments, assessments, gr
     
     print("\n📊 SUMMARY:")
     print(f"  • Program Outcomes: {len(pos)}")
-    print(f"  • Teachers: {len(teachers)}")
+    print(f"  • Teacher: {teacher.get_full_name()} ({teacher.username})")
     print(f"  • Students: {len(students)}")
     print(f"  • Courses: {len(courses)}")
     print(f"  • Course-PO Mappings: {CoursePO.objects.count()}")
@@ -535,32 +684,47 @@ def print_summary(pos, teachers, students, courses, enrollments, assessments, gr
     print(f"  • Student Grades: {len(grades)}")
     print(f"  • PO Achievements: {len(achievements)}")
     
+    # Show class sizes
+    print("\n📚 CLASS SIZES:")
+    for course in courses:
+        count = Enrollment.objects.filter(course=course).count()
+        print(f"  • {course.code}: {count} students")
+    
+    # Show grade ranges
+    print("\n📈 GRADE RANGES:")
+    for course in courses:
+        enrollments = Enrollment.objects.filter(course=course, final_grade__isnull=False)
+        if enrollments.exists():
+            grades_list = [float(e.final_grade) for e in enrollments]
+            print(f"  • {course.code}: Min={min(grades_list):.1f}, Max={max(grades_list):.1f}, Avg={sum(grades_list)/len(grades_list):.1f}")
+    
     print("\n🔐 DEMO CREDENTIALS:")
-    print("\n  👨‍🏫 Teachers:")
-    for teacher in teachers:
-        print(f"    • Username: {teacher.username}")
-        print(f"      Password: teacher123")
-        print(f"      Name: {teacher.get_full_name()}\n")
+    print("\n  👨‍🏫 Teacher:")
+    print(f"    • Username: {teacher.username}")
+    print(f"      Password: ahmet123")
+    print(f"      Name: {teacher.get_full_name()}\n")
     
-    print("  👨‍🎓 Students:")
+    print("  👨‍🎓 Key Students:")
     for student in students:
-        print(f"    • Username: {student.username}")
-        print(f"      Password: student123")
-        print(f"      Name: {student.get_full_name()} ({student.student_id})\n")
+        if student.username in ['beyza2', 'beyza.karasahan']:
+            enrollment = Enrollment.objects.filter(student=student).first()
+            final_grade = enrollment.final_grade if enrollment and enrollment.final_grade else None
+            grade_str = f" (Final: {final_grade:.1f})" if final_grade else ""
+            print(f"    • Username: {student.username}")
+            print(f"      Password: beyza123")
+            print(f"      Name: {student.get_full_name()} ({student.student_id}){grade_str}\n")
     
-    print("  🏛️  Institution Admin:")
-    print("    • Create superuser with: python manage.py createsuperuser")
-    print("    • Suggested username: admin")
-    print("    • Suggested password: admin123")
+    print("  👨‍🎓 Other Students:")
+    print(f"    • Password: student123")
+    print(f"    • Total: {len([s for s in students if s.username not in ['beyza2', 'beyza.karasahan']])} students")
     
     print("\n🌐 NEXT STEPS:")
-    print("  1. Run migrations if not done:")
-    print("     python manage.py migrate")
-    print("\n  2. Start the development server:")
+    print("  1. Start the development server:")
     print("     python manage.py runserver")
-    print("\n  3. Access the admin panel:")
-    print("     http://127.0.0.1:8000/admin/")
-    print("\n  4. Explore the data and test the system!")
+    print("\n  2. Login with beyza2 or beyza.karasahan")
+    print("     Username: beyza2 or beyza.karasahan")
+    print("     Password: beyza123")
+    print("\n  3. Navigate to Course Analytics to see the graphs!")
     
     print("\n" + "="*70)
 
@@ -568,7 +732,7 @@ def print_summary(pos, teachers, students, courses, enrollments, assessments, gr
 def main():
     """Main function to create all test data"""
     print("\n" + "="*70)
-    print("🚀 ACURATE TEST DATA GENERATOR")
+    print("🚀 ACURATE TEST DATA GENERATOR (Course Analytics Edition)")
     print("="*70 + "\n")
     
     try:
@@ -577,17 +741,18 @@ def main():
         
         # Create data in order
         pos = create_program_outcomes()
-        teachers = create_teachers()
+        teacher = create_teacher()
         students = create_students()
-        courses = create_courses(teachers)
+        courses = create_courses(teacher)
         create_course_po_mappings(courses, pos)
         enrollments = create_enrollments(students, courses)
         assessments = create_assessments(courses, pos)
         grades = create_student_grades(students, assessments)
+        calculate_final_grades(students, courses)
         achievements = create_student_po_achievements(students, pos)
         
         # Print summary
-        print_summary(pos, teachers, students, courses, enrollments, assessments, grades, achievements)
+        print_summary(pos, teacher, students, courses, enrollments, assessments, grades, achievements)
         
     except Exception as e:
         print(f"\n❌ ERROR: {str(e)}")
@@ -598,4 +763,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
