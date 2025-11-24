@@ -7,6 +7,7 @@ from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
+from rest_framework.exceptions import PermissionDenied
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from django.db.models import Q, Avg, Count, F, Min, Max, StdDev
@@ -15,11 +16,12 @@ from django.shortcuts import get_object_or_404
 from .models import (
     User, ProgramOutcome, Course, CoursePO,
     Enrollment, Assessment, StudentGrade, StudentPOAchievement,
-    ContactRequest
+    ContactRequest, LearningOutcome
 )
 from .serializers import (
     UserSerializer, UserDetailSerializer, UserCreateSerializer, LoginSerializer,
     ProgramOutcomeSerializer, ProgramOutcomeStatsSerializer,
+    LearningOutcomeSerializer,
     CourseSerializer, CourseDetailSerializer,
     EnrollmentSerializer, AssessmentSerializer,
     StudentGradeSerializer, StudentGradeDetailSerializer,
@@ -259,6 +261,7 @@ class UserViewSet(viewsets.ModelViewSet):
 class ProgramOutcomeViewSet(viewsets.ModelViewSet):
     """
     ViewSet for ProgramOutcome CRUD operations
+    Only INSTITUTION role can create/update/delete POs
     """
     queryset = ProgramOutcome.objects.all()
     serializer_class = ProgramOutcomeSerializer
@@ -274,6 +277,38 @@ class ProgramOutcomeViewSet(viewsets.ModelViewSet):
         if not self.request.user.is_staff:
             queryset = queryset.filter(is_active=True)
         return queryset
+    
+    def get_permissions(self):
+        """Only allow INSTITUTION role to create/update/delete POs"""
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            # Check if user is INSTITUTION or staff
+            if self.request.user.role != User.Role.INSTITUTION and not self.request.user.is_staff:
+                return [IsAdminUser()]  # This will deny access
+        return [IsAuthenticated()]
+    
+    def create(self, request, *args, **kwargs):
+        """Only INSTITUTION can create POs"""
+        if request.user.role != User.Role.INSTITUTION and not request.user.is_staff:
+            return Response({
+                'error': 'Only institution administrators can create Program Outcomes'
+            }, status=status.HTTP_403_FORBIDDEN)
+        return super().create(request, *args, **kwargs)
+    
+    def update(self, request, *args, **kwargs):
+        """Only INSTITUTION can update POs"""
+        if request.user.role != User.Role.INSTITUTION and not request.user.is_staff:
+            return Response({
+                'error': 'Only institution administrators can update Program Outcomes'
+            }, status=status.HTTP_403_FORBIDDEN)
+        return super().update(request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        """Only INSTITUTION can delete POs"""
+        if request.user.role != User.Role.INSTITUTION and not request.user.is_staff:
+            return Response({
+                'error': 'Only institution administrators can delete Program Outcomes'
+            }, status=status.HTTP_403_FORBIDDEN)
+        return super().destroy(request, *args, **kwargs)
     
     def list(self, request, *args, **kwargs):
         """Override list to ensure proper response format"""
@@ -690,10 +725,14 @@ def teacher_dashboard(request):
             'error': 'This endpoint is only for teachers'
         }, status=status.HTTP_403_FORBIDDEN)
     
-    # Get teacher's courses
+    # Get teacher's courses with all necessary prefetches
     courses = Course.objects.filter(
         teacher=user
-    ).prefetch_related('enrollments')
+    ).prefetch_related(
+        'enrollments',
+        'course_pos__program_outcome',
+        'learning_outcomes'
+    ).select_related('teacher', 'department')
     
     # Calculate total students (active enrollments)
     total_students = Enrollment.objects.filter(
@@ -713,16 +752,16 @@ def teacher_dashboard(request):
         assessment__course__teacher=user
     ).select_related('student', 'assessment').order_by('-graded_at')[:10]
     
-    # Serialize data
-    serializer = TeacherDashboardSerializer({
-        'teacher': user,
-        'courses': courses,
+    # Serialize data manually (like student_dashboard)
+    serializer_data = {
+        'teacher': UserDetailSerializer(user).data,
+        'courses': [CourseDetailSerializer(course).data for course in courses],
         'total_students': total_students,
         'pending_assessments': pending_assessments,
-        'recent_submissions': recent_submissions
-    })
+        'recent_submissions': [StudentGradeSerializer(submission).data for submission in recent_submissions]
+    }
     
-    return Response(serializer.data)
+    return Response(serializer_data)
 
 
 @api_view(['GET'])
@@ -777,6 +816,99 @@ def institution_dashboard(request):
     
     serializer = InstitutionDashboardSerializer()
     return Response(serializer.to_representation(data))
+
+
+# =============================================================================
+# LEARNING OUTCOME VIEWSET
+# =============================================================================
+
+class LearningOutcomeViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for LearningOutcome CRUD operations
+    Only TEACHER role can create/update/delete LOs for their courses
+    """
+    queryset = LearningOutcome.objects.all()
+    serializer_class = LearningOutcomeSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['code', 'title', 'description']
+    ordering_fields = ['code', 'created_at', 'course__code']
+    ordering = ['course__code', 'code']
+    
+    def get_queryset(self):
+        """Filter LOs based on user role"""
+        user = self.request.user
+        queryset = LearningOutcome.objects.select_related('course')
+        
+        # Teachers see only LOs for their courses
+        if user.role == User.Role.TEACHER:
+            queryset = queryset.filter(course__teacher=user)
+        
+        # Filter by course if specified
+        course_id = self.request.query_params.get('course', None)
+        if course_id:
+            try:
+                course_id_int = int(course_id)
+                queryset = queryset.filter(course_id=course_id_int)
+            except (ValueError, TypeError):
+                # Invalid course_id, return empty queryset
+                queryset = queryset.none()
+        
+        # Filter active LOs for non-admin users
+        if not user.is_staff:
+            queryset = queryset.filter(is_active=True)
+        
+        return queryset
+    
+    def list(self, request, *args, **kwargs):
+        """Override list to ensure proper response format"""
+        queryset = self.filter_queryset(self.get_queryset())
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+    
+    def perform_create(self, serializer):
+        """Only allow teachers to create LOs for their own courses"""
+        user = self.request.user
+        course = serializer.validated_data.get('course')
+        
+        if user.role != User.Role.TEACHER and not user.is_staff:
+            raise PermissionDenied('Only teachers can create Learning Outcomes')
+        
+        if course and course.teacher != user and not user.is_staff:
+            raise PermissionDenied('You can only create Learning Outcomes for your own courses')
+        
+        serializer.save()
+    
+    def perform_update(self, serializer):
+        """Only allow teachers to update LOs for their own courses"""
+        user = self.request.user
+        learning_outcome = self.get_object()
+        
+        if user.role != User.Role.TEACHER and not user.is_staff:
+            raise PermissionDenied('Only teachers can update Learning Outcomes')
+        
+        if learning_outcome.course.teacher != user and not user.is_staff:
+            raise PermissionDenied('You can only update Learning Outcomes for your own courses')
+        
+        serializer.save()
+    
+    def perform_destroy(self, instance):
+        """Only allow teachers to delete LOs for their own courses"""
+        user = self.request.user
+        
+        if user.role != User.Role.TEACHER and not user.is_staff:
+            raise PermissionDenied('Only teachers can delete Learning Outcomes')
+        
+        if instance.course.teacher != user and not user.is_staff:
+            raise PermissionDenied('You can only delete Learning Outcomes for your own courses')
+        
+        instance.delete()
+    
+    def list(self, request, *args, **kwargs):
+        """Override list to ensure proper response format"""
+        queryset = self.filter_queryset(self.get_queryset())
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
 
 
 # =============================================================================

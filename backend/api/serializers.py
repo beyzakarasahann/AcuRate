@@ -8,7 +8,7 @@ from django.contrib.auth import authenticate
 from .models import (
     User, ProgramOutcome, Course, CoursePO, 
     Enrollment, Assessment, StudentGrade, StudentPOAchievement,
-    ContactRequest
+    ContactRequest, LearningOutcome
 )
 
 
@@ -128,6 +128,26 @@ class ProgramOutcomeStatsSerializer(serializers.ModelSerializer):
 
 
 # =============================================================================
+# LEARNING OUTCOME SERIALIZERS
+# =============================================================================
+
+class LearningOutcomeSerializer(serializers.ModelSerializer):
+    """Serializer for LearningOutcome model"""
+    course_code = serializers.CharField(source='course.code', read_only=True)
+    course_name = serializers.CharField(source='course.name', read_only=True)
+    
+    class Meta:
+        model = LearningOutcome
+        fields = [
+            'id', 'code', 'title', 'description',
+            'course', 'course_code', 'course_name',
+            'target_percentage', 'is_active',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+# =============================================================================
 # COURSE SERIALIZERS
 # =============================================================================
 
@@ -168,6 +188,7 @@ class CourseDetailSerializer(serializers.ModelSerializer):
     teacher_name = serializers.SerializerMethodField()
     semester_display = serializers.CharField(source='get_semester_display', read_only=True)
     program_outcomes = CoursePOSerializer(source='course_pos', many=True, read_only=True)
+    learning_outcomes = LearningOutcomeSerializer(many=True, read_only=True)
     enrollment_count = serializers.SerializerMethodField()
     
     class Meta:
@@ -176,7 +197,7 @@ class CourseDetailSerializer(serializers.ModelSerializer):
             'id', 'code', 'name', 'description', 'credits',
             'semester', 'semester_display', 'academic_year',
             'department', 'teacher', 'teacher_name', 'program_outcomes',
-            'enrollment_count',
+            'learning_outcomes', 'enrollment_count',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
@@ -234,7 +255,7 @@ class AssessmentSerializer(serializers.ModelSerializer):
             'id', 'course', 'course_code', 'course_name',
             'title', 'description', 'assessment_type', 'type_display',
             'weight', 'max_score', 'due_date', 'is_active',
-            'related_pos', 'created_at', 'updated_at'
+            'related_pos', 'feedback_ranges', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
     
@@ -245,6 +266,40 @@ class AssessmentSerializer(serializers.ModelSerializer):
         if related_pos:
             assessment.related_pos.set(related_pos)
         return assessment
+    
+    def validate_feedback_ranges(self, value):
+        """Validate feedback_ranges format"""
+        if value is None:
+            return []
+        
+        if not isinstance(value, list):
+            raise serializers.ValidationError("feedback_ranges must be a list")
+        
+        for i, range_item in enumerate(value):
+            if not isinstance(range_item, dict):
+                raise serializers.ValidationError(f"feedback_ranges[{i}] must be a dictionary")
+            
+            required_fields = ['min_score', 'max_score', 'feedback']
+            for field in required_fields:
+                if field not in range_item:
+                    raise serializers.ValidationError(f"feedback_ranges[{i}] missing required field: {field}")
+            
+            min_score = range_item.get('min_score')
+            max_score = range_item.get('max_score')
+            
+            if not isinstance(min_score, (int, float)) or not isinstance(max_score, (int, float)):
+                raise serializers.ValidationError(f"feedback_ranges[{i}] min_score and max_score must be numbers")
+            
+            if min_score < 0 or min_score > 100:
+                raise serializers.ValidationError(f"feedback_ranges[{i}] min_score must be between 0 and 100")
+            
+            if max_score < 0 or max_score > 100:
+                raise serializers.ValidationError(f"feedback_ranges[{i}] max_score must be between 0 and 100")
+            
+            if min_score > max_score:
+                raise serializers.ValidationError(f"feedback_ranges[{i}] min_score cannot be greater than max_score")
+        
+        return value
     
     def update(self, instance, validated_data):
         """Handle ManyToMany relationship for related_pos"""

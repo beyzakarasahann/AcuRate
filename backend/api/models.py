@@ -298,6 +298,69 @@ class CoursePO(models.Model):
 
 
 # =============================================================================
+# LEARNING OUTCOME MODEL
+# =============================================================================
+
+class LearningOutcome(models.Model):
+    """
+    Learning Outcomes (LO) represent course-specific learning objectives.
+    These are defined by teachers for their courses.
+    
+    Example LOs:
+    - LO1: Understand data structures
+    - LO2: Implement algorithms
+    - LO3: Analyze algorithm complexity
+    """
+    
+    code = models.CharField(
+        max_length=20,
+        help_text="LO code (e.g., LO1, LO2, CS301-LO1)"
+    )
+    
+    title = models.CharField(
+        max_length=200,
+        help_text="LO title (e.g., Understand Data Structures)"
+    )
+    
+    description = models.TextField(
+        help_text="Detailed description of the learning outcome"
+    )
+    
+    course = models.ForeignKey(
+        Course,
+        on_delete=models.CASCADE,
+        related_name='learning_outcomes',
+        help_text="Course this LO belongs to"
+    )
+    
+    target_percentage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=70.00,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        help_text="Target achievement percentage (default: 70%)"
+    )
+    
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether this LO is currently active"
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'learning_outcomes'
+        ordering = ['course', 'code']
+        unique_together = ['course', 'code']
+        verbose_name = 'Learning Outcome'
+        verbose_name_plural = 'Learning Outcomes'
+    
+    def __str__(self):
+        return f"{self.course.code} - {self.code}: {self.title}"
+
+
+# =============================================================================
 # ENROLLMENT MODEL
 # =============================================================================
 
@@ -430,6 +493,13 @@ class Assessment(models.Model):
         help_text="Whether this assessment is currently active"
     )
     
+    # Feedback ranges for automatic feedback generation
+    feedback_ranges = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="List of feedback ranges: [{'min_score': 90, 'max_score': 100, 'feedback': 'Excellent'}, ...]"
+    )
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -441,6 +511,21 @@ class Assessment(models.Model):
     
     def __str__(self):
         return f"{self.course.code}: {self.title} ({self.get_assessment_type_display()})"
+    
+    def get_feedback_for_score(self, score):
+        """Get automatic feedback based on score and feedback ranges"""
+        if not self.feedback_ranges:
+            return ""
+        
+        score_percentage = (float(score) / float(self.max_score)) * 100 if self.max_score > 0 else 0
+        
+        for range_item in self.feedback_ranges:
+            min_score = range_item.get('min_score', 0)
+            max_score = range_item.get('max_score', 100)
+            if min_score <= score_percentage <= max_score:
+                return range_item.get('feedback', '')
+        
+        return ""
 
 
 # =============================================================================
