@@ -1,116 +1,13 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Building2, Users, BookOpen, TrendingUp, Filter, FileText, AlertTriangle, CheckCircle2, Trophy, ArrowUpRight, ArrowDownRight, Moon, Sun } from 'lucide-react';
+import { Building2, Users, BookOpen, TrendingUp, Filter, FileText, AlertTriangle, CheckCircle2, Trophy, ArrowUpRight, ArrowDownRight, Moon, Sun, Loader2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useTheme } from 'next-themes'; 
+import { api, DashboardData } from '../../lib/api';
 
 // 🎨 DİNAMİK TEMA KANCASI BURAYA MİRAS ALINDI
-import { useThemeColors } from '../../hooks/useThemeColors'; 
-
-// Mevcut statik mock verileri (DEĞİŞTİRİLMEDİ)
-const stats = [
-  {
-    title: 'Total Students',
-    value: '1,250',
-    change: '+12%',
-    trend: 'up',
-    icon: Users,
-    color: 'from-blue-500 to-cyan-500' 
-  },
-  {
-    title: 'Faculty Members',
-    value: '85',
-    change: '+5%',
-    trend: 'up',
-    icon: Users,
-    color: 'from-purple-500 to-pink-500'
-  },
-  {
-    title: 'Active Courses',
-    value: '156',
-    change: '+8%',
-    trend: 'up',
-    icon: BookOpen,
-    color: 'from-orange-500 to-red-500'
-  },
-  {
-    title: 'Avg Performance',
-    value: '76.5%',
-    change: '+2.3%',
-    trend: 'up',
-    icon: TrendingUp,
-    color: 'from-green-500 to-emerald-500'
-  }
-];
-
-const departments = [
-    {
-      name: 'Computer Science',
-      students: 450,
-      avgGrade: 78.5,
-      poAchievement: 82,
-      status: 'excellent',
-      courses: 45,
-      faculty: 28
-    },
-    {
-      name: 'Electrical Engineering',
-      students: 380,
-      avgGrade: 75.2,
-      poAchievement: 76,
-      status: 'good',
-      courses: 38,
-      faculty: 24
-    },
-    {
-      name: 'Mechanical Engineering',
-      students: 320,
-      avgGrade: 73.8,
-      poAchievement: 74,
-      status: 'good',
-      courses: 35,
-      faculty: 20
-    },
-    {
-      name: 'Civil Engineering',
-      students: 280,
-      avgGrade: 71.5,
-      poAchievement: 68,
-      status: 'needs-attention',
-      courses: 32,
-      faculty: 18
-    }
-  ];
-
-const programOutcomes = [
-    { code: 'PO1', title: 'Engineering Knowledge', current: 78.5, target: 70, status: 'achieved' },
-    { code: 'PO2', title: 'Problem Analysis', current: 82.3, target: 75, status: 'excellent' },
-    { code: 'PO3', title: 'Design/Development', current: 75.8, target: 70, status: 'achieved' },
-    { code: 'PO4', title: 'Investigation', current: 73.2, target: 70, status: 'achieved' },
-    { code: 'PO5', title: 'Modern Tool Usage', current: 68.5, target: 65, status: 'achieved' }
-  ];
-
-const recentAlerts = [
-    {
-      type: 'warning',
-      title: 'Civil Engineering - PO2 Below Target',
-      description: 'Average achievement: 62% (Target: 75%)',
-      time: '2 hours ago'
-    },
-    {
-      type: 'info',
-      title: 'Accreditation Review Scheduled',
-      description: 'ABET review scheduled for December 2024',
-      time: '1 day ago'
-    },
-    {
-      type: 'success',
-      title: 'CS Department Exceeds All Targets',
-      description: 'All POs above target for Fall 2024',
-      time: '2 days ago'
-    }
-  ];
+import { useThemeColors } from '../../hooks/useThemeColors';
 
 // Statik sınıf stringlerini renk kodlarına çeviren yardımcı fonksiyon
 // 🚩 TypeScript Hatası Düzeltildi: colorClass parametresine 'string' türü eklendi.
@@ -140,14 +37,134 @@ const item = {
 };
 
 
+interface InstitutionDashboardData extends DashboardData {
+  po_achievements?: Array<{
+    id: number;
+    code: string;
+    title: string;
+    description?: string;
+    average_achievement: number | null;
+    target_percentage: number;
+    total_students: number;
+    students_achieved: number;
+    achievement_rate?: number;
+  }>;
+  department_stats?: Array<{
+    department: string;
+    student_count: number;
+  }>;
+}
+
 export default function InstitutionDashboard() {
   const [selectedDepartment, setSelectedDepartment] = useState('all');
   const [selectedSemester, setSelectedSemester] = useState('fall-2024');
-  const [mounted, setMounted] = useState(false); 
+  const [mounted, setMounted] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [dashboardData, setDashboardData] = useState<InstitutionDashboardData | null>(null);
 
   useEffect(() => {
     setMounted(true);
+    fetchDashboardData();
   }, []);
+
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await api.getInstitutionDashboard();
+      setDashboardData(data as InstitutionDashboardData);
+    } catch (err: any) {
+      console.error('Error fetching institution dashboard:', err);
+      setError(err.message || 'Failed to load dashboard data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Calculate stats from API data
+  const stats = dashboardData ? [
+    {
+      title: 'Total Students',
+      value: dashboardData.total_students?.toLocaleString() || '0',
+      change: '+0%', // TODO: Calculate from historical data
+      trend: 'up' as const,
+      icon: Users,
+      color: 'from-blue-500 to-cyan-500' 
+    },
+    {
+      title: 'Faculty Members',
+      value: dashboardData.total_teachers?.toLocaleString() || '0',
+      change: '+0%', // TODO: Calculate from historical data
+      trend: 'up' as const,
+      icon: Users,
+      color: 'from-purple-500 to-pink-500'
+    },
+    {
+      title: 'Active Courses',
+      value: dashboardData.total_courses?.toLocaleString() || '0',
+      change: '+0%', // TODO: Calculate from historical data
+      trend: 'up' as const,
+      icon: BookOpen,
+      color: 'from-orange-500 to-red-500'
+    },
+    {
+      title: 'Avg Performance',
+      value: dashboardData.po_achievements && dashboardData.po_achievements.length > 0
+        ? `${(dashboardData.po_achievements.reduce((sum, po) => sum + (po.average_achievement ?? 0), 0) / dashboardData.po_achievements.length).toFixed(1)}%`
+        : '0%',
+      change: '+0%', // TODO: Calculate from historical data
+      trend: 'up' as const,
+      icon: TrendingUp,
+      color: 'from-green-500 to-emerald-500'
+    }
+  ] : [];
+
+  // Transform department stats from API
+  const departments = dashboardData?.department_stats?.map(dept => {
+    // Calculate avg grade and PO achievement from enrollments (simplified)
+    // TODO: Get actual data from backend
+    const avgGrade = 75; // Placeholder
+    const poAchievement = 75; // Placeholder
+    return {
+      name: dept.department,
+      students: dept.student_count,
+      avgGrade,
+      poAchievement,
+      status: poAchievement >= 80 ? 'excellent' : poAchievement >= 70 ? 'good' : 'needs-attention' as const,
+      courses: 0, // TODO: Get from backend
+      faculty: 0 // TODO: Get from backend
+    };
+  }) || [];
+
+  // Transform PO achievements from API
+  const programOutcomes = dashboardData?.po_achievements?.map(po => {
+    const current = po.average_achievement ?? 0;
+    const target = po.target_percentage || 0;
+    return {
+      code: po.code,
+      title: po.title,
+      current,
+      target,
+      status: (current >= target * 1.1 ? 'excellent' : current >= target ? 'achieved' : 'not-achieved') as const
+    };
+  }) || [];
+
+  // Mock alerts (TODO: Get from backend)
+  const recentAlerts = [
+    {
+      type: 'warning' as const,
+      title: 'Some PO Below Target',
+      description: 'Check PO achievements for details',
+      time: 'Recently'
+    },
+    {
+      type: 'info' as const,
+      title: 'Dashboard Updated',
+      description: 'Latest data loaded successfully',
+      time: 'Just now'
+    }
+  ];
 
   // 1. Kancadan Dinamik Tema Değerlerini Alma
   const { 
@@ -162,21 +179,55 @@ export default function InstitutionDashboard() {
   // Temayı değiştirmek için next-themes hook'unu kullanma
   const { setTheme } = useTheme();
 
+  // Aydınlık/Karanlık moda göre metin ve ikon renkleri (hook'lardan sonra tanımlanmalı)
+  const whiteTextClass = isDark ? 'text-white' : 'text-gray-900';
+  const accentIconClass = isDark ? 'text-indigo-400' : 'text-indigo-600';
+  const secondaryTextClass = isDark ? 'text-gray-400' : 'text-gray-600';
+
   // Yüklenme Kontrolü
   // Sunucu renderı ile istemci hidrasyonu arasındaki uyuşmazlığı engeller.
   if (!mounted || !themeMounted) {
     // Statik başlangıç değerlerini kullanın (Sunucu renderına en yakın değerler)
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-950 flex items-center justify-center">
-        <div className="text-white text-xl">Loading...</div>
+      <div className={`min-h-screen bg-gradient-to-br ${themeClasses.background} flex items-center justify-center`}>
+        <div className={`${whiteTextClass} text-xl`}>Loading...</div>
       </div>
     );
   }
-  
-  // Aydınlık/Karanlık moda göre metin ve ikon renkleri
-  const whiteTextClass = isDark ? 'text-white' : 'text-gray-900';
-  const accentIconClass = isDark ? 'text-indigo-400' : 'text-indigo-600';
-  const secondaryTextClass = isDark ? 'text-gray-400' : 'text-gray-600';
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className={`min-h-screen bg-gradient-to-br ${themeClasses.background} flex items-center justify-center`}>
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className={`w-8 h-8 ${accentIconClass} animate-spin`} />
+          <p className={`${secondaryTextClass} text-lg`}>Loading dashboard data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className={`min-h-screen bg-gradient-to-br ${themeClasses.background} flex items-center justify-center`}>
+        <div className={`${themeClasses.card} p-8 max-w-md text-center`}>
+          <AlertTriangle className={`w-12 h-12 text-red-500 mx-auto mb-4`} />
+          <h2 className={`text-xl font-bold ${whiteTextClass} mb-2`}>Error Loading Dashboard</h2>
+          <p className={`${secondaryTextClass} mb-4`}>{error}</p>
+          <motion.button
+            onClick={fetchDashboardData}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            style={{ backgroundImage: `linear-gradient(to right, ${accentStart}, ${accentEnd})` }}
+            className="px-6 py-2 rounded-xl text-white font-medium"
+          >
+            Retry
+          </motion.button>
+        </div>
+      </div>
+    );
+  }
 
   // Tema değiştirme fonksiyonu
   const toggleTheme = () => {

@@ -732,7 +732,7 @@ def teacher_dashboard(request):
         'enrollments',
         'course_pos__program_outcome',
         'learning_outcomes'
-    ).select_related('teacher', 'department')
+    ).select_related('teacher')
     
     # Calculate total students (active enrollments)
     total_students = Enrollment.objects.filter(
@@ -782,18 +782,18 @@ def institution_dashboard(request):
     # Overall statistics
     total_students = User.objects.filter(role=User.Role.STUDENT, is_active=True).count()
     total_teachers = User.objects.filter(role=User.Role.TEACHER, is_active=True).count()
-    total_courses = Course.objects.filter(is_active=True).count()
+    total_courses = Course.objects.all().count()  # Course model doesn't have is_active field
     active_enrollments = Enrollment.objects.filter(is_active=True).count()
     
     # PO achievements statistics
     po_achievements = ProgramOutcome.objects.filter(is_active=True).annotate(
-        total_students=Count('studentpoachievement__student', distinct=True),
+        total_students=Count('student_achievements__student', distinct=True),
         students_achieved=Count(
-            'studentpoachievement',
-            filter=Q(studentpoachievement__achievement_percentage__gte=F('target_percentage')),
+            'student_achievements',
+            filter=Q(student_achievements__current_percentage__gte=F('target_percentage')),
             distinct=True
         ),
-        average_achievement=Avg('studentpoachievement__achievement_percentage')
+        average_achievement=Avg('student_achievements__current_percentage')
     )
     
     # Department statistics
@@ -805,17 +805,24 @@ def institution_dashboard(request):
         student_count=Count('id')
     ).order_by('-student_count')
     
+    # Serialize PO achievements
+    po_achievements_data = ProgramOutcomeStatsSerializer(po_achievements, many=True).data
+    
     data = {
         'total_students': total_students,
         'total_teachers': total_teachers,
         'total_courses': total_courses,
         'active_enrollments': active_enrollments,
-        'po_achievements': po_achievements,
+        'po_achievements': po_achievements_data,
         'department_stats': list(department_stats)
     }
     
-    serializer = InstitutionDashboardSerializer()
-    return Response(serializer.to_representation(data))
+    serializer = InstitutionDashboardSerializer(data=data)
+    if serializer.is_valid():
+        return Response(serializer.validated_data)
+    else:
+        # If validation fails, return data directly
+        return Response(data)
 
 
 # =============================================================================
