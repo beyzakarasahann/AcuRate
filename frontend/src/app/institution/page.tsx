@@ -1,9 +1,10 @@
 'use client';
 
-import { motion } from 'framer-motion';
-import { Building2, Users, BookOpen, TrendingUp, Filter, FileText, AlertTriangle, CheckCircle2, Trophy, ArrowUpRight, ArrowDownRight, Moon, Sun, Loader2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Building2, Users, BookOpen, TrendingUp, Filter, FileText, AlertTriangle, CheckCircle2, Trophy, ArrowUpRight, ArrowDownRight, Moon, Sun, Loader2, BarChart3, X } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { useTheme } from 'next-themes'; 
+import { useTheme } from 'next-themes';
+import Link from 'next/link';
 import { api, DashboardData } from '../../lib/api';
 
 // 🎨 DİNAMİK TEMA KANCASI BURAYA MİRAS ALINDI
@@ -52,6 +53,10 @@ interface InstitutionDashboardData extends DashboardData {
   department_stats?: Array<{
     department: string;
     student_count: number;
+    course_count?: number;
+    faculty_count?: number;
+    avg_grade?: number | null;
+    po_achievement?: number | null;
   }>;
 }
 
@@ -62,10 +67,14 @@ export default function InstitutionDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dashboardData, setDashboardData] = useState<InstitutionDashboardData | null>(null);
+  const [alerts, setAlerts] = useState<any[]>([]);
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [previousData, setPreviousData] = useState<any>(null); // For trend calculation
 
   useEffect(() => {
     setMounted(true);
     fetchDashboardData();
+    fetchAlerts();
   }, []);
 
   const fetchDashboardData = async () => {
@@ -73,6 +82,12 @@ export default function InstitutionDashboard() {
       setLoading(true);
       setError(null);
       const data = await api.getInstitutionDashboard();
+      
+      // Store previous data for trend calculation
+      if (dashboardData) {
+        setPreviousData(dashboardData);
+      }
+      
       setDashboardData(data as InstitutionDashboardData);
     } catch (err: any) {
       console.error('Error fetching institution dashboard:', err);
@@ -82,29 +97,63 @@ export default function InstitutionDashboard() {
     }
   };
 
-  // Calculate stats from API data
+  const fetchAlerts = async () => {
+    try {
+      const response = await api.getAnalyticsAlerts();
+      setAlerts(response.alerts || []);
+    } catch (err: any) {
+      console.error('Error fetching alerts:', err);
+      // Don't show error for alerts, just use empty array
+      setAlerts([]);
+    }
+  };
+
+  // Calculate trend percentage
+  const calculateTrend = (current: number, previous: number | null): string => {
+    if (!previous || previous === 0) return '+0%';
+    const change = ((current - previous) / previous) * 100;
+    const sign = change >= 0 ? '+' : '';
+    return `${sign}${change.toFixed(1)}%`;
+  };
+
+  // Calculate stats from API data with trends
   const stats = dashboardData ? [
     {
       title: 'Total Students',
       value: dashboardData.total_students?.toLocaleString() || '0',
-      change: '+0%', // TODO: Calculate from historical data
-      trend: 'up' as const,
+      change: previousData ? calculateTrend(
+        dashboardData.total_students || 0,
+        previousData.total_students || 0
+      ) : '+0%',
+      trend: (previousData && dashboardData.total_students && previousData.total_students) 
+        ? (dashboardData.total_students >= (previousData.total_students || 0) ? 'up' : 'down') as const
+        : 'up' as const,
       icon: Users,
       color: 'from-blue-500 to-cyan-500' 
     },
     {
       title: 'Faculty Members',
       value: dashboardData.total_teachers?.toLocaleString() || '0',
-      change: '+0%', // TODO: Calculate from historical data
-      trend: 'up' as const,
+      change: previousData ? calculateTrend(
+        dashboardData.total_teachers || 0,
+        previousData.total_teachers || 0
+      ) : '+0%',
+      trend: (previousData && dashboardData.total_teachers && previousData.total_teachers)
+        ? (dashboardData.total_teachers >= (previousData.total_teachers || 0) ? 'up' : 'down') as const
+        : 'up' as const,
       icon: Users,
       color: 'from-purple-500 to-pink-500'
     },
     {
       title: 'Active Courses',
       value: dashboardData.total_courses?.toLocaleString() || '0',
-      change: '+0%', // TODO: Calculate from historical data
-      trend: 'up' as const,
+      change: previousData ? calculateTrend(
+        dashboardData.total_courses || 0,
+        previousData.total_courses || 0
+      ) : '+0%',
+      trend: (previousData && dashboardData.total_courses && previousData.total_courses)
+        ? (dashboardData.total_courses >= (previousData.total_courses || 0) ? 'up' : 'down') as const
+        : 'up' as const,
       icon: BookOpen,
       color: 'from-orange-500 to-red-500'
     },
@@ -113,8 +162,22 @@ export default function InstitutionDashboard() {
       value: dashboardData.po_achievements && dashboardData.po_achievements.length > 0
         ? `${(dashboardData.po_achievements.reduce((sum, po) => sum + (po.average_achievement ?? 0), 0) / dashboardData.po_achievements.length).toFixed(1)}%`
         : '0%',
-      change: '+0%', // TODO: Calculate from historical data
-      trend: 'up' as const,
+      change: (() => {
+        if (!previousData || !dashboardData.po_achievements) return '+0%';
+        const currentAvg = dashboardData.po_achievements.reduce((sum, po) => sum + (po.average_achievement ?? 0), 0) / dashboardData.po_achievements.length;
+        const prevAvg = previousData.po_achievements 
+          ? previousData.po_achievements.reduce((sum: number, po: any) => sum + (po.average_achievement ?? 0), 0) / previousData.po_achievements.length
+          : 0;
+        return calculateTrend(currentAvg, prevAvg);
+      })(),
+      trend: (() => {
+        if (!previousData || !dashboardData.po_achievements) return 'up' as const;
+        const currentAvg = dashboardData.po_achievements.reduce((sum, po) => sum + (po.average_achievement ?? 0), 0) / dashboardData.po_achievements.length;
+        const prevAvg = previousData.po_achievements 
+          ? previousData.po_achievements.reduce((sum: number, po: any) => sum + (po.average_achievement ?? 0), 0) / previousData.po_achievements.length
+          : 0;
+        return (currentAvg >= prevAvg ? 'up' : 'down') as const;
+      })(),
       icon: TrendingUp,
       color: 'from-green-500 to-emerald-500'
     }
@@ -122,18 +185,17 @@ export default function InstitutionDashboard() {
 
   // Transform department stats from API
   const departments = dashboardData?.department_stats?.map(dept => {
-    // Calculate avg grade and PO achievement from enrollments (simplified)
-    // TODO: Get actual data from backend
-    const avgGrade = 75; // Placeholder
-    const poAchievement = 75; // Placeholder
+    // Get actual data from backend
+    const avgGrade = dept.avg_grade ?? 0;
+    const poAchievement = dept.po_achievement ?? 0;
     return {
       name: dept.department,
       students: dept.student_count,
       avgGrade,
       poAchievement,
       status: poAchievement >= 80 ? 'excellent' : poAchievement >= 70 ? 'good' : 'needs-attention' as const,
-      courses: 0, // TODO: Get from backend
-      faculty: 0 // TODO: Get from backend
+      courses: dept.course_count ?? 0,
+      faculty: dept.faculty_count ?? 0
     };
   }) || [];
 
@@ -150,14 +212,8 @@ export default function InstitutionDashboard() {
     };
   }) || [];
 
-  // Mock alerts (TODO: Get from backend)
-  const recentAlerts = [
-    {
-      type: 'warning' as const,
-      title: 'Some PO Below Target',
-      description: 'Check PO achievements for details',
-      time: 'Recently'
-    },
+  // Use real alerts from API
+  const recentAlerts = alerts.length > 0 ? alerts : [
     {
       type: 'info' as const,
       title: 'Dashboard Updated',
@@ -165,6 +221,33 @@ export default function InstitutionDashboard() {
       time: 'Just now'
     }
   ];
+
+  // Export report function
+  const handleExportReport = () => {
+    // Create a simple text report
+    const reportData = {
+      title: 'Institution Dashboard Report',
+      date: new Date().toLocaleDateString(),
+      stats: stats,
+      departments: departments,
+      programOutcomes: programOutcomes,
+    };
+
+    // Convert to JSON and download
+    const dataStr = JSON.stringify(reportData, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `institution-dashboard-report-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  // Get available departments for filter
+  const availableDepartments = departments.map(d => d.name);
 
   // 1. Kancadan Dinamik Tema Değerlerini Alma
   const { 
@@ -301,6 +384,7 @@ export default function InstitutionDashboard() {
               </motion.button>
 
               <motion.button
+                onClick={() => setShowFilterModal(true)}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 // Filtre Butonu: Dinamik Sınıf Kullanımı (Temel kart stiline uyumlu)
@@ -310,8 +394,22 @@ export default function InstitutionDashboard() {
                 Filters
               </motion.button>
               
+              {/* Analytics Butonu (Dinamik Gradient) */}
+              <Link href="/institution/analytics">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  style={{ backgroundImage: `linear-gradient(to right, ${accentStart}, ${accentEnd})` }}
+                  className="px-4 py-2 rounded-xl text-white flex items-center gap-2 transition-all shadow-lg shadow-indigo-500/30"
+                >
+                  <BarChart3 className="w-4 h-4" />
+                  View Analytics
+                </motion.button>
+              </Link>
+              
               {/* Rapor Butonu (Dinamik Gradient) */}
               <motion.button
+                onClick={handleExportReport}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 style={{ backgroundImage: `linear-gradient(to right, ${accentStart}, ${accentEnd})` }}
@@ -574,7 +672,17 @@ export default function InstitutionDashboard() {
             >
               <h2 className={`text-xl font-bold ${whiteTextClass} mb-4`}>Quick Actions</h2>
               <div className="space-y-2">
-                {['Generate Report', 'Schedule Meeting', 'View Analytics'].map((action, index) => (
+                <Link href="/institution/analytics">
+                  <motion.button
+                    whileHover={{ scale: 1.05, x: 5 }}
+                    whileTap={{ scale: 0.95 }}
+                    className={`w-full px-4 py-3 rounded-xl ${themeClasses.card.replace('shadow-2xl', '').replace('rounded-2xl', 'rounded-xl')} ${isDark ? 'hover:bg-white/10 text-white' : 'hover:bg-gray-100 text-gray-700'} text-left transition-all flex items-center gap-2`}
+                  >
+                    <BarChart3 className="w-4 h-4" />
+                    View Analytics
+                  </motion.button>
+                </Link>
+                {['Generate Report', 'Schedule Meeting'].map((action, index) => (
                   <motion.button
                     key={index}
                     whileHover={{ scale: 1.05, x: 5 }}
@@ -624,6 +732,89 @@ export default function InstitutionDashboard() {
           </div>
         </div>
       </div>
+
+      {/* Filter Modal */}
+      <AnimatePresence>
+        {showFilterModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setShowFilterModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className={`${themeClasses.card} rounded-2xl p-6 max-w-md w-full shadow-2xl`}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h2 className={`text-xl font-bold ${whiteTextClass} flex items-center gap-2`}>
+                  <Filter className="w-5 h-5" style={{ color: accentStart }} />
+                  Filters
+                </h2>
+                <motion.button
+                  onClick={() => setShowFilterModal(false)}
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  className={`${secondaryTextClass} hover:${whiteTextClass} transition-colors`}
+                >
+                  <X className="w-5 h-5" />
+                </motion.button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className={`text-sm font-medium ${secondaryTextClass} mb-2 block`}>
+                    Department
+                  </label>
+                  <select
+                    value={selectedDepartment}
+                    onChange={(e) => setSelectedDepartment(e.target.value)}
+                    className={`w-full px-4 py-2 rounded-xl ${themeClasses.card.replace('shadow-2xl', '').replace('rounded-2xl', 'rounded-xl')} ${isDark ? 'bg-white/5 text-white border border-white/10' : 'bg-white text-gray-700 border border-gray-200'} focus:outline-none focus:ring-2 focus:ring-indigo-500`}
+                  >
+                    <option value="all">All Departments</option>
+                    {availableDepartments.map(dept => (
+                      <option key={dept} value={dept}>{dept}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className={`text-sm font-medium ${secondaryTextClass} mb-2 block`}>
+                    Semester
+                  </label>
+                  <select
+                    value={selectedSemester}
+                    onChange={(e) => setSelectedSemester(e.target.value)}
+                    className={`w-full px-4 py-2 rounded-xl ${themeClasses.card.replace('shadow-2xl', '').replace('rounded-2xl', 'rounded-xl')} ${isDark ? 'bg-white/5 text-white border border-white/10' : 'bg-white text-gray-700 border border-gray-200'} focus:outline-none focus:ring-2 focus:ring-indigo-500`}
+                  >
+                    <option value="all">All Semesters</option>
+                    <option value="fall-2024">Fall 2024</option>
+                    <option value="spring-2024">Spring 2024</option>
+                    <option value="summer-2024">Summer 2024</option>
+                  </select>
+                </div>
+
+                <motion.button
+                  onClick={() => {
+                    setShowFilterModal(false);
+                    fetchDashboardData();
+                  }}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  style={{ backgroundImage: `linear-gradient(to right, ${accentStart}, ${accentEnd})` }}
+                  className="w-full px-4 py-2 rounded-xl text-white font-medium"
+                >
+                  Apply Filters
+                </motion.button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

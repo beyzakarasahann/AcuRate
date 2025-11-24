@@ -13,6 +13,9 @@ from .views import (
     student_dashboard, teacher_dashboard, institution_dashboard,
     # Course Analytics views
     course_analytics_overview, course_analytics_detail,
+    # Institution Analytics views
+    analytics_departments, analytics_po_trends,
+    analytics_performance_distribution, analytics_course_success, analytics_alerts,
     # Contact views
     create_contact_request,
     # ViewSets
@@ -51,6 +54,13 @@ urlpatterns = [
     # Course Analytics endpoints
     path('course-analytics/', course_analytics_overview, name='course-analytics-overview'),
     path('course-analytics/<int:course_id>/', course_analytics_detail, name='course-analytics-detail'),
+    
+    # Institution Analytics endpoints
+    path('analytics/departments/', analytics_departments, name='analytics-departments'),
+    path('analytics/po-trends/', analytics_po_trends, name='analytics-po-trends'),
+    path('analytics/performance-distribution/', analytics_performance_distribution, name='analytics-performance-distribution'),
+    path('analytics/course-success/', analytics_course_success, name='analytics-course-success'),
+    path('analytics/alerts/', analytics_alerts, name='analytics-alerts'),
     
     # Contact endpoints
     path('contact/', create_contact_request, name='create-contact-request'),

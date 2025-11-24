@@ -855,6 +855,126 @@ class ApiClient {
   }> {
     return await this.request(`/course-analytics/${courseId}/`);
   }
+
+  // Institution Analytics
+  async getAnalyticsDepartments(): Promise<{
+    success: boolean;
+    departments: Array<{
+      name: string;
+      students: number;
+      courses: number;
+      faculty: number;
+      avg_grade: number | null;
+      po_achievement: number | null;
+      status: 'excellent' | 'good' | 'needs-attention';
+    }>;
+  }> {
+    return await this.request('/analytics/departments/');
+  }
+
+  async getAnalyticsPOTrends(params?: {
+    semester?: string;
+    academic_year?: string;
+  }): Promise<{
+    success: boolean;
+    program_outcomes: Array<{
+      code: string;
+      title: string;
+      target_percentage: number;
+      current_percentage: number | null;
+      total_students: number;
+      students_achieved: number;
+      achievement_rate: number;
+      status: 'excellent' | 'achieved' | 'not-achieved';
+    }>;
+    filters: {
+      semester?: string;
+      academic_year?: string;
+    };
+  }> {
+    const queryParams = new URLSearchParams();
+    if (params?.semester) queryParams.append('semester', params.semester);
+    if (params?.academic_year) queryParams.append('academic_year', params.academic_year);
+    const queryString = queryParams.toString();
+    const endpoint = `/analytics/po-trends/${queryString ? `?${queryString}` : ''}`;
+    return await this.request(endpoint);
+  }
+
+  async getAnalyticsPerformanceDistribution(params?: {
+    department?: string;
+  }): Promise<{
+    success: boolean;
+    distribution: {
+      '0-20': number;
+      '21-40': number;
+      '41-60': number;
+      '61-80': number;
+      '81-100': number;
+    };
+    statistics: {
+      total_students: number;
+      average: number;
+      median: number;
+      min: number;
+      max: number;
+    };
+    filters: {
+      department?: string;
+    };
+  }> {
+    const queryParams = new URLSearchParams();
+    if (params?.department) queryParams.append('department', params.department);
+    const queryString = queryParams.toString();
+    const endpoint = `/analytics/performance-distribution/${queryString ? `?${queryString}` : ''}`;
+    return await this.request(endpoint);
+  }
+
+  async getAnalyticsCourseSuccess(params?: {
+    department?: string;
+    semester?: string;
+    academic_year?: string;
+  }): Promise<{
+    success: boolean;
+    courses: Array<{
+      course_id: number;
+      course_code: string;
+      course_name: string;
+      department: string;
+      semester: string;
+      academic_year: string;
+      instructor: string;
+      total_students: number;
+      successful_students: number;
+      success_rate: number;
+      average_grade: number | null;
+    }>;
+    filters: {
+      department?: string;
+      semester?: string;
+      academic_year?: string;
+    };
+  }> {
+    const queryParams = new URLSearchParams();
+    if (params?.department) queryParams.append('department', params.department);
+    if (params?.semester) queryParams.append('semester', params.semester);
+    if (params?.academic_year) queryParams.append('academic_year', params.academic_year);
+    const queryString = queryParams.toString();
+    const endpoint = `/analytics/course-success/${queryString ? `?${queryString}` : ''}`;
+    return await this.request(endpoint);
+  }
+
+  async getAnalyticsAlerts(): Promise<{
+    success: boolean;
+    alerts: Array<{
+      type: 'warning' | 'info' | 'success';
+      title: string;
+      description: string;
+      created_at: string;
+      time: string;
+    }>;
+  }> {
+    return await this.request('/analytics/alerts/');
+  }
 }
 
 // Export singleton instance

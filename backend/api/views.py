@@ -12,6 +12,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from django.db.models import Q, Avg, Count, F, Min, Max, StdDev
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 
 from .models import (
     User, ProgramOutcome, Course, CoursePO,
@@ -796,14 +797,69 @@ def institution_dashboard(request):
         average_achievement=Avg('student_achievements__current_percentage')
     )
     
-    # Department statistics
-    department_stats = User.objects.filter(
+    # Department statistics with detailed calculations
+    department_list = User.objects.filter(
         role=User.Role.STUDENT,
         is_active=True,
         department__isnull=False
-    ).values('department').annotate(
-        student_count=Count('id')
-    ).order_by('-student_count')
+    ).values_list('department', flat=True).distinct()
+    
+    department_stats = []
+    for dept in department_list:
+        # Student count
+        student_count = User.objects.filter(
+            role=User.Role.STUDENT,
+            is_active=True,
+            department=dept
+        ).count()
+        
+        # Course count for this department
+        course_count = Course.objects.filter(department=dept).count()
+        
+        # Faculty count for this department
+        faculty_count = User.objects.filter(
+            role=User.Role.TEACHER,
+            is_active=True,
+            department=dept
+        ).count()
+        
+        # Average grade for students in this department
+        # Get all enrollments for students in this department
+        dept_students = User.objects.filter(
+            role=User.Role.STUDENT,
+            is_active=True,
+            department=dept
+        )
+        dept_enrollments = Enrollment.objects.filter(
+            student__in=dept_students,
+            final_grade__isnull=False
+        )
+        avg_grade = dept_enrollments.aggregate(
+            avg=Avg('final_grade')
+        )['avg']
+        avg_grade = round(float(avg_grade), 1) if avg_grade else None
+        
+        # PO Achievement average for students in this department
+        # Get all PO achievements for students in this department
+        dept_po_achievements = StudentPOAchievement.objects.filter(
+            student__in=dept_students
+        )
+        po_achievement_avg = dept_po_achievements.aggregate(
+            avg=Avg('current_percentage')
+        )['avg']
+        po_achievement_avg = round(float(po_achievement_avg), 1) if po_achievement_avg else None
+        
+        department_stats.append({
+            'department': dept,
+            'student_count': student_count,
+            'course_count': course_count,
+            'faculty_count': faculty_count,
+            'avg_grade': avg_grade,
+            'po_achievement': po_achievement_avg
+        })
+    
+    # Sort by student_count descending
+    department_stats.sort(key=lambda x: x['student_count'], reverse=True)
     
     # Serialize PO achievements
     po_achievements_data = ProgramOutcomeStatsSerializer(po_achievements, many=True).data
@@ -814,7 +870,7 @@ def institution_dashboard(request):
         'total_courses': total_courses,
         'active_enrollments': active_enrollments,
         'po_achievements': po_achievements_data,
-        'department_stats': list(department_stats)
+        'department_stats': department_stats
     }
     
     serializer = InstitutionDashboardSerializer(data=data)
@@ -1206,4 +1262,464 @@ def course_analytics_detail(request, course_id):
             'boxplot_data': boxplot_data,
             'assessment_comparison': assessment_comparison
         }
+    })
+
+
+# =============================================================================
+# INSTITUTION ANALYTICS VIEWS
+# =============================================================================
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def analytics_departments(request):
+    """
+    Get department comparison analytics
+    
+    GET /api/analytics/departments/
+    Returns department statistics for comparison charts
+    """
+    user = request.user
+    
+    if user.role != User.Role.INSTITUTION and not user.is_staff:
+        return Response({
+            'error': 'This endpoint is only for institution admins'
+        }, status=status.HTTP_403_FORBIDDEN)
+    
+    # Get all departments
+    department_list = User.objects.filter(
+        role=User.Role.STUDENT,
+        is_active=True,
+        department__isnull=False
+    ).values_list('department', flat=True).distinct()
+    
+    departments = []
+    for dept in department_list:
+        # Student count
+        student_count = User.objects.filter(
+            role=User.Role.STUDENT,
+            is_active=True,
+            department=dept
+        ).count()
+        
+        # Course count
+        course_count = Course.objects.filter(department=dept).count()
+        
+        # Faculty count
+        faculty_count = User.objects.filter(
+            role=User.Role.TEACHER,
+            is_active=True,
+            department=dept
+        ).count()
+        
+        # Average grade
+        dept_students = User.objects.filter(
+            role=User.Role.STUDENT,
+            is_active=True,
+            department=dept
+        )
+        dept_enrollments = Enrollment.objects.filter(
+            student__in=dept_students,
+            final_grade__isnull=False
+        )
+        avg_grade = dept_enrollments.aggregate(avg=Avg('final_grade'))['avg']
+        avg_grade = round(float(avg_grade), 1) if avg_grade else None
+        
+        # PO Achievement average
+        dept_po_achievements = StudentPOAchievement.objects.filter(
+            student__in=dept_students
+        )
+        po_achievement = dept_po_achievements.aggregate(
+            avg=Avg('current_percentage')
+        )['avg']
+        po_achievement = round(float(po_achievement), 1) if po_achievement else None
+        
+        # Determine status
+        if po_achievement:
+            if po_achievement >= 80:
+                status = 'excellent'
+            elif po_achievement >= 70:
+                status = 'good'
+            else:
+                status = 'needs-attention'
+        else:
+            status = 'needs-attention'
+        
+        departments.append({
+            'name': dept,
+            'students': student_count,
+            'courses': course_count,
+            'faculty': faculty_count,
+            'avg_grade': avg_grade,
+            'po_achievement': po_achievement,
+            'status': status
+        })
+    
+    # Sort by student count descending
+    departments.sort(key=lambda x: x['students'], reverse=True)
+    
+    return Response({
+        'success': True,
+        'departments': departments
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def analytics_po_trends(request):
+    """
+    Get PO trends over time (by semester/academic year)
+    
+    GET /api/analytics/po-trends/
+    Query params: ?semester=FALL&academic_year=2024-2025
+    Returns PO achievement trends for chart visualization
+    """
+    user = request.user
+    
+    if user.role != User.Role.INSTITUTION and not user.is_staff:
+        return Response({
+            'error': 'This endpoint is only for institution admins'
+        }, status=status.HTTP_403_FORBIDDEN)
+    
+    # Get filter parameters
+    semester = request.query_params.get('semester', None)
+    academic_year = request.query_params.get('academic_year', None)
+    
+    # Get all active POs
+    pos = ProgramOutcome.objects.filter(is_active=True)
+    
+    # Get courses based on filters
+    courses_query = Course.objects.all()
+    if semester:
+        try:
+            semester_int = int(semester)
+            courses_query = courses_query.filter(semester=semester_int)
+        except ValueError:
+            pass
+    if academic_year:
+        courses_query = courses_query.filter(academic_year=academic_year)
+    
+    # Get enrollments for filtered courses
+    enrollments = Enrollment.objects.filter(
+        course__in=courses_query,
+        final_grade__isnull=False
+    ).select_related('course', 'student')
+    
+    # Get students from enrollments
+    student_ids = list(enrollments.values_list('student_id', flat=True).distinct())
+    
+    # Calculate PO trends
+    po_trends = []
+    for po in pos:
+        # Get PO achievements for students in filtered courses
+        # If no student_ids, get all PO achievements for this PO
+        if student_ids:
+            po_achievements = StudentPOAchievement.objects.filter(
+                program_outcome=po,
+                student_id__in=student_ids
+            )
+        else:
+            # If no filtered students, get all achievements for this PO
+            po_achievements = StudentPOAchievement.objects.filter(
+                program_outcome=po
+            )
+        
+        avg_achievement = po_achievements.aggregate(
+            avg=Avg('current_percentage')
+        )['avg']
+        avg_achievement = round(float(avg_achievement), 1) if avg_achievement is not None else None
+        
+        total_students = po_achievements.values('student').distinct().count()
+        target_percentage_float = float(po.target_percentage)
+        students_achieved = po_achievements.filter(
+            current_percentage__gte=po.target_percentage
+        ).values('student').distinct().count()
+        
+        achievement_rate = round((students_achieved / total_students * 100), 1) if total_students > 0 else 0
+        
+        # Determine status
+        if avg_achievement is not None:
+            if avg_achievement >= target_percentage_float * 1.1:
+                status = 'excellent'
+            elif avg_achievement >= target_percentage_float:
+                status = 'achieved'
+            else:
+                status = 'not-achieved'
+        else:
+            status = 'not-achieved'
+        
+        po_trends.append({
+            'code': po.code,
+            'title': po.title,
+            'target_percentage': target_percentage_float,
+            'current_percentage': avg_achievement,
+            'total_students': total_students,
+            'students_achieved': students_achieved,
+            'achievement_rate': achievement_rate,
+            'status': status
+        })
+    
+    return Response({
+        'success': True,
+        'program_outcomes': po_trends,
+        'filters': {
+            'semester': semester,
+            'academic_year': academic_year
+        }
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def analytics_performance_distribution(request):
+    """
+    Get student performance distribution (histogram data)
+    
+    GET /api/analytics/performance-distribution/
+    Query params: ?department=Computer Science
+    Returns performance distribution for histogram chart
+    """
+    user = request.user
+    
+    if user.role != User.Role.INSTITUTION and not user.is_staff:
+        return Response({
+            'error': 'This endpoint is only for institution admins'
+        }, status=status.HTTP_403_FORBIDDEN)
+    
+    # Get filter parameters
+    department = request.query_params.get('department', None)
+    
+    # Get enrollments with final grades
+    enrollments_query = Enrollment.objects.filter(
+        final_grade__isnull=False
+    )
+    
+    # Filter by department if specified
+    if department:
+        dept_students = User.objects.filter(
+            role=User.Role.STUDENT,
+            is_active=True,
+            department=department
+        )
+        enrollments_query = enrollments_query.filter(student__in=dept_students)
+    
+    enrollments = enrollments_query.select_related('student')
+    
+    # Calculate distribution (bins: 0-20, 21-40, 41-60, 61-80, 81-100)
+    distribution = {
+        '0-20': 0,
+        '21-40': 0,
+        '41-60': 0,
+        '61-80': 0,
+        '81-100': 0
+    }
+    
+    for enrollment in enrollments:
+        score = float(enrollment.final_grade)
+        if score <= 20:
+            distribution['0-20'] += 1
+        elif score <= 40:
+            distribution['21-40'] += 1
+        elif score <= 60:
+            distribution['41-60'] += 1
+        elif score <= 80:
+            distribution['61-80'] += 1
+        else:
+            distribution['81-100'] += 1
+    
+    # Calculate statistics
+    scores = [float(e.final_grade) for e in enrollments]
+    total_students = len(scores)
+    
+    stats = {
+        'total_students': total_students,
+        'average': round(sum(scores) / total_students, 1) if total_students > 0 else 0,
+        'median': round(sorted(scores)[total_students // 2], 1) if total_students > 0 else 0,
+        'min': round(min(scores), 1) if scores else 0,
+        'max': round(max(scores), 1) if scores else 0
+    }
+    
+    return Response({
+        'success': True,
+        'distribution': distribution,
+        'statistics': stats,
+        'filters': {
+            'department': department
+        }
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def analytics_course_success(request):
+    """
+    Get course success rates
+    
+    GET /api/analytics/course-success/
+    Query params: ?department=Computer Science&semester=FALL
+    Returns course success rates for bar chart
+    """
+    user = request.user
+    
+    if user.role != User.Role.INSTITUTION and not user.is_staff:
+        return Response({
+            'error': 'This endpoint is only for institution admins'
+        }, status=status.HTTP_403_FORBIDDEN)
+    
+    # Get filter parameters
+    department = request.query_params.get('department', None)
+    semester = request.query_params.get('semester', None)
+    academic_year = request.query_params.get('academic_year', None)
+    
+    # Get courses based on filters
+    courses_query = Course.objects.all()
+    if department:
+        courses_query = courses_query.filter(department=department)
+    if semester:
+        try:
+            semester_int = int(semester)
+            courses_query = courses_query.filter(semester=semester_int)
+        except ValueError:
+            pass
+    if academic_year:
+        courses_query = courses_query.filter(academic_year=academic_year)
+    
+    courses = courses_query.select_related('teacher')
+    
+    course_success = []
+    for course in courses:
+        # Get all enrollments for this course
+        enrollments = Enrollment.objects.filter(
+            course=course,
+            final_grade__isnull=False
+        )
+        
+        total_students = enrollments.count()
+        
+        # Success rate: students with grade >= 60
+        successful_students = enrollments.filter(final_grade__gte=60).count()
+        success_rate = round((successful_students / total_students * 100), 1) if total_students > 0 else 0
+        
+        # Average grade
+        avg_grade = enrollments.aggregate(avg=Avg('final_grade'))['avg']
+        avg_grade = round(float(avg_grade), 1) if avg_grade else None
+        
+        course_success.append({
+            'course_id': course.id,
+            'course_code': course.code,
+            'course_name': course.name,
+            'department': course.department,
+            'semester': course.get_semester_display(),
+            'academic_year': course.academic_year,
+            'instructor': course.teacher.get_full_name() if course.teacher else 'TBA',
+            'total_students': total_students,
+            'successful_students': successful_students,
+            'success_rate': success_rate,
+            'average_grade': avg_grade
+        })
+    
+    # Sort by success rate descending
+    course_success.sort(key=lambda x: x['success_rate'], reverse=True)
+    
+    return Response({
+        'success': True,
+        'courses': course_success,
+        'filters': {
+            'department': department,
+            'semester': semester,
+            'academic_year': academic_year
+        }
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def analytics_alerts(request):
+    """
+    Get recent alerts for institution dashboard
+    
+    GET /api/analytics/alerts/
+    Returns alerts about PO achievements, departments, etc.
+    """
+    user = request.user
+    
+    if user.role != User.Role.INSTITUTION and not user.is_staff:
+        return Response({
+            'error': 'This endpoint is only for institution admins'
+        }, status=status.HTTP_403_FORBIDDEN)
+    
+    alerts = []
+    
+    # Check for POs below target
+    pos_below_target = ProgramOutcome.objects.filter(is_active=True).annotate(
+        avg_achievement=Avg('student_achievements__current_percentage')
+    ).filter(
+        avg_achievement__lt=F('target_percentage')
+    )
+    
+    for po in pos_below_target:
+        avg = float(po.avg_achievement) if po.avg_achievement else 0
+        target = float(po.target_percentage)
+        alerts.append({
+            'type': 'warning',
+            'title': f'{po.code} Below Target',
+            'description': f'Current: {avg:.1f}% (Target: {target:.1f}%)',
+            'created_at': timezone.now().isoformat(),
+            'time': 'Recently'
+        })
+    
+    # Check for departments with low PO achievement
+    department_list = User.objects.filter(
+        role=User.Role.STUDENT,
+        is_active=True,
+        department__isnull=False
+    ).values_list('department', flat=True).distinct()
+    
+    for dept in department_list[:3]:  # Limit to 3 departments
+        dept_students = User.objects.filter(
+            role=User.Role.STUDENT,
+            is_active=True,
+            department=dept
+        )
+        dept_po_achievements = StudentPOAchievement.objects.filter(
+            student__in=dept_students
+        )
+        po_avg = dept_po_achievements.aggregate(avg=Avg('current_percentage'))['avg']
+        
+        if po_avg and po_avg < 70:
+            alerts.append({
+                'type': 'warning',
+                'title': f'{dept} - Low PO Achievement',
+                'description': f'Average PO achievement: {float(po_avg):.1f}%',
+                'created_at': timezone.now().isoformat(),
+                'time': 'Recently'
+            })
+    
+    # Success alerts for departments exceeding targets
+    for dept in department_list[:2]:  # Limit to 2
+        dept_students = User.objects.filter(
+            role=User.Role.STUDENT,
+            is_active=True,
+            department=dept
+        )
+        dept_po_achievements = StudentPOAchievement.objects.filter(
+            student__in=dept_students
+        )
+        po_avg = dept_po_achievements.aggregate(avg=Avg('current_percentage'))['avg']
+        
+        if po_avg and po_avg >= 80:
+            alerts.append({
+                'type': 'success',
+                'title': f'{dept} Exceeds All Targets',
+                'description': f'All POs above target (Avg: {float(po_avg):.1f}%)',
+                'created_at': timezone.now().isoformat(),
+                'time': 'Recently'
+            })
+            break  # Only one success alert
+    
+    # Sort by created_at (most recent first) and limit to 5
+    alerts = sorted(alerts, key=lambda x: x.get('created_at', ''), reverse=True)[:5]
+    
+    return Response({
+        'success': True,
+        'alerts': alerts
     })
