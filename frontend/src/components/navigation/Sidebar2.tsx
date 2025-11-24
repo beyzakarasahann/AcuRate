@@ -17,7 +17,7 @@ const baseNavItems = [
     { name: 'Home', icon: Home, slug: 'home' },
     { name: 'Analytics', icon: BarChart3, slug: 'analytics' },
     { name: 'Grades', icon: FileText, slug: 'grades' },
-    { name: 'PO Management', icon: Target, slug: 'po-management' },
+    { name: 'Learning Outcome', icon: Target, slug: 'learning-outcome' },
     { name: 'Settings', icon: Settings, slug: 'settings' },
 ];
 

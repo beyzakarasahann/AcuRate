@@ -2,8 +2,8 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { FileText, Search, Save, Download, Upload, Filter, CheckCircle2, AlertCircle, User, BookOpen, Calendar, Plus, X, Edit, TrendingUp, Info, Loader2 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { FileText, Search, Save, Download, Upload, Filter, CheckCircle2, AlertCircle, User, BookOpen, Plus, X, Edit, TrendingUp, Info, Loader2, Trash2 } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { api, type Course, type Assessment, type Enrollment, type StudentGrade } from '@/lib/api';
 
@@ -36,16 +36,25 @@ export default function TeacherGradesPage() {
   const [selectedCourse, setSelectedCourse] = useState<number | null>(null);
   const [selectedAssessment, setSelectedAssessment] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [grades, setGrades] = useState<Record<number, { score: string; feedback: string }>>({});
+  const [grades, setGrades] = useState<Record<number, { score: string }>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'success' | 'error' | null>(null);
   const [showCreateAssessment, setShowCreateAssessment] = useState(false);
+  const [showEditGrades, setShowEditGrades] = useState(false);
+  const [showFeedbackRanges, setShowFeedbackRanges] = useState(false);
+  const [editingGrades, setEditingGrades] = useState<Record<number, { score: string }>>({});
+  const [feedbackRanges, setFeedbackRanges] = useState<Array<{ min_score: number; max_score: number; feedback: string }>>([
+    { min_score: 90, max_score: 100, feedback: 'Excellent work! Outstanding performance.' },
+    { min_score: 80, max_score: 89, feedback: 'Good job! Well done.' },
+    { min_score: 70, max_score: 79, feedback: 'Satisfactory. Keep improving.' },
+    { min_score: 60, max_score: 69, feedback: 'Needs improvement. Study harder.' },
+    { min_score: 0, max_score: 59, feedback: 'Failed. Please review the material and retake.' }
+  ]);
   const [newAssessment, setNewAssessment] = useState({
     title: '',
     type: 'MIDTERM',
     maxScore: 100,
     weight: 30,
-    dueDate: '',
     description: ''
   });
 
@@ -67,6 +76,27 @@ export default function TeacherGradesPage() {
       setExistingGrades([]);
     }
   }, [selectedCourse]);
+
+  // Load feedback ranges when assessment changes
+  useEffect(() => {
+    if (selectedAssessment && selectedCourse && assessments.length > 0) {
+      // Filter assessments for the selected course
+      const courseAssessments = assessments.filter(a => a.course === selectedCourse);
+      const assessment = courseAssessments.find(a => a.id === selectedAssessment);
+      if (assessment?.feedback_ranges && assessment.feedback_ranges.length > 0) {
+        setFeedbackRanges(assessment.feedback_ranges);
+      } else {
+        // Default feedback ranges
+        setFeedbackRanges([
+          { min_score: 90, max_score: 100, feedback: 'Excellent work! Outstanding performance.' },
+          { min_score: 80, max_score: 89, feedback: 'Good job! Well done.' },
+          { min_score: 70, max_score: 79, feedback: 'Satisfactory. Keep improving.' },
+          { min_score: 60, max_score: 69, feedback: 'Needs improvement. Study harder.' },
+          { min_score: 0, max_score: 59, feedback: 'Failed. Please review the material and retake.' }
+        ]);
+      }
+    }
+  }, [selectedAssessment, selectedCourse, assessments]);
 
   const fetchData = async () => {
     try {
@@ -133,16 +163,21 @@ export default function TeacherGradesPage() {
         setExistingGrades(gradesArray);
         
         // Pre-populate grades state with existing grades for selected assessment
-        const gradesMap: Record<number, { score: string; feedback: string }> = {};
+        const gradesMap: Record<number, { score: string }> = {};
         gradesArray.forEach(grade => {
           if (grade.assessment === selectedAssessment) {
             gradesMap[grade.student] = {
-              score: grade.score.toString(),
-              feedback: grade.feedback || ''
+              score: grade.score.toString()
             };
           }
         });
         setGrades(gradesMap);
+        
+        // Load feedback ranges from assessment
+        const assessment = assessmentsData.find(a => a.id === selectedAssessment);
+        if (assessment?.feedback_ranges && assessment.feedback_ranges.length > 0) {
+          setFeedbackRanges(assessment.feedback_ranges);
+        }
       } else {
         setExistingGrades([]);
         setGrades({});
@@ -171,6 +206,22 @@ export default function TeacherGradesPage() {
     text, 
     mutedText 
   } = useThemeColors();
+
+  // Seçili derse ait assessment'lar (moved before early returns)
+  const availableAssessments = useMemo(() => {
+    return selectedCourse && Array.isArray(assessments)
+      ? assessments.filter(a => a.course === selectedCourse)
+      : [];
+  }, [selectedCourse, assessments]);
+
+  // Seçili assessment bilgisi (moved before early returns)
+  const currentAssessment = useMemo(() => {
+    return availableAssessments.find(a => a.id === selectedAssessment);
+  }, [availableAssessments, selectedAssessment]);
+  
+  const selectedCourseData = useMemo(() => {
+    return Array.isArray(courses) ? courses.find(c => c.id === selectedCourse) : undefined;
+  }, [courses, selectedCourse]);
 
   if (!mounted || !themeMounted) {
     return null;
@@ -228,20 +279,26 @@ export default function TeacherGradesPage() {
     student.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Seçili derse ait assessment'lar
-  const availableAssessments = selectedCourse && Array.isArray(assessments)
-    ? assessments.filter(a => a.course === selectedCourse)
-    : [];
-
-  // Not girişi değişikliği
-  const handleGradeChange = (studentId: number, field: 'score' | 'feedback', value: string) => {
-    setGrades(prev => ({
-      ...prev,
-      [studentId]: {
-        ...prev[studentId],
-        [field]: value
+  // Otomatik feedback hesaplama
+  const getAutomaticFeedback = (score: number): string => {
+    if (!selectedAssessment || assessments.length === 0) {
+      return '';
+    }
+    
+    const assessment = assessments.find(a => a.id === selectedAssessment);
+    if (!assessment || !assessment.feedback_ranges || assessment.feedback_ranges.length === 0) {
+      return '';
+    }
+    
+    const scorePercentage = (score / assessment.max_score) * 100;
+    
+    for (const range of assessment.feedback_ranges) {
+      if (scorePercentage >= range.min_score && scorePercentage <= range.max_score) {
+        return range.feedback;
       }
-    }));
+    }
+    
+    return '';
   };
 
   // Not kaydetme
@@ -269,11 +326,14 @@ export default function TeacherGradesPage() {
           g => g.student === studentIdNum && g.assessment === selectedAssessment
         );
 
+        // Otomatik feedback hesapla
+        const automaticFeedback = getAutomaticFeedback(score);
+
         const gradePayload = {
           student: studentIdNum,
           assessment: selectedAssessment,
           score: score,
-          feedback: gradeData.feedback || ''
+          feedback: automaticFeedback
         };
 
         if (existingGrade) {
@@ -307,6 +367,146 @@ export default function TeacherGradesPage() {
     setSaveStatus(null);
   };
 
+  // Edit Grades modal'dan kaydetme
+  const handleSaveEditingGrades = async () => {
+    if (!selectedCourse || !selectedAssessment) {
+      alert('Please select a course and assessment first.');
+      return;
+    }
+
+    setIsSaving(true);
+    setSaveStatus(null);
+
+    try {
+      // Save/update grades for each student
+      const gradePromises = Object.entries(editingGrades).map(async ([studentId, gradeData]) => {
+        const studentIdNum = parseInt(studentId);
+        const score = parseFloat(gradeData.score);
+        
+        if (isNaN(score) || score < 0) {
+          return;
+        }
+
+        // Check if grade already exists
+        const existingGrade = existingGrades.find(
+          g => g.student === studentIdNum && g.assessment === selectedAssessment
+        );
+
+        // Otomatik feedback hesapla
+        const automaticFeedback = getAutomaticFeedback(score);
+
+        const gradePayload = {
+          student: studentIdNum,
+          assessment: selectedAssessment,
+          score: score,
+          feedback: automaticFeedback
+        };
+
+        if (existingGrade) {
+          // Update existing grade
+          await api.updateGrade(existingGrade.id, gradePayload);
+        } else {
+          // Create new grade
+          await api.createGrade(gradePayload);
+        }
+      });
+
+      await Promise.all(gradePromises);
+      
+      // Update grades state
+      setGrades({ ...editingGrades });
+      
+      // Refresh grades
+      await fetchGrades(selectedCourse!);
+      
+      setIsSaving(false);
+      setSaveStatus('success');
+      setShowEditGrades(false);
+      setTimeout(() => setSaveStatus(null), 3000);
+    } catch (err: any) {
+      console.error('Failed to save grades:', err);
+      setIsSaving(false);
+      setSaveStatus('error');
+      setTimeout(() => setSaveStatus(null), 3000);
+    }
+  };
+
+  // Edit Grades modal'da not değişikliği
+  const handleEditingGradeChange = (studentId: number, value: string) => {
+    setEditingGrades(prev => ({
+      ...prev,
+      [studentId]: {
+        score: value
+      }
+    }));
+  };
+
+  // Feedback aralıklarını kaydetme
+  const handleSaveFeedbackRanges = async () => {
+    if (!selectedAssessment) {
+      alert('Please select an assessment first.');
+      return;
+    }
+
+    // Validate feedback ranges before sending
+    const validRanges = feedbackRanges.filter(range => {
+      return range.min_score >= 0 && 
+             range.min_score <= 100 && 
+             range.max_score >= 0 && 
+             range.max_score <= 100 && 
+             range.min_score <= range.max_score &&
+             range.feedback.trim() !== '';
+    });
+
+    if (validRanges.length === 0) {
+      alert('Please add at least one valid feedback range with a non-empty feedback message.');
+      return;
+    }
+
+    // Check for empty feedback messages
+    const emptyFeedback = feedbackRanges.find(range => !range.feedback || range.feedback.trim() === '');
+    if (emptyFeedback) {
+      alert('All feedback ranges must have a feedback message. Please fill in all feedback fields.');
+      return;
+    }
+
+    try {
+      await api.updateAssessment(selectedAssessment, {
+        feedback_ranges: validRanges.map(range => ({
+          min_score: Number(range.min_score),
+          max_score: Number(range.max_score),
+          feedback: range.feedback.trim()
+        }))
+      });
+      
+      // Refresh assessments
+      await fetchAssessments(selectedCourse!);
+      setShowFeedbackRanges(false);
+      setSaveStatus('success');
+      setTimeout(() => setSaveStatus(null), 3000);
+    } catch (err: any) {
+      console.error('Failed to save feedback ranges:', err);
+      alert(`Failed to save feedback ranges: ${err.message || 'Please try again.'}`);
+    }
+  };
+
+  // Feedback aralığı ekleme
+  const handleAddFeedbackRange = () => {
+    setFeedbackRanges([...feedbackRanges, { min_score: 0, max_score: 100, feedback: '' }]);
+  };
+
+  // Feedback aralığı silme
+  const handleRemoveFeedbackRange = (index: number) => {
+    setFeedbackRanges(feedbackRanges.filter((_, i) => i !== index));
+  };
+
+  // Feedback aralığı güncelleme
+  const handleUpdateFeedbackRange = (index: number, field: 'min_score' | 'max_score' | 'feedback', value: string | number) => {
+    const updated = [...feedbackRanges];
+    updated[index] = { ...updated[index], [field]: value };
+    setFeedbackRanges(updated);
+  };
+
   // Yeni assessment oluşturma
   const handleCreateAssessment = async () => {
     if (!selectedCourse) {
@@ -316,6 +516,12 @@ export default function TeacherGradesPage() {
 
     if (!newAssessment.title || !newAssessment.type) {
       alert('Please fill in all required fields (Title, Type).');
+      return;
+    }
+
+    // Max score validation
+    if (newAssessment.maxScore < 0 || newAssessment.maxScore > 100) {
+      alert('Maximum score must be between 0 and 100.');
       return;
     }
 
@@ -333,10 +539,10 @@ export default function TeacherGradesPage() {
         course: selectedCourse,
         title: newAssessment.title,
         assessment_type: newAssessment.type,
-        max_score: 100, // Sabit 100
-        weight: newAssessment.weight,
-        due_date: newAssessment.dueDate || undefined,
+        max_score: Number(newAssessment.maxScore), // Ensure it's a number
+        weight: Number(newAssessment.weight), // Ensure it's a number
         description: newAssessment.description || undefined,
+        feedback_ranges: feedbackRanges,
         is_active: true
       });
 
@@ -347,7 +553,7 @@ export default function TeacherGradesPage() {
       setSelectedAssessment(createdAssessment.id);
 
       // Form'u temizle ve modal'ı kapat
-      setNewAssessment({ title: '', type: 'MIDTERM', maxScore: 100, weight: 30, dueDate: '', description: '' });
+      setNewAssessment({ title: '', type: 'MIDTERM', maxScore: 100, weight: 30, description: '' });
       setShowCreateAssessment(false);
     } catch (err: any) {
       console.error('Failed to create assessment:', err);
@@ -370,10 +576,6 @@ export default function TeacherGradesPage() {
     setNewAssessment({ ...newAssessment, weight: Math.max(0, Math.min(100, newWeight)) });
   };
 
-  // Seçili assessment bilgisi
-  const currentAssessment = availableAssessments.find(a => a.id === selectedAssessment);
-  const selectedCourseData = Array.isArray(courses) ? courses.find(c => c.id === selectedCourse) : undefined;
-  
   // Assessment type label'ını al
   const getAssessmentTypeLabel = (type: string) => {
     return assessmentTypes.find(at => at.value === type)?.label || type;
@@ -527,7 +729,7 @@ export default function TeacherGradesPage() {
             animate={{ opacity: 1, height: 'auto' }}
             className={`mt-4 p-4 rounded-xl ${isDark ? 'bg-indigo-500/10 border-indigo-500/30' : 'bg-indigo-50 border-indigo-200'} border`}
           >
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
               <div>
                 <span className={mutedText}>Type:</span>
                 <p className={whiteText}>{getAssessmentTypeLabel(currentAssessment.assessment_type)}</p>
@@ -539,10 +741,6 @@ export default function TeacherGradesPage() {
               <div>
                 <span className={mutedText}>Weight:</span>
                 <p className={whiteText}>{currentAssessment.weight}%</p>
-              </div>
-              <div>
-                <span className={mutedText}>Due Date:</span>
-                <p className={whiteText}>{currentAssessment.due_date ? new Date(currentAssessment.due_date).toLocaleDateString() : 'Not set'}</p>
               </div>
             </div>
           </motion.div>
@@ -665,8 +863,6 @@ export default function TeacherGradesPage() {
                     <th className={`text-left py-3 px-4 ${mutedText} font-medium text-sm`}>Type</th>
                     <th className={`text-left py-3 px-4 ${mutedText} font-medium text-sm`}>Weight (%)</th>
                     <th className={`text-left py-3 px-4 ${mutedText} font-medium text-sm`}>Max Score</th>
-                    <th className={`text-left py-3 px-4 ${mutedText} font-medium text-sm`}>Due Date</th>
-                    <th className={`text-left py-3 px-4 ${mutedText} font-medium text-sm`}>Progress</th>
                     <th className={`text-left py-3 px-4 ${mutedText} font-medium text-sm`}>Avg Score</th>
                     <th className={`text-left py-3 px-4 ${mutedText} font-medium text-sm`}>Action</th>
                   </tr>
@@ -731,35 +927,6 @@ export default function TeacherGradesPage() {
                         </td>
                         <td className={`py-4 px-4 ${whiteText}`}>{assessment.max_score}</td>
                         <td className={`py-4 px-4`}>
-                          {assessment.due_date ? (
-                            <div className="flex items-center gap-1">
-                              <Calendar className={`w-3 h-3 ${mutedText}`} />
-                              <span className={whiteText}>{new Date(assessment.due_date).toLocaleDateString()}</span>
-                            </div>
-                          ) : (
-                            <span className={mutedText}>Not set</span>
-                          )}
-                        </td>
-                        <td className="py-4 px-4">
-                          <div className="flex items-center gap-2 min-w-[120px]">
-                            <div className={`flex-1 h-2 rounded-full ${isDark ? 'bg-white/10' : 'bg-gray-200'}`}>
-                              <motion.div
-                                initial={{ width: 0 }}
-                                animate={{ width: `${progress}%` }}
-                                transition={{ duration: 0.5, delay: 0.4 + index * 0.05 }}
-                                className={`h-full rounded-full ${
-                                  progress === 100 ? 'bg-green-500' : 
-                                  progress >= 50 ? 'bg-blue-500' : 
-                                  'bg-orange-500'
-                                }`}
-                              />
-                            </div>
-                            <span className={`${mutedText} text-xs whitespace-nowrap`}>
-                              {stats.graded}/{stats.total}
-                            </span>
-                          </div>
-                        </td>
-                        <td className={`py-4 px-4`}>
                           {stats.graded > 0 ? (
                             <div className="flex items-center gap-1">
                               <TrendingUp className={`w-4 h-4 ${stats.average >= 80 ? 'text-green-500' : stats.average >= 70 ? 'text-blue-500' : 'text-orange-500'}`} />
@@ -798,7 +965,7 @@ export default function TeacherGradesPage() {
                         {totalWeight.toFixed(1)}%
                       </span>
                     </td>
-                    <td colSpan={5} className={`py-3 px-4`}>
+                    <td colSpan={3} className={`py-3 px-4`}>
                       {totalWeight === 100 ? (
                         <span className={`text-green-500 text-sm font-semibold flex items-center gap-1`}>
                           <CheckCircle2 className="w-4 h-4" />
@@ -843,45 +1010,6 @@ export default function TeacherGradesPage() {
                 className={`w-full pl-10 pr-4 py-2 rounded-xl ${isDark ? 'bg-white/5 border-white/10 text-white placeholder-gray-500' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'} border focus:outline-none focus:ring-2 focus:ring-indigo-500`}
               />
             </div>
-            <div className="flex gap-2">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={handleClearGrades}
-                className={`px-4 py-2 rounded-xl ${isDark ? 'bg-white/5 hover:bg-white/10 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'} transition-all`}
-              >
-                Clear
-              </motion.button>
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => {
-                  if (totalWeight !== 100) {
-                    alert('You must complete the assessment weight distribution to exactly 100% before saving grades.');
-                    return;
-                  }
-                  handleSaveGrades();
-                }}
-                disabled={isSaving || Object.keys(grades).length === 0 || totalWeight !== 100}
-                className={`px-6 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed relative`}
-                title={totalWeight !== 100 ? 'Assessment weights must total exactly 100% to save grades' : ''}
-              >
-                {isSaving ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Save className="w-4 h-4" />
-                    Save Grades
-                  </>
-                )}
-                {totalWeight !== 100 && (
-                  <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white"></span>
-                )}
-              </motion.button>
-            </div>
           </div>
 
           {/* Save Status */}
@@ -919,6 +1047,40 @@ export default function TeacherGradesPage() {
           transition={{ delay: 0.3 }}
           className={`backdrop-blur-xl ${themeClasses.card} p-6 shadow-2xl rounded-xl overflow-x-auto`}
         >
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+            <h2 className={`text-xl font-bold ${whiteText} flex items-center gap-2`}>
+              <User className={`w-5 h-5 ${accentIconClass}`} />
+              Student Grades
+            </h2>
+            <div className="flex gap-2">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => {
+                  if (currentAssessment?.feedback_ranges) {
+                    setFeedbackRanges(currentAssessment.feedback_ranges);
+                  }
+                  setShowFeedbackRanges(true);
+                }}
+                className={`px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white flex items-center gap-2 transition-all`}
+              >
+                <Info className="w-4 h-4" />
+                Manage Feedback Ranges
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => {
+                  setEditingGrades({ ...grades });
+                  setShowEditGrades(true);
+                }}
+                className={`px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white flex items-center gap-2 transition-all`}
+              >
+                <Edit className="w-4 h-4" />
+                Edit Grades
+              </motion.button>
+            </div>
+          </div>
           <div className="min-w-full">
             <table className="w-full">
               <thead>
@@ -929,16 +1091,14 @@ export default function TeacherGradesPage() {
                   <th className={`text-left py-3 px-4 ${mutedText} font-medium text-sm`}>
                     Score / {currentAssessment?.max_score || 100}
                   </th>
-                  <th className={`text-left py-3 px-4 ${mutedText} font-medium text-sm`}>Percentage</th>
-                  <th className={`text-left py-3 px-4 ${mutedText} font-medium text-sm`}>Feedback</th>
+                  <th className={`text-left py-3 px-4 ${mutedText} font-medium text-sm`}>Auto Feedback</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredStudents.map((student, index) => {
-                  const studentGrade = grades[student.id] || { score: '', feedback: '' };
+                  const studentGrade = grades[student.id] || { score: '' };
                   const scoreNum = parseFloat(studentGrade.score) || 0;
-                  const percentage = currentAssessment ? (scoreNum / currentAssessment.max_score) * 100 : 0;
-                  const isValidScore = scoreNum >= 0 && scoreNum <= (currentAssessment?.max_score || 100);
+                  const automaticFeedback = scoreNum > 0 ? getAutomaticFeedback(scoreNum) : '';
 
                   return (
                     <motion.tr
@@ -957,40 +1117,14 @@ export default function TeacherGradesPage() {
                       <td className={`py-4 px-4 ${whiteText} font-medium`}>{student.name}</td>
                       <td className={`py-4 px-4 ${mutedText} text-sm`}>{student.email}</td>
                       <td className="py-4 px-4">
-                        <input
-                          type="number"
-                          min="0"
-                          max={currentAssessment?.max_score || 100}
-                          step="0.01"
-                          value={studentGrade.score}
-                          onChange={(e) => handleGradeChange(student.id, 'score', e.target.value)}
-                          className={`w-24 px-3 py-2 rounded-lg border ${
-                            isValidScore
-                              ? isDark
-                                ? 'bg-white/5 border-white/10 text-white'
-                                : 'bg-white border-gray-300 text-gray-900'
-                              : 'border-red-500 bg-red-500/10'
-                          } focus:outline-none focus:ring-2 focus:ring-indigo-500`}
-                          placeholder="0.00"
-                        />
-                      </td>
-                      <td className="py-4 px-4">
                         <span className={`${whiteText} font-medium`}>
-                          {studentGrade.score ? `${percentage.toFixed(1)}%` : '-'}
+                          {studentGrade.score ? studentGrade.score : '-'}
                         </span>
                       </td>
                       <td className="py-4 px-4">
-                        <input
-                          type="text"
-                          value={studentGrade.feedback}
-                          onChange={(e) => handleGradeChange(student.id, 'feedback', e.target.value)}
-                          placeholder="Optional feedback..."
-                          className={`w-full px-3 py-2 rounded-lg border ${
-                            isDark
-                              ? 'bg-white/5 border-white/10 text-white placeholder-gray-500'
-                              : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
-                          } focus:outline-none focus:ring-2 focus:ring-indigo-500`}
-                        />
+                        <span className={`${mutedText} text-sm`}>
+                          {automaticFeedback || '-'}
+                        </span>
                       </td>
                     </motion.tr>
                   );
@@ -1097,7 +1231,7 @@ export default function TeacherGradesPage() {
               exit={{ opacity: 0 }}
               onClick={() => {
                 setShowCreateAssessment(false);
-                setNewAssessment({ title: '', type: 'MIDTERM', maxScore: 100, weight: 30, dueDate: '', description: '' });
+                setNewAssessment({ title: '', type: 'MIDTERM', maxScore: 100, weight: 30, description: '' });
               }}
               className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
             />
@@ -1123,7 +1257,7 @@ export default function TeacherGradesPage() {
                     whileTap={{ scale: 0.9 }}
                     onClick={() => {
                       setShowCreateAssessment(false);
-                      setNewAssessment({ title: '', type: 'MIDTERM', maxScore: 100, weight: 30, dueDate: '', description: '' });
+                      setNewAssessment({ title: '', type: 'MIDTERM', maxScore: 100, weight: 30, description: '' });
                     }}
                     className={`p-2 rounded-lg ${isDark ? 'hover:bg-white/10' : 'hover:bg-gray-100'} transition-all`}
                   >
@@ -1168,16 +1302,33 @@ export default function TeacherGradesPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className={`block text-sm font-medium ${mutedText} mb-1`}>
-                        Maximum Score
+                        Maximum Score <span className="text-red-500">*</span>
                       </label>
                       <input
                         type="number"
-                        value={100}
-                        readOnly
-                        disabled
-                        className={`w-full p-3 rounded-lg ${isDark ? 'bg-white/5 border-white/10 text-gray-400' : 'bg-gray-100 border-gray-300 text-gray-500'} border cursor-not-allowed`}
+                        min="0"
+                        max="100"
+                        step="1"
+                        value={newAssessment.maxScore}
+                        onChange={(e) => {
+                          const value = Number(e.target.value);
+                          // Allow empty input or values between 0-100
+                          if (e.target.value === '' || (value >= 0 && value <= 100)) {
+                            setNewAssessment({ ...newAssessment, maxScore: value || 0 });
+                          }
+                        }}
+                        onBlur={(e) => {
+                          // Ensure value is within bounds when user leaves the field
+                          const value = Number(e.target.value);
+                          if (isNaN(value) || value < 0) {
+                            setNewAssessment({ ...newAssessment, maxScore: 0 });
+                          } else if (value > 100) {
+                            setNewAssessment({ ...newAssessment, maxScore: 100 });
+                          }
+                        }}
+                        className={`w-full p-3 rounded-lg ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'} border transition-colors focus:ring-2 focus:ring-indigo-500 outline-none`}
                       />
-                      <p className={`${mutedText} text-xs mt-1`}>Fixed at 100 points (cannot be changed)</p>
+                      <p className={`${mutedText} text-xs mt-1`}>Enter a value between 0 and 100</p>
                     </div>
                     <div>
                       <label className={`block text-sm font-medium ${mutedText} mb-1`}>
@@ -1217,20 +1368,6 @@ export default function TeacherGradesPage() {
                     </div>
                   </div>
 
-                  {/* Due Date */}
-                  <div>
-                    <label className={`block text-sm font-medium ${mutedText} mb-1`}>
-                      <Calendar className="w-4 h-4 inline mr-1" />
-                      Due Date / Exam Date
-                    </label>
-                    <input
-                      type="date"
-                      value={newAssessment.dueDate}
-                      onChange={(e) => setNewAssessment({ ...newAssessment, dueDate: e.target.value })}
-                      className={`w-full p-3 rounded-lg ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'} border transition-colors focus:ring-2 focus:ring-indigo-500 outline-none`}
-                    />
-                  </div>
-
                   {/* Description */}
                   <div>
                     <label className={`block text-sm font-medium ${mutedText} mb-1`}>
@@ -1253,7 +1390,7 @@ export default function TeacherGradesPage() {
                     whileTap={{ scale: 0.95 }}
                     onClick={() => {
                       setShowCreateAssessment(false);
-                      setNewAssessment({ title: '', type: 'MIDTERM', maxScore: 100, weight: 30, dueDate: '', description: '' });
+                      setNewAssessment({ title: '', type: 'MIDTERM', maxScore: 100, weight: 30, description: '' });
                     }}
                     className={`px-6 py-2 rounded-xl ${isDark ? 'bg-white/5 hover:bg-white/10 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'} transition-all`}
                   >
@@ -1277,6 +1414,310 @@ export default function TeacherGradesPage() {
                   >
                     <Save className="w-4 h-4" />
                     Create Assessment
+                  </motion.button>
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Edit Grades Modal */}
+      <AnimatePresence>
+        {showEditGrades && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowEditGrades(false)}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
+            />
+            
+            {/* Modal */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            >
+              <div 
+                onClick={(e) => e.stopPropagation()}
+                className={`backdrop-blur-xl ${themeClasses.card} p-6 shadow-2xl rounded-2xl border ${isDark ? 'border-white/10' : 'border-gray-200'} w-full max-w-5xl max-h-[90vh] overflow-y-auto`}
+              >
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className={`text-2xl font-bold ${whiteText} flex items-center gap-2`}>
+                    <Edit className="w-6 h-6 text-indigo-500" />
+                    Edit Student Grades
+                  </h2>
+                  <motion.button
+                    whileHover={{ scale: 1.1, rotate: 90 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => setShowEditGrades(false)}
+                    className={`p-2 rounded-lg ${isDark ? 'hover:bg-white/10' : 'hover:bg-gray-100'} transition-all`}
+                  >
+                    <X className={`w-5 h-5 ${mutedText}`} />
+                  </motion.button>
+                </div>
+
+                <div className="mb-4 p-4 rounded-xl bg-indigo-500/10 border border-indigo-500/30">
+                  <p className={`${whiteText} text-sm`}>
+                    <strong>Assessment:</strong> {currentAssessment?.title} | 
+                    <strong> Max Score:</strong> {currentAssessment?.max_score || 100}
+                  </p>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className={`border-b ${isDark ? 'border-white/10' : 'border-gray-200'}`}>
+                        <th className={`text-left py-3 px-4 ${mutedText} font-medium text-sm`}>Student ID</th>
+                        <th className={`text-left py-3 px-4 ${mutedText} font-medium text-sm`}>Name</th>
+                        <th className={`text-left py-3 px-4 ${mutedText} font-medium text-sm`}>
+                          Score / {currentAssessment?.max_score || 100}
+                        </th>
+                        <th className={`text-left py-3 px-4 ${mutedText} font-medium text-sm`}>Auto Feedback</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredStudents.map((student, index) => {
+                        const studentGrade = editingGrades[student.id] || { score: '' };
+                        const scoreNum = parseFloat(studentGrade.score) || 0;
+                        const isValidScore = scoreNum >= 0 && scoreNum <= (currentAssessment?.max_score || 100);
+                        const automaticFeedback = scoreNum > 0 ? getAutomaticFeedback(scoreNum) : '';
+
+                        return (
+                          <motion.tr
+                            key={student.id}
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: index * 0.05 }}
+                            className={`border-b ${isDark ? 'border-white/5 hover:bg-white/5' : 'border-gray-100 hover:bg-gray-50'} transition-colors`}
+                          >
+                            <td className="py-4 px-4">
+                              <div className="flex items-center gap-2">
+                                <User className={`w-4 h-4 ${mutedText}`} />
+                                <span className={whiteText}>{student.studentId}</span>
+                              </div>
+                            </td>
+                            <td className={`py-4 px-4 ${whiteText} font-medium`}>{student.name}</td>
+                            <td className="py-4 px-4">
+                              <input
+                                type="number"
+                                min="0"
+                                max={currentAssessment?.max_score || 100}
+                                step="0.01"
+                                value={studentGrade.score}
+                                onChange={(e) => handleEditingGradeChange(student.id, e.target.value)}
+                                className={`w-24 px-3 py-2 rounded-lg border ${
+                                  isValidScore
+                                    ? isDark
+                                      ? 'bg-white/5 border-white/10 text-white'
+                                      : 'bg-white border-gray-300 text-gray-900'
+                                    : 'border-red-500 bg-red-500/10'
+                                } focus:outline-none focus:ring-2 focus:ring-indigo-500`}
+                                placeholder="0.00"
+                              />
+                            </td>
+                            <td className="py-4 px-4">
+                              <span className={`${mutedText} text-sm`}>
+                                {automaticFeedback || '-'}
+                              </span>
+                            </td>
+                          </motion.tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex items-center justify-end gap-3 mt-6 pt-6 border-t border-gray-500/10">
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setShowEditGrades(false)}
+                    className={`px-6 py-2 rounded-xl ${isDark ? 'bg-white/5 hover:bg-white/10 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'} transition-all`}
+                  >
+                    Cancel
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={handleSaveEditingGrades}
+                    disabled={isSaving || Object.keys(editingGrades).length === 0}
+                    className={`px-6 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed`}
+                  >
+                    {isSaving ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4" />
+                        Save Grades
+                      </>
+                    )}
+                  </motion.button>
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Feedback Ranges Management Modal */}
+      <AnimatePresence>
+        {showFeedbackRanges && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowFeedbackRanges(false)}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
+            />
+            
+            {/* Modal */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            >
+              <div 
+                onClick={(e) => e.stopPropagation()}
+                className={`backdrop-blur-xl ${themeClasses.card} p-6 shadow-2xl rounded-2xl border ${isDark ? 'border-white/10' : 'border-gray-200'} w-full max-w-3xl max-h-[90vh] overflow-y-auto`}
+              >
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className={`text-2xl font-bold ${whiteText} flex items-center gap-2`}>
+                    <Info className="w-6 h-6 text-purple-500" />
+                    Manage Feedback Ranges
+                  </h2>
+                  <motion.button
+                    whileHover={{ scale: 1.1, rotate: 90 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => setShowFeedbackRanges(false)}
+                    className={`p-2 rounded-lg ${isDark ? 'hover:bg-white/10' : 'hover:bg-gray-100'} transition-all`}
+                  >
+                    <X className={`w-5 h-5 ${mutedText}`} />
+                  </motion.button>
+                </div>
+
+                <div className="mb-4 p-4 rounded-xl bg-purple-500/10 border border-purple-500/30">
+                  <p className={`${whiteText} text-sm mb-2`}>
+                    <strong>Assessment:</strong> {currentAssessment?.title}
+                  </p>
+                  <p className={`${mutedText} text-xs`}>
+                    Define score percentage ranges and their corresponding feedback messages. 
+                    Feedback will be automatically assigned to students based on their score percentage.
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  {feedbackRanges.map((range, index) => (
+                    <motion.div
+                      key={index}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.1 }}
+                      className={`p-4 rounded-xl border ${isDark ? 'bg-white/5 border-white/10' : 'bg-gray-50 border-gray-200'}`}
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className={`${whiteText} font-semibold`}>Range {index + 1}</h3>
+                        {feedbackRanges.length > 1 && (
+                          <motion.button
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                            onClick={() => handleRemoveFeedbackRange(index)}
+                            className={`p-2 rounded-lg ${isDark ? 'bg-red-500/20 text-red-300 hover:bg-red-500/30' : 'bg-red-100 text-red-600 hover:bg-red-200'} transition-all`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </motion.button>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                        <div>
+                          <label className={`block text-sm font-medium ${mutedText} mb-1`}>
+                            Min Score (%)
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            value={range.min_score}
+                            onChange={(e) => handleUpdateFeedbackRange(index, 'min_score', Number(e.target.value) || 0)}
+                            className={`w-full p-2 rounded-lg border ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-purple-500`}
+                          />
+                        </div>
+                        <div>
+                          <label className={`block text-sm font-medium ${mutedText} mb-1`}>
+                            Max Score (%)
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            value={range.max_score}
+                            onChange={(e) => handleUpdateFeedbackRange(index, 'max_score', Number(e.target.value) || 100)}
+                            className={`w-full p-2 rounded-lg border ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-purple-500`}
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className={`block text-sm font-medium ${mutedText} mb-1`}>
+                          Feedback Message
+                        </label>
+                        <input
+                          type="text"
+                          value={range.feedback}
+                          onChange={(e) => handleUpdateFeedbackRange(index, 'feedback', e.target.value)}
+                          placeholder="e.g., Excellent work!"
+                          className={`w-full p-2 rounded-lg border ${isDark ? 'bg-white/5 border-white/10 text-white placeholder-gray-500' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'} focus:outline-none focus:ring-2 focus:ring-purple-500`}
+                        />
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+
+                <div className="mt-4">
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={handleAddFeedbackRange}
+                    className={`w-full px-4 py-2 rounded-xl ${isDark ? 'bg-white/5 hover:bg-white/10 text-white border border-white/10' : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300'} transition-all flex items-center justify-center gap-2`}
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Feedback Range
+                  </motion.button>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex items-center justify-end gap-3 mt-6 pt-6 border-t border-gray-500/10">
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => {
+                      setShowFeedbackRanges(false);
+                      if (currentAssessment?.feedback_ranges) {
+                        setFeedbackRanges(currentAssessment.feedback_ranges);
+                      }
+                    }}
+                    className={`px-6 py-2 rounded-xl ${isDark ? 'bg-white/5 hover:bg-white/10 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'} transition-all`}
+                  >
+                    Cancel
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={handleSaveFeedbackRanges}
+                    className={`px-6 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white flex items-center gap-2 transition-all`}
+                  >
+                    <Save className="w-4 h-4" />
+                    Save Feedback Ranges
                   </motion.button>
                 </div>
               </div>

@@ -15,7 +15,13 @@ AcuRate, üniversiteler, okullar ve eğitim kurumları için kapsamlı bir akade
 ### 👨‍🏫 Öğretmen Paneli
 - **Dashboard**: Kurs istatistikleri, öğrenci sayıları, bekleyen değerlendirmeler
 - **Grades**: Öğrenci notları girişi, assessment yönetimi, otomatik final not hesaplama
-- **PO Management**: Kurslar için Program Çıktıları tanımlama, özel PO oluşturma
+  - Assessment oluşturma (max score düzenlenebilir, due date yok)
+  - Feedback ranges yönetimi (otomatik feedback sistemi)
+  - Edit Grades modal'ı ile not düzenleme
+  - Read-only ana liste görünümü
+- **Learning Outcome**: Kurslar için Learning Outcome tanımlama (🆕 YENİ)
+  - Teacher'lar sadece kendi kursları için LO oluşturabilir
+  - Her LO için target percentage belirlenebilir
 - **Analytics**: Kurs performans analizi, öğrenci başarı takibi
 
 ### 🏛️ Kurum Paneli
@@ -194,9 +200,10 @@ Test verileri oluşturulduktan sonra şu hesaplarla giriş yapabilirsiniz:
 - `/api/users/` - Kullanıcı yönetimi
 - `/api/courses/` - Kurs yönetimi
 - `/api/enrollments/` - Kayıt yönetimi
-- `/api/assessments/` - Değerlendirme yönetimi
-- `/api/grades/` - Not yönetimi
-- `/api/program-outcomes/` - Program Çıktıları
+- `/api/assessments/` - Değerlendirme yönetimi (PATCH ile feedback_ranges güncelleme)
+- `/api/grades/` - Not yönetimi (otomatik feedback atama)
+- `/api/program-outcomes/` - Program Çıktıları (sadece Institution)
+- `/api/learning-outcomes/` - Learning Outcomes (🆕 YENİ - Teacher'lar için)
 - `/api/po-achievements/` - PO başarıları
 - `/api/contact-requests/` - İletişim talepleri (admin)
 
@@ -224,9 +231,11 @@ Test verileri oluşturulduktan sonra şu hesaplarla giriş yapabilirsiniz:
 
 ### Form Validasyonları
 - Assessment weight toplamı %100 kontrolü
-- Max score 100 sabit
+- Max score 0-100 arası düzenlenebilir (artık sabit değil)
+- Feedback ranges validation (min_score, max_score, feedback kontrolü)
 - Email format kontrolü
 - Şifre güvenlik kuralları
+- Learning Outcome code uniqueness (kurs bazında)
 
 ## 🔧 Geliştirme
 
@@ -285,8 +294,15 @@ npm run lint
 
 ### Assessment
 - Sınav, proje, ödev türleri
-- Ağırlık, max puan
+- Ağırlık, max puan (0-100 arası düzenlenebilir)
 - Program Çıktıları ile ilişkilendirme
+- Feedback ranges (otomatik feedback sistemi için score aralıkları)
+
+### LearningOutcome (🆕 YENİ)
+- Kurs bazlı öğrenme çıktıları
+- Teacher'lar tarafından yönetilir
+- Target percentage belirlenebilir
+- Her kurs için özel LO'lar tanımlanabilir
 
 ### StudentGrade
 - Öğrenci notları
@@ -319,7 +335,43 @@ npm run lint
 
 ### 🆕 Yeni Özellikler (Son Güncellemeler)
 
-#### Course Analytics (Kurs Analitiği) - YENİ
+#### Teacher Panel - Learning Outcome Management (🆕 YENİ)
+- ✅ **Backend**: Learning Outcome modeli ve API endpoint'leri eklendi
+  - `/api/learning-outcomes/` - Learning Outcome CRUD işlemleri
+  - Teacher'lar sadece kendi kursları için LO oluşturabilir
+  - Program Outcome'lar artık sadece Institution tarafından yönetiliyor
+- ✅ **Frontend**: PO Management → Learning Outcome olarak değiştirildi
+  - `/teacher/learning-outcome` - Learning Outcome yönetim sayfası
+  - Teacher'lar kendi kursları için LO tanımlayabilir
+  - Her LO için target percentage belirlenebilir
+
+#### Otomatik Feedback Sistemi (🆕 YENİ)
+- ✅ **Backend**: Assessment modeline `feedback_ranges` JSONField eklendi
+  - Score aralıklarına göre otomatik feedback atama
+  - `get_feedback_for_score()` metodu ile otomatik feedback hesaplama
+  - Feedback ranges validation eklendi
+- ✅ **Frontend**: Feedback yönetim sistemi
+  - "Manage Feedback Ranges" modal'ı eklendi
+  - Teacher'lar score aralıkları ve feedback mesajları tanımlayabilir
+  - Öğrenci notları kaydedilirken otomatik feedback atanıyor
+  - Ana listede feedback sadece görüntüleniyor (read-only)
+
+#### Grade Management İyileştirmeleri (🆕 YENİ)
+- ✅ **Assessment Oluşturma**:
+  - Due date alanı kaldırıldı
+  - Max score artık düzenlenebilir (0-100 arası)
+  - Kullanıcı istediği max score değerini girebilir
+- ✅ **Grade Listesi**:
+  - Progress kolonu kaldırıldı
+  - Percentages kolonu kaldırıldı
+  - Öğrenci notları ana listede read-only (sadece görüntüleme)
+  - "Edit Grades" butonu ve modal'ı eklendi
+  - Notları düzenlemek için ayrı bir modal kullanılıyor
+- ✅ **Course Assessment Overview**:
+  - Due date kolonu kaldırıldı
+  - Progress kolonu kaldırıldı
+
+#### Course Analytics (Kurs Analitiği)
 - ✅ **Backend**: Kurs bazlı analitik endpoint'leri eklendi
   - `/api/course-analytics/` - Öğrencinin tüm kurslarının özet analitiği
   - `/api/course-analytics/<course_id>/` - Detaylı kurs analitiği
@@ -348,6 +400,16 @@ npm run lint
 - ✅ Admin panel iyileştirmeleri
 - ✅ **Course Analytics API endpoints** (🆕 YENİ)
 - ✅ **Kapsamlı test verisi migration'ları** (🆕 YENİ)
+- ✅ **Learning Outcome modeli ve API** (🆕 YENİ)
+  - Teacher'lar için LO yönetimi
+  - Kurs bazlı LO tanımlama
+- ✅ **Assessment feedback_ranges JSONField** (🆕 YENİ)
+  - Otomatik feedback sistemi için score aralıkları
+  - Validation ve error handling
+- ✅ **API hata mesajları iyileştirmeleri** (🆕 YENİ)
+  - Detaylı field-specific hata mesajları
+  - 400/401 hataları için daha açıklayıcı mesajlar
+  - PATCH request desteği (partial update)
 
 ### Frontend Geliştirmeleri
 - ✅ Tüm mock data'lar kaldırıldı, backend entegrasyonu tamamlandı
@@ -362,6 +424,24 @@ npm run lint
 - ✅ Error handling iyileştirmeleri
 - ✅ Empty state'ler ve loading state'ler
 - ✅ Interface güncellemeleri (backend ile uyumlu)
+- ✅ **Teacher Learning Outcome sayfası** (🆕 YENİ)
+  - PO Management → Learning Outcome olarak değiştirildi
+  - Teacher'lar kendi kursları için LO yönetebilir
+- ✅ **Grade Management iyileştirmeleri** (🆕 YENİ)
+  - Due date kaldırıldı (assessment oluşturma ve görüntüleme)
+  - Progress kolonu kaldırıldı
+  - Percentages kolonu kaldırıldı
+  - Max score düzenlenebilir (0-100 arası)
+  - Öğrenci notları ana listede read-only
+  - Edit Grades modal'ı eklendi
+- ✅ **Feedback Ranges Management** (🆕 YENİ)
+  - "Manage Feedback Ranges" modal'ı
+  - Score aralıkları ve feedback mesajları tanımlama
+  - Otomatik feedback atama sistemi
+- ✅ **API client iyileştirmeleri** (🆕 YENİ)
+  - PATCH request desteği (partial update)
+  - Detaylı hata mesajları parsing
+  - Field-specific error handling
 
 ### 📊 Entegrasyon Durumu
 
@@ -374,7 +454,9 @@ npm run lint
 | Student Outcomes | ✅ %100 | API'den veri çekiyor |
 | Student Course Analytics | ✅ %100 | 🆕 YENİ - API entegre |
 | Student Settings | ✅ %100 | Profil ve şifre güncelleme çalışıyor |
-| Teacher Dashboard | 🔄 %50 | Placeholder, API'ye bağlanacak |
+| Teacher Dashboard | ✅ %100 | API entegre |
+| Teacher Grades | ✅ %100 | Assessment yönetimi, feedback ranges, not girişi |
+| Teacher Learning Outcome | ✅ %100 | 🆕 YENİ - API entegre |
 | Institution Dashboard | 🔄 %50 | Placeholder, API'ye bağlanacak |
 | Contact Form | ✅ %100 | API entegre |
 

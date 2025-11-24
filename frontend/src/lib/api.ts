@@ -51,6 +51,20 @@ export interface ProgramOutcome {
   is_active: boolean;
 }
 
+export interface LearningOutcome {
+  id: number;
+  code: string;
+  title: string;
+  description: string;
+  course: number;
+  course_code?: string;
+  course_name?: string;
+  target_percentage: number;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface Course {
   id: number;
   code: string;
@@ -82,6 +96,12 @@ export interface Enrollment {
   updated_at?: string;
 }
 
+export interface FeedbackRange {
+  min_score: number;
+  max_score: number;
+  feedback: string;
+}
+
 export interface Assessment {
   id: number;
   course: number;
@@ -96,6 +116,7 @@ export interface Assessment {
   due_date?: string;
   is_active: boolean;
   related_pos?: number[];
+  feedback_ranges?: FeedbackRange[];
   created_at?: string;
   updated_at?: string;
 }
@@ -315,14 +336,19 @@ class ApiClient {
           // Check for error field first (new backend format)
           const errorMessage = data?.error || data?.message || data?.detail;
           if (errorMessage && typeof errorMessage === 'string') {
+            // Only show "Incorrect username or password" for login-specific errors
             if (
-              errorMessage.toLowerCase().includes('invalid') ||
+              (errorMessage.toLowerCase().includes('invalid') ||
               errorMessage.toLowerCase().includes('credential') ||
               errorMessage.toLowerCase().includes('password') ||
-              errorMessage.toLowerCase().includes('username') ||
-              errorMessage.toLowerCase().includes('authentication')
+              errorMessage.toLowerCase().includes('username')) &&
+              endpoint.includes('/auth/login')
             ) {
               throw new Error('Incorrect username or password');
+            }
+            // For other authentication errors, use the actual error message
+            if (response.status === 401) {
+              throw new Error(errorMessage || 'Authentication failed. Please log in again.');
             }
             throw new Error(errorMessage);
           }
@@ -330,21 +356,64 @@ class ApiClient {
           // Check for non_field_errors (Django REST Framework format)
           if (data?.non_field_errors && Array.isArray(data.non_field_errors) && data.non_field_errors.length > 0) {
             const firstError = data.non_field_errors[0];
-            if (typeof firstError === 'string' && (
-              firstError.toLowerCase().includes('invalid') ||
-              firstError.toLowerCase().includes('credential') ||
-              firstError.toLowerCase().includes('password') ||
-              firstError.toLowerCase().includes('username')
-            )) {
-              throw new Error('Incorrect username or password');
+            if (typeof firstError === 'string') {
+              // Only show "Incorrect username or password" for login-specific errors
+              if (
+                (firstError.toLowerCase().includes('invalid') ||
+                firstError.toLowerCase().includes('credential') ||
+                firstError.toLowerCase().includes('password') ||
+                firstError.toLowerCase().includes('username')) &&
+                endpoint.includes('/auth/login')
+              ) {
+                throw new Error('Incorrect username or password');
+              }
+              throw new Error(firstError);
             }
             throw new Error(firstError);
           }
           
-          // Default error message
-          throw new Error('Incorrect username or password');
+          // Default error message based on status code
+          if (response.status === 401) {
+            throw new Error('Authentication failed. Please log in again.');
+          }
+          throw new Error(data?.error || data?.message || data?.detail || `Request failed with status ${response.status}`);
         }
-        const errorMessage = data?.error || data?.message || data?.detail || `Request failed with status ${response.status} on ${method} ${endpoint}`;
+        // Try to extract detailed error messages from Django REST Framework format
+        let errorMessage = data?.error || data?.message || data?.detail;
+        
+        // If no direct error message, check for field-specific errors
+        if (!errorMessage && typeof data === 'object') {
+          const fieldErrors: string[] = [];
+          for (const [key, value] of Object.entries(data)) {
+            if (Array.isArray(value) && value.length > 0) {
+              fieldErrors.push(`${key}: ${value[0]}`);
+            } else if (typeof value === 'string') {
+              fieldErrors.push(`${key}: ${value}`);
+            } else if (typeof value === 'object' && value !== null) {
+              // Handle nested error objects
+              const nestedErrors = Object.entries(value).map(([k, v]) => {
+                if (Array.isArray(v) && v.length > 0) {
+                  return `${key}.${k}: ${v[0]}`;
+                }
+                return `${key}.${k}: ${v}`;
+              });
+              fieldErrors.push(...nestedErrors);
+            }
+          }
+          if (fieldErrors.length > 0) {
+            errorMessage = fieldErrors.join(', ');
+          }
+        }
+        
+        // Log the full error data for debugging
+        if (response.status === 400) {
+          console.error('400 Error Details:', JSON.stringify(data, null, 2));
+        }
+        
+        if (!errorMessage) {
+          errorMessage = `Request failed with status ${response.status} on ${method} ${endpoint}`;
+        }
+        
         throw new Error(errorMessage);
       }
 
@@ -563,6 +632,38 @@ class ApiClient {
     return await this.request<ProgramOutcome>(`/program-outcomes/${id}/`);
   }
 
+  // Learning Outcomes
+  async getLearningOutcomes(params?: { course?: number }): Promise<LearningOutcome[]> {
+    const queryParams = new URLSearchParams(params as any).toString();
+    const endpoint = `/learning-outcomes/${queryParams ? `?${queryParams}` : ''}`;
+    const response = await this.request<LearningOutcome[]>(endpoint);
+    return Array.isArray(response) ? response : [];
+  }
+
+  async getLearningOutcome(id: number): Promise<LearningOutcome> {
+    return await this.request<LearningOutcome>(`/learning-outcomes/${id}/`);
+  }
+
+  async createLearningOutcome(data: Partial<LearningOutcome>): Promise<LearningOutcome> {
+    return await this.request<LearningOutcome>('/learning-outcomes/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateLearningOutcome(id: number, data: Partial<LearningOutcome>): Promise<LearningOutcome> {
+    return await this.request<LearningOutcome>(`/learning-outcomes/${id}/`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteLearningOutcome(id: number): Promise<void> {
+    return await this.request<void>(`/learning-outcomes/${id}/`, {
+      method: 'DELETE',
+    });
+  }
+
   // Courses
   async getCourses(params?: { semester?: string; academic_year?: string }): Promise<Course[]> {
     const queryParams = new URLSearchParams(params as any).toString();
@@ -668,7 +769,7 @@ class ApiClient {
 
   async updateAssessment(id: number, data: Partial<Assessment>): Promise<Assessment> {
     return await this.request<Assessment>(`/assessments/${id}/`, {
-      method: 'PUT',
+      method: 'PATCH',
       body: JSON.stringify(data),
     });
   }

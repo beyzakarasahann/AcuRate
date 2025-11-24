@@ -16,7 +16,7 @@ from .views import (
     # Contact views
     create_contact_request,
     # ViewSets
-    UserViewSet, ProgramOutcomeViewSet, CourseViewSet,
+    UserViewSet, ProgramOutcomeViewSet, LearningOutcomeViewSet, CourseViewSet,
     EnrollmentViewSet, AssessmentViewSet, StudentGradeViewSet,
     StudentPOAchievementViewSet, ContactRequestViewSet
 )
@@ -25,6 +25,7 @@ from .views import (
 router = DefaultRouter()
 router.register(r'users', UserViewSet, basename='user')
 router.register(r'program-outcomes', ProgramOutcomeViewSet, basename='programoutcome')
+router.register(r'learning-outcomes', LearningOutcomeViewSet, basename='learningoutcome')
 router.register(r'courses', CourseViewSet, basename='course')
 router.register(r'enrollments', EnrollmentViewSet, basename='enrollment')
 router.register(r'assessments', AssessmentViewSet, basename='assessment')
