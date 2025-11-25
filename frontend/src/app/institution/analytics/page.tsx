@@ -101,9 +101,10 @@ export default function InstitutionAnalytics() {
       setPerformanceData(performance);
       setCourseSuccessData(courseSuccess.courses || []);
 
-      // Extract available departments for filter
+      // Extract available departments for filter (remove duplicates)
       const deptNames = departments.departments?.map((d: any) => d.name) || [];
-      setAvailableDepartments(deptNames);
+      const uniqueDeptNames = Array.from(new Set(deptNames));
+      setAvailableDepartments(uniqueDeptNames);
 
     } catch (err: any) {
       console.error('Error fetching analytics data:', err);
@@ -284,8 +285,8 @@ export default function InstitutionAnalytics() {
                 className={`px-4 py-2 rounded-xl ${themeClasses.card.replace('shadow-2xl', '').replace('rounded-2xl', 'rounded-xl')} ${isDark ? 'bg-white/5 text-white border border-white/10' : 'bg-white text-gray-700 border border-gray-200'} focus:outline-none focus:ring-2 focus:ring-indigo-500`}
               >
                 <option value="all">All Departments</option>
-                {availableDepartments.map(dept => (
-                  <option key={dept} value={dept}>{dept}</option>
+                {availableDepartments.map((dept, index) => (
+                  <option key={`${dept}-${index}`} value={dept}>{dept}</option>
                 ))}
               </select>
               <select

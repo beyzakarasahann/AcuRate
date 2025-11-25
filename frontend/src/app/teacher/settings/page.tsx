@@ -6,16 +6,8 @@ import { Settings, User, Lock, Bell, Moon, Sun, Globe, Save, BookOpen, Mail, Pho
 import { useState, useEffect } from 'react';
 import { useTheme } from 'next-themes';
 import { useThemeColors } from '@/hooks/useThemeColors'; 
-
-// --- MOCK VERİLER ---
-const teacherInfo = {
-  name: 'Dr. Sarah Mitchell',
-  email: 's.mitchell@university.edu',
-  department: 'Computer Science',
-  phone: '+90 555 123 4567',
-  office: 'CS Building, Room 301',
-  title: 'Associate Professor',
-};
+import { api } from '@/lib/api';
+import type { User } from '@/lib/api';
 
 // Sekme verileri
 const settingTabs = [
@@ -25,10 +17,10 @@ const settingTabs = [
     { id: 'teaching', name: 'Teaching Preferences', icon: BookOpen },
 ];
 
-// --- YARDIMCI BİLEŞENLER ---
+// --- HELPER COMPONENTS ---
 
-// 1. Profil Bilgileri Sekmesi
-const ProfileTab = ({ isDark, themeClasses, text, mutedText }: any) => ( 
+// 1. Profile Details Tab
+const ProfileTab = ({ isDark, themeClasses, text, mutedText, user }: any) => ( 
     <div className="space-y-6">
         <motion.div 
             initial={{ x: -20, opacity: 0 }} 
@@ -41,13 +33,14 @@ const ProfileTab = ({ isDark, themeClasses, text, mutedText }: any) => (
             </h3>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* İsim */}
+                {/* Full Name */}
                 <div>
                     <label className={`block text-sm font-medium ${mutedText} mb-1`}>Full Name</label>
                     <input 
                         type="text" 
-                        defaultValue={teacherInfo.name}
-                        className={`w-full p-3 rounded-lg ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'} border transition-colors focus:ring-2 focus:ring-indigo-500 outline-none`}
+                        value={`${user?.first_name ?? ''} ${user?.last_name ?? ''}`.trim()}
+                        disabled
+                        className={`w-full p-3 rounded-lg ${isDark ? 'bg-white/10 border-white/10 text-white' : 'bg-gray-100 border-gray-200 text-gray-900'} border transition-colors focus:ring-2 focus:ring-indigo-500 outline-none`}
                     />
                 </div>
                 {/* Email */}
@@ -55,69 +48,59 @@ const ProfileTab = ({ isDark, themeClasses, text, mutedText }: any) => (
                     <label className={`block text-sm font-medium ${mutedText} mb-1`}>Email Address</label>
                     <input 
                         type="email" 
-                        defaultValue={teacherInfo.email}
-                        className={`w-full p-3 rounded-lg ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'} border transition-colors focus:ring-2 focus:ring-indigo-500 outline-none`}
+                        value={user?.email ?? ''}
+                        disabled
+                        className={`w-full p-3 rounded-lg ${isDark ? 'bg-white/10 border-white/10 text-white' : 'bg-gray-100 border-gray-200 text-gray-900'} border transition-colors focus:ring-2 focus:ring-indigo-500 outline-none`}
                     />
                 </div>
-                {/* Bölüm */}
+                {/* Department */}
                 <div>
                     <label className={`block text-sm font-medium ${mutedText} mb-1`}>Department</label>
-                    <select
-                        defaultValue={teacherInfo.department}
-                        className={`w-full p-3 rounded-lg appearance-none ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'} border transition-colors focus:ring-2 focus:ring-indigo-500 outline-none`}
-                    >
-                        <option value="Computer Science">Computer Science</option>
-                        <option value="Electrical Engineering">Electrical Engineering</option>
-                        <option value="Mechanical Engineering">Mechanical Engineering</option>
-                        <option value="Civil Engineering">Civil Engineering</option>
-                    </select>
+                    <input
+                        type="text"
+                        value={user?.department ?? 'Department not set'}
+                        disabled
+                        className={`w-full p-3 rounded-lg ${isDark ? 'bg-white/10 border-white/10 text-white' : 'bg-gray-100 border-gray-200 text-gray-900'} border transition-colors focus:ring-2 focus:ring-indigo-500 outline-none`}
+                    />
                 </div>
-                {/* Unvan */}
+                {/* Title */}
                 <div>
                     <label className={`block text-sm font-medium ${mutedText} mb-1`}>Title</label>
-                    <select
-                        defaultValue={teacherInfo.title}
-                        className={`w-full p-3 rounded-lg appearance-none ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'} border transition-colors focus:ring-2 focus:ring-indigo-500 outline-none`}
-                    >
-                        <option value="Professor">Professor</option>
-                        <option value="Associate Professor">Associate Professor</option>
-                        <option value="Assistant Professor">Assistant Professor</option>
-                        <option value="Lecturer">Lecturer</option>
-                    </select>
+                    <input
+                        type="text"
+                        value={user?.role_display ?? 'Faculty'}
+                        disabled
+                        className={`w-full p-3 rounded-lg ${isDark ? 'bg-white/10 border-white/10 text-white' : 'bg-gray-100 border-gray-200 text-gray-900'} border transition-colors focus:ring-2 focus:ring-indigo-500 outline-none`}
+                    />
                 </div>
-                {/* Telefon */}
+                {/* Phone */}
                 <div>
                     <label className={`block text-sm font-medium ${mutedText} mb-1`}>Phone Number</label>
                     <input 
                         type="tel" 
-                        defaultValue={teacherInfo.phone}
-                        className={`w-full p-3 rounded-lg ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'} border transition-colors focus:ring-2 focus:ring-indigo-500 outline-none`}
+                        value={user?.phone ?? 'Not provided'}
+                        disabled
+                        className={`w-full p-3 rounded-lg ${isDark ? 'bg-white/10 border-white/10 text-white' : 'bg-gray-100 border-gray-200 text-gray-900'} border transition-colors focus:ring-2 focus:ring-indigo-500 outline-none`}
                     />
                 </div>
-                {/* Ofis */}
+                {/* Office */}
                 <div>
                     <label className={`block text-sm font-medium ${mutedText} mb-1`}>Office Location</label>
                     <input 
                         type="text" 
-                        defaultValue={teacherInfo.office}
-                        className={`w-full p-3 rounded-lg ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'} border transition-colors focus:ring-2 focus:ring-indigo-500 outline-none`}
+                        value={user?.office_location ?? 'Not provided'}
+                        disabled
+                        className={`w-full p-3 rounded-lg ${isDark ? 'bg-white/10 border-white/10 text-white' : 'bg-gray-100 border-gray-200 text-gray-900'} border transition-colors focus:ring-2 focus:ring-indigo-500 outline-none`}
                     />
                 </div>
             </div>
             
-            <motion.button 
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                className="mt-6 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold rounded-lg flex items-center gap-2 transition-all"
-            >
-                <Save className="w-4 h-4" /> Save Profile
-            </motion.button>
         </motion.div>
     </div>
 );
 
-// 2. Güvenlik Sekmesi
-const SecurityTab = ({ isDark, themeClasses, text, mutedText }: any) => ( 
+// 2. Security Tab
+const SecurityTab = ({ isDark, themeClasses, text, mutedText, onChangePassword, loading, error, success, form, setForm }: any) => (
     <div className="space-y-6">
         <motion.div 
             initial={{ x: -20, opacity: 0 }} 
@@ -135,6 +118,8 @@ const SecurityTab = ({ isDark, themeClasses, text, mutedText }: any) => (
                     <input 
                         type="password" 
                         placeholder="********" 
+                        value={form.old_password}
+                        onChange={(e) => setForm((prev: any) => ({ ...prev, old_password: e.target.value }))}
                         className={`w-full p-3 rounded-lg ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'} border transition-colors focus:ring-2 focus:ring-indigo-500 outline-none`} 
                     />
                 </div>
@@ -143,6 +128,8 @@ const SecurityTab = ({ isDark, themeClasses, text, mutedText }: any) => (
                     <input 
                         type="password" 
                         placeholder="********" 
+                        value={form.new_password}
+                        onChange={(e) => setForm((prev: any) => ({ ...prev, new_password: e.target.value }))}
                         className={`w-full p-3 rounded-lg ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'} border transition-colors focus:ring-2 focus:ring-indigo-500 outline-none`} 
                     />
                 </div>
@@ -151,23 +138,30 @@ const SecurityTab = ({ isDark, themeClasses, text, mutedText }: any) => (
                     <input 
                         type="password" 
                         placeholder="********" 
+                        value={form.new_password_confirm}
+                        onChange={(e) => setForm((prev: any) => ({ ...prev, new_password_confirm: e.target.value }))}
                         className={`w-full p-3 rounded-lg ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'} border transition-colors focus:ring-2 focus:ring-indigo-500 outline-none`} 
                     />
                 </div>
             </div>
             
+            {error && <p className="text-sm text-red-500 mt-4">{error}</p>}
+            {success && <p className="text-sm text-green-500 mt-4">{success}</p>}
+
             <motion.button 
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                className="mt-6 px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg flex items-center gap-2 transition-colors"
+                onClick={onChangePassword}
+                disabled={loading}
+                className={`mt-6 px-6 py-3 ${loading ? 'bg-red-400 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700'} text-white font-semibold rounded-lg flex items-center gap-2 transition-colors`}
             >
-                <Lock className="w-4 h-4" /> Update Password
+                <Lock className="w-4 h-4" /> {loading ? 'Updating...' : 'Update Password'}
             </motion.button>
         </motion.div>
     </div>
 );
 
-// 3. Tercihler Sekmesi
+// 3. Preferences Tab
 const PreferencesTab = ({ isDark, themeClasses, text, mutedText }: any) => {
     const { setTheme } = useTheme();
 
@@ -184,7 +178,7 @@ const PreferencesTab = ({ isDark, themeClasses, text, mutedText }: any) => {
                     Display and Notifications
                 </h3>
                 
-                {/* Tema Seçimi */}
+                {/* Theme selection */}
                 <div className="flex justify-between items-center py-3 border-b border-gray-500/10">
                     <div className="flex items-center gap-3">
                         {isDark ? <Sun className="w-5 h-5 text-yellow-500" /> : <Moon className="w-5 h-5 text-gray-700" />}
@@ -203,7 +197,7 @@ const PreferencesTab = ({ isDark, themeClasses, text, mutedText }: any) => {
                     </motion.button>
                 </div>
                 
-                {/* Dil Seçimi */}
+                {/* Language selection */}
                  <div className="flex justify-between items-center py-3 border-b border-gray-500/10">
                     <div className="flex items-center gap-3">
                         <Globe className="w-5 h-5 text-blue-500" />
@@ -217,11 +211,11 @@ const PreferencesTab = ({ isDark, themeClasses, text, mutedText }: any) => {
                         className={`px-4 py-2 rounded-lg text-sm font-medium ${isDark ? 'bg-white/10 text-white border-white/10' : 'bg-gray-200 text-gray-800 border-gray-300'} border appearance-none`}
                     >
                         <option value="en">English</option>
-                        <option value="tr">Türkçe</option>
+                        <option value="tr">Turkish</option>
                     </select>
                 </div>
 
-                 {/* Email Bildirimleri */}
+                 {/* Email notifications */}
                  <div className="flex justify-between items-center py-3 border-b border-gray-500/10">
                     <div className="flex items-center gap-3">
                         <Mail className="w-5 h-5 text-green-500" />
@@ -236,7 +230,7 @@ const PreferencesTab = ({ isDark, themeClasses, text, mutedText }: any) => {
                     </label>
                 </div>
 
-                 {/* Push Bildirimleri */}
+                 {/* Push notifications */}
                  <div className="flex justify-between items-center pt-3">
                     <div className="flex items-center gap-3">
                         <Bell className="w-5 h-5 text-purple-500" />
@@ -255,7 +249,7 @@ const PreferencesTab = ({ isDark, themeClasses, text, mutedText }: any) => {
     );
 };
 
-// 4. Teaching Preferences Sekmesi (Teacher'a özel)
+// 4. Teaching Preferences Tab (teacher specific)
 const TeachingPreferencesTab = ({ isDark, themeClasses, text, mutedText }: any) => {
     const [defaultWeights, setDefaultWeights] = useState({
         exam: 35,
@@ -427,6 +421,17 @@ const TeachingPreferencesTab = ({ isDark, themeClasses, text, mutedText }: any) 
 export default function TeacherSettingsPage() {
   const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState(settingTabs[0].id);
+  const [user, setUser] = useState<User | null>(null);
+  const [userLoading, setUserLoading] = useState(true);
+  const [userError, setUserError] = useState<string | null>(null);
+  const [passwordForm, setPasswordForm] = useState({
+    old_password: '',
+    new_password: '',
+    new_password_confirm: '',
+  });
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
   
   const { 
     isDark, 
@@ -440,15 +445,92 @@ export default function TeacherSettingsPage() {
     setMounted(true);
   }, []);
 
+  useEffect(() => {
+    const loadUser = async () => {
+      try {
+        const currentUser = await api.getCurrentUser();
+        setUser(currentUser);
+        setUserError(null);
+      } catch (error: any) {
+        setUserError(error.message || 'Unable to load user details.');
+      } finally {
+        setUserLoading(false);
+      }
+    };
+
+    loadUser();
+  }, []);
+
+  const handlePasswordChange = async () => {
+    setPasswordError(null);
+    setPasswordSuccess(null);
+
+    if (!passwordForm.old_password || !passwordForm.new_password || !passwordForm.new_password_confirm) {
+      setPasswordError('Please fill in all fields.');
+      return;
+    }
+
+    if (passwordForm.new_password !== passwordForm.new_password_confirm) {
+      setPasswordError('New passwords do not match.');
+      return;
+    }
+
+    setPasswordLoading(true);
+    try {
+      await api.changePassword(
+        passwordForm.old_password,
+        passwordForm.new_password,
+        passwordForm.new_password_confirm
+      );
+      setPasswordSuccess('Password updated successfully.');
+      setPasswordForm({
+        old_password: '',
+        new_password: '',
+        new_password_confirm: '',
+      });
+    } catch (error: any) {
+      setPasswordError(error.message || 'An error occurred while updating the password.');
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
+
   if (!mounted || !themeMounted) {
     return null;
+  }
+
+  if (userLoading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <p className="text-gray-500">Loading your profile...</p>
+      </div>
+    );
+  }
+
+  if (userError) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <p className="text-red-500">{userError}</p>
+      </div>
+    );
   }
   
   const renderTabContent = () => {
     const props = { isDark, themeClasses, text, mutedText };
     switch (activeTab) {
-        case 'profile': return <ProfileTab {...props} />;
-        case 'security': return <SecurityTab {...props} />;
+        case 'profile': return <ProfileTab {...props} user={user} />;
+        case 'security': 
+            return (
+                <SecurityTab 
+                    {...props} 
+                    form={passwordForm}
+                    setForm={setPasswordForm}
+                    loading={passwordLoading}
+                    error={passwordError}
+                    success={passwordSuccess}
+                    onChangePassword={handlePasswordChange}
+                />
+            );
         case 'preferences': return <PreferencesTab {...props} />;
         case 'teaching': return <TeachingPreferencesTab {...props} />;
         default: return null;
