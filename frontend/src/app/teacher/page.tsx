@@ -2,7 +2,8 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { BookOpen, Users, Award, TrendingUp, ArrowUpRight, ArrowDownRight, CheckCircle2, AlertTriangle, FileText, BarChart3, Clock, Target, Loader2 } from 'lucide-react';
+import { BookOpen, Users, Award, TrendingUp, ArrowUpRight, ArrowDownRight, AlertTriangle, FileText, BarChart3, Clock, Target, Loader2, PenSquare, MessageCircle, CalendarDays, Sparkles } from 'lucide-react';
+import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { api, type DashboardData, type Course } from '@/lib/api'; 
@@ -284,6 +285,13 @@ export default function TeacherHomePage() {
     color: 'blue' as const
   }));
 
+  const gradedToday = recentSubmissions.filter((submission: any) => {
+    if (!submission.graded_at) return false;
+    const gradedDate = new Date(submission.graded_at);
+    const now = new Date();
+    return gradedDate.toDateString() === now.toDateString();
+  }).length;
+
   // Calculate grade distribution from actual grades
   const gradeDistribution = {
     A: 0, // 90-100
@@ -399,26 +407,154 @@ export default function TeacherHomePage() {
   const dynamicLineOptions = lineOptions(isDark, secondaryTextClass);
   const dynamicDoughnutOptions = doughnutOptions(isDark, secondaryTextClass);
 
+  const heroChips = [
+    { label: 'Courses', value: totalCourses.toString() },
+    { label: 'Students', value: totalStudents.toString() },
+    { label: 'Avg Grade', value: avgGrade > 0 ? `${Math.round(avgGrade * 10) / 10}%` : '-' },
+    { label: 'Graded Today', value: gradedToday.toString() },
+  ];
+
+  const quickActions = [
+    { label: 'Record Grades', description: 'Update latest assessments', href: '/teacher/grades', icon: PenSquare },
+    { label: 'View Analytics', description: 'Monitor course KPIs', href: '/teacher/analytics', icon: TrendingUp },
+    { label: 'Manage Outcomes', description: 'Align PO mappings', href: '/teacher/learning-outcome', icon: Target },
+  ];
+
+  const sortedByGrade = [...currentCourses].sort((a, b) => (b.avgGrade || 0) - (a.avgGrade || 0));
+  const bestCourse = sortedByGrade[0];
+  const attentionCourse = [...currentCourses]
+    .sort((a, b) => (a.avgGrade || 0) - (b.avgGrade || 0))
+    .find(course => (course.avgGrade || 0) < 80);
+
+  const quickStats = [
+    { label: 'Pending Grading', value: pendingAssessments || 0, accent: 'text-orange-400' },
+    { label: 'Graded Today', value: gradedToday, accent: 'text-emerald-400' },
+    { label: 'Active Outcomes', value: poAchievements.length, accent: 'text-indigo-400' },
+    { label: 'Avg Grade', value: avgGrade > 0 ? `${Math.round(avgGrade)}%` : '-', accent: 'text-blue-400' },
+  ];
+
   return (
     <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.5 }}
     >
-        {/* Header */}
+        {/* Hero */}
         <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex items-center justify-between flex-wrap gap-4 mb-8"
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8"
         >
-            <div>
-                <h1 className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">
+          <div
+            className="xl:col-span-2 rounded-2xl p-6 relative overflow-hidden shadow-2xl border border-white/10"
+            style={{ backgroundImage: `linear-gradient(135deg, ${accentStart}, ${accentEnd})` }}
+          >
+            <div className="relative z-10 flex flex-col gap-6">
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div>
+                  <p className="text-white/70 text-sm">Instructor Dashboard</p>
+                  <h1 className="text-4xl font-bold text-white leading-tight">
                     Welcome back, {teacher?.first_name || '-'}
-                </h1>
-                <p className={`${secondaryTextClass} text-sm mt-1`}>
-                    {teacher?.department || '-'} • {totalCourses} Courses • {totalStudents} Students
-                </p>
+                  </h1>
+                  <p className="text-white/80 text-sm mt-1">
+                    {teacher?.department || 'Department not set'} • {totalCourses} Courses • {totalStudents} Students
+                  </p>
+                </div>
+                <div className="px-4 py-2 rounded-full bg-white/15 text-white text-sm flex items-center gap-2">
+                  <Sparkles className="w-4 h-4" />
+                  Performance mode
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {heroChips.map((chip) => (
+                  <div key={chip.label} className="rounded-xl bg-white/15 p-3 text-white">
+                    <p className="text-xs uppercase tracking-wider text-white/70">{chip.label}</p>
+                    <p className="text-2xl font-semibold mt-1">{chip.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                <Link href="/teacher/grades" className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-white text-indigo-600 font-medium shadow-lg">
+                  <PenSquare className="w-4 h-4" />
+                  Record Grades
+                </Link>
+                <Link href="/teacher/analytics" className="inline-flex items-center gap-2 px-5 py-2 rounded-xl border border-white/40 text-white font-medium backdrop-blur">
+                  <CalendarDays className="w-4 h-4" />
+                  Weekly Insights
+                </Link>
+              </div>
             </div>
+            <div className="absolute inset-y-0 right-0 w-48 pointer-events-none opacity-30">
+              <div className="h-full w-full bg-gradient-to-b from-white/60 to-transparent blur-3xl" />
+            </div>
+          </div>
+
+          <div className={`backdrop-blur-xl ${themeClasses.card} rounded-2xl p-6 shadow-xl flex flex-col gap-4`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className={`${secondaryTextClass} text-sm`}>Focus Course</p>
+                <h3 className={`text-2xl font-semibold ${whiteTextClass}`}>{bestCourse ? bestCourse.code : '—'}</h3>
+              </div>
+              <div className="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-500 text-xs font-medium">
+                Top Performing
+              </div>
+            </div>
+            {bestCourse ? (
+              <>
+                <p className={`${secondaryTextClass} text-sm`}>
+                  {bestCourse.name}
+                </p>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className={`${secondaryTextClass}`}>Avg Grade</p>
+                    <p className={`text-xl font-semibold ${whiteTextClass}`}>{bestCourse.avgGrade}%</p>
+                  </div>
+                  <div>
+                    <p className={`${secondaryTextClass}`}>Students</p>
+                    <p className={`text-xl font-semibold ${whiteTextClass}`}>{bestCourse.students}</p>
+                  </div>
+                </div>
+                {attentionCourse && (
+                  <div className={`mt-3 p-3 rounded-xl border ${isDark ? 'border-orange-500/30 bg-orange-500/10' : 'border-orange-200 bg-orange-50'}`}>
+                    <p className="text-xs uppercase tracking-wide text-orange-500">Needs Attention</p>
+                    <p className={`font-medium ${whiteTextClass}`}>{attentionCourse.code} - {attentionCourse.name}</p>
+                    <p className="text-xs text-orange-500">Avg grade {attentionCourse.avgGrade}% • {attentionCourse.students} students</p>
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className={secondaryTextClass}>No course data available yet.</p>
+            )}
+          </div>
+        </motion.div>
+
+        {/* Quick Actions */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10"
+        >
+          {quickActions.map((action, idx) => (
+            <Link key={action.label} href={action.href}>
+              <motion.div
+                whileHover={{ y: -4, scale: 1.01 }}
+                transition={{ delay: idx * 0.05 }}
+                className={`backdrop-blur-xl ${themeClasses.card} rounded-2xl p-4 shadow-xl border border-transparent hover:border-indigo-400/40`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`p-3 rounded-xl ${isDark ? 'bg-white/10' : 'bg-gray-100'}`}>
+                    <action.icon className="w-5 h-5 text-indigo-500" />
+                  </div>
+                  <div>
+                    <p className={`font-semibold ${whiteTextClass}`}>{action.label}</p>
+                    <p className={`text-xs ${secondaryTextClass}`}>{action.description}</p>
+                  </div>
+                </div>
+              </motion.div>
+            </Link>
+          ))}
         </motion.div>
 
         {/* Stats Overview */}
@@ -659,23 +795,13 @@ export default function TeacherHomePage() {
                     className={`backdrop-blur-xl ${themeClasses.card} p-6 shadow-2xl`}
                 >
                     <h2 className={`text-xl font-bold ${whiteTextClass} mb-4`}>Quick Stats</h2>
-                    <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                            <span className={`${secondaryTextClass} text-sm`}>Pending Grading</span>
-                            <span className={`font-semibold ${whiteTextClass}`}>12</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                            <span className={`${secondaryTextClass} text-sm`}>Upcoming Deadlines</span>
-                            <span className={`font-semibold ${whiteTextClass}`}>3</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                            <span className={`${secondaryTextClass} text-sm`}>Student Inquiries</span>
-                            <span className={`font-semibold ${whiteTextClass}`}>5</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                            <span className={`${secondaryTextClass} text-sm`}>Avg Response Time</span>
-                            <span className={`font-semibold text-green-500`}>2.5h</span>
-                        </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        {quickStats.map((stat) => (
+                            <div key={stat.label} className={`rounded-xl border ${isDark ? 'border-white/10 bg-white/5' : 'border-gray-200 bg-white/80'} p-3`}>
+                                <p className={`${secondaryTextClass} text-xs uppercase tracking-wide`}>{stat.label}</p>
+                                <p className={`text-xl font-semibold ${stat.accent}`}>{stat.value}</p>
+                            </div>
+                        ))}
                     </div>
                 </motion.div>
             </div>

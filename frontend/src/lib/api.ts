@@ -19,6 +19,7 @@ export interface User {
   student_id?: string;
   department?: string;
   year_of_study?: number;
+  office_location?: string;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -566,6 +567,39 @@ class ApiClient {
     }
   }
 
+  async getTeachers(params?: { search?: string }): Promise<User[]> {
+    const query = new URLSearchParams({ role: 'TEACHER' });
+    if (params?.search) {
+      query.append('search', params.search);
+    }
+    const endpoint = `/users/?${query.toString()}`;
+    const response = await this.request<any>(endpoint);
+    if (response && typeof response === 'object' && 'results' in response && Array.isArray(response.results)) {
+      return response.results;
+    }
+    if (Array.isArray(response)) {
+      return response;
+    }
+    return [];
+  }
+
+  async createTeacher(data: {
+    username: string;
+    email: string;
+    password: string;
+    password_confirm: string;
+    first_name: string;
+    last_name: string;
+    department?: string;
+    phone?: string;
+  }): Promise<User> {
+    const payload = { ...data, role: 'TEACHER' };
+    return await this.request<User>('/users/', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
   // Contact Request
   async createContactRequest(data: {
     institution_name: string;
@@ -974,6 +1008,31 @@ class ApiClient {
     }>;
   }> {
     return await this.request('/analytics/alerts/');
+  }
+
+  // Departments
+  async getDepartments(): Promise<Array<{
+    name: string;
+    students: number;
+    courses: number;
+    faculty: number;
+    avg_grade: number | null;
+    po_achievement: number | null;
+    status: 'excellent' | 'good' | 'needs-attention';
+  }>> {
+    const response = await this.request<{
+      success: boolean;
+      departments: Array<{
+        name: string;
+        students: number;
+        courses: number;
+        faculty: number;
+        avg_grade: number | null;
+        po_achievement: number | null;
+        status: 'excellent' | 'good' | 'needs-attention';
+      }>;
+    }>('/analytics/departments/');
+    return response.departments || [];
   }
 }
 

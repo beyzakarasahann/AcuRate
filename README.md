@@ -13,7 +13,7 @@ AcuRate, üniversiteler, okullar ve eğitim kurumları için kapsamlı bir akade
 - **Settings**: Profil yönetimi, şifre değiştirme (✅ API entegre)
 
 ### 👨‍🏫 Öğretmen Paneli
-- **Dashboard**: Kurs istatistikleri, öğrenci sayıları, bekleyen değerlendirmeler
+- **Dashboard**: Kurs istatistikleri, öğrenci sayıları, bekleyen değerlendirmeler, modern KPI kartları ve hızlı aksiyonlar (🆕 yenilendi)
 - **Grades**: Öğrenci notları girişi, assessment yönetimi, otomatik final not hesaplama
   - Assessment oluşturma (max score düzenlenebilir, due date yok)
   - Feedback ranges yönetimi (otomatik feedback sistemi)
@@ -23,10 +23,14 @@ AcuRate, üniversiteler, okullar ve eğitim kurumları için kapsamlı bir akade
   - Teacher'lar sadece kendi kursları için LO oluşturabilir
   - Her LO için target percentage belirlenebilir
 - **Analytics**: Kurs performans analizi, öğrenci başarı takibi
+- **Settings**: Kurumdan gelen profil bilgilerini görüntüleme + şifre değişimi (🆕 API entegre, kilitli alanlar)
 
 ### 🏛️ Kurum Paneli
 - **Dashboard**: Kurumsal genel bakış, toplam öğrenci/öğretmen/ders sayıları
-- **Analytics**: Departman bazlı istatistikler, PO başarı raporları
+- **Analytics**: Departman bazlı istatistikler, PO başarı raporları (departman filtreleri iyileştirildi)
+- **Teachers**: Öğretmen dizini, arama, kart bazlı görünüm, slide-over ile öğretmen oluşturma (🆕 YENİ)
+- **Departments**: Departman kartları, istatistikler, departman ekleme paneli (🆕 YENİ)
+- **Settings**: Kurum profili ve güvenlik yönetimi (🆕 API entegre)
 
 ### 🌐 Genel Özellikler
 - **Dark/Light Mode**: Tema desteği
@@ -335,60 +339,24 @@ npm run lint
 
 ### 🆕 Yeni Özellikler (Son Güncellemeler)
 
-#### Teacher Panel - Learning Outcome Management (🆕 YENİ)
-- ✅ **Backend**: Learning Outcome modeli ve API endpoint'leri eklendi
-  - `/api/learning-outcomes/` - Learning Outcome CRUD işlemleri
-  - Teacher'lar sadece kendi kursları için LO oluşturabilir
-  - Program Outcome'lar artık sadece Institution tarafından yönetiliyor
-- ✅ **Frontend**: PO Management → Learning Outcome olarak değiştirildi
-  - `/teacher/learning-outcome` - Learning Outcome yönetim sayfası
-  - Teacher'lar kendi kursları için LO tanımlayabilir
-  - Her LO için target percentage belirlenebilir
+#### Institution Departments & Teacher Management (🆕 YENİ)
+- ✅ **Frontend**:
+  - `/institution/teachers` sayfası tamamen yenilendi (grid kartları, unified search, refresh + add aksiyonları, slide-over form ile öğretmen oluşturma)
+  - `/institution/departments` sayfası eklendi; departman kartları, öğrenci/fakülte/kurs istatistikleri ve departman ekleme paneli
+  - Slide-over panel tasarımı; smooth animasyon, modern form alanları, validation mesajları
+- ✅ **API Client**: Departman analytics endpoint entegrasyonu, öğretmen oluşturma/listeme fonksiyonları, unique key iyileştirmeleri
 
-#### Otomatik Feedback Sistemi (🆕 YENİ)
-- ✅ **Backend**: Assessment modeline `feedback_ranges` JSONField eklendi
-  - Score aralıklarına göre otomatik feedback atama
-  - `get_feedback_for_score()` metodu ile otomatik feedback hesaplama
-  - Feedback ranges validation eklendi
-- ✅ **Frontend**: Feedback yönetim sistemi
-  - "Manage Feedback Ranges" modal'ı eklendi
-  - Teacher'lar score aralıkları ve feedback mesajları tanımlayabilir
-  - Öğrenci notları kaydedilirken otomatik feedback atanıyor
-  - Ana listede feedback sadece görüntüleniyor (read-only)
+#### Teacher Settings & Dashboard Refresh (🆕 YENİ)
+- ✅ **Teacher Settings**:
+  - Profil bilgileri backend’den okunuyor, kurum tarafından kilitlenen alanlar read-only gösteriliyor
+  - Şifre değiştirme formu API’ye bağlı, hatalar/success mesajları ve loading state’leri eklendi
+- ✅ **Teacher Dashboard**:
+  - Hero bölümü, focus course kartı, quick actions ve quick stats panelleri ile profesyonel SaaS görünümü
+  - Backend verileriyle senkron KPI kartları, graded today metriği
 
-#### Grade Management İyileştirmeleri (🆕 YENİ)
-- ✅ **Assessment Oluşturma**:
-  - Due date alanı kaldırıldı
-  - Max score artık düzenlenebilir (0-100 arası)
-  - Kullanıcı istediği max score değerini girebilir
-- ✅ **Grade Listesi**:
-  - Progress kolonu kaldırıldı
-  - Percentages kolonu kaldırıldı
-  - Öğrenci notları ana listede read-only (sadece görüntüleme)
-  - "Edit Grades" butonu ve modal'ı eklendi
-  - Notları düzenlemek için ayrı bir modal kullanılıyor
-- ✅ **Course Assessment Overview**:
-  - Due date kolonu kaldırıldı
-  - Progress kolonu kaldırıldı
-
-#### Course Analytics (Kurs Analitiği)
-- ✅ **Backend**: Kurs bazlı analitik endpoint'leri eklendi
-  - `/api/course-analytics/` - Öğrencinin tüm kurslarının özet analitiği
-  - `/api/course-analytics/<course_id>/` - Detaylı kurs analitiği
-  - Sınıf ortalaması, öğrenci percentile, trend analizi
-- ✅ **Frontend**: Yeni sayfalar eklendi
-  - `/student/course-analytics` - Kurs listesi ve özet analitikler
-  - `/student/course-analytics/[courseId]` - Detaylı kurs analitiği sayfası
-  - Sınıf ortalaması karşılaştırması, percentile gösterimi
-
-#### Veri Zenginleştirme
-- ✅ **Migration 0004**: Tüm öğrenciler için kapsamlı test verileri
-  - Kurs kayıtları, assessment'lar, notlar
-  - PO başarı verileri
-  - Gerçekçi veri setleri
-- ✅ **Migration 0005**: beyza2 öğrencisi için çeşitli PO başarı yüzdeleri
-  - Bazı PO'lar yüksek (95%, 92%), bazıları düşük (65%)
-  - Daha gerçekçi test senaryoları
+#### Department & Analytics Filter Fixes (🆕 YENİ)
+- ✅ Departman seçeneklerinde benzersiz key kullanımı ve duplicate filtreleme ile React uyarıları giderildi
+- ✅ Institution analytics filtrelerinde unique departman listesi kullanılıyor; dropdown’lar hatasız
 
 ### Backend Geliştirmeleri
 - ✅ PostgreSQL veritabanı entegrasyonu
@@ -454,7 +422,7 @@ npm run lint
 | Student Outcomes | ✅ %100 | API'den veri çekiyor |
 | Student Course Analytics | ✅ %100 | 🆕 YENİ - API entegre |
 | Student Settings | ✅ %100 | Profil ve şifre güncelleme çalışıyor |
-| Teacher Dashboard | ✅ %100 | API entegre |
+| Teacher Dashboard | ✅ %100 | API entegre, yeni UI |
 | Teacher Grades | ✅ %100 | Assessment yönetimi, feedback ranges, not girişi |
 | Teacher Learning Outcome | ✅ %100 | 🆕 YENİ - API entegre |
 | Institution Dashboard | 🔄 %50 | Placeholder, API'ye bağlanacak |
@@ -532,7 +500,7 @@ Proje hakkında daha detaylı bilgi için:
 #### Frontend - Teacher Paneli
 - [ ] **Teacher Dashboard**: PO achievement hesaplama TODO olarak işaretli (satır 257)
 - [ ] **Teacher PO Management**: Mock data kullanıyor, API entegrasyonu yok
-- [ ] **Teacher Settings**: Sayfa eksik, implement edilmemiş
+- [x] **Teacher Settings**: Sayfa tamamlandı (kilitli bilgiler + şifre değişimi)
 - [ ] **Teacher Courses**: Detaylı kurs yönetimi sayfası eksik
 - [ ] **Grade Export/Import**: Export ve Import butonları var ama fonksiyonel değil
 
@@ -605,7 +573,6 @@ Proje hakkında daha detaylı bilgi için:
 - Teacher dashboard'da bazı statik veriler
 
 #### Eksik Sayfalar
-- `/teacher/settings` - Teacher settings sayfası yok
 - `/teacher/courses` - Detaylı kurs yönetimi sayfası eksik
 - `/institution/analytics` - Analytics sayfası eksik veya mock data
 - `/institution/reports` - Reports sayfası eksik
