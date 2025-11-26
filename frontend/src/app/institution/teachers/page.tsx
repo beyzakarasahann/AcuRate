@@ -2,7 +2,7 @@
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { useEffect, useState } from 'react';
-import { Users, PlusCircle, RefreshCw, Search, Mail, Phone, Building2, Loader2, X } from 'lucide-react';
+import { Users, PlusCircle, RefreshCw, Search, Mail, Phone, Building2, Loader2, X, Trash2, AlertTriangle } from 'lucide-react';
 import { api, type User } from '@/lib/api';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { Inter } from 'next/font/google';
@@ -12,12 +12,9 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 interface CreateTeacherForm {
   first_name: string;
   last_name: string;
-  username: string;
   email: string;
   department: string;
-  phone: string;
-  password: string;
-  password_confirm: string;
+  phone: string; // kept for display only, not sent to backend right now
 }
 
 export default function TeachersPage() {
@@ -28,17 +25,17 @@ export default function TeachersPage() {
   const [form, setForm] = useState<CreateTeacherForm>({
     first_name: '',
     last_name: '',
-    username: '',
     email: '',
     department: '',
     phone: '',
-    password: '',
-    password_confirm: '',
   });
   const [formError, setFormError] = useState<string | null>(null);
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [deleting, setDeleting] = useState<number | null>(null);
+  const [teacherToDelete, setTeacherToDelete] = useState<User | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const {
     mounted: themeMounted,
@@ -83,26 +80,15 @@ export default function TeachersPage() {
     setForm({
       first_name: '',
       last_name: '',
-      username: '',
       email: '',
       department: '',
       phone: '',
-      password: '',
-      password_confirm: '',
     });
   };
 
   const validateForm = () => {
-    if (!form.first_name || !form.last_name || !form.username || !form.email) {
+    if (!form.first_name || !form.last_name || !form.email) {
       setFormError('Please fill in the required fields.');
-      return false;
-    }
-    if (form.password.length < 8) {
-      setFormError('Password must be at least 8 characters.');
-      return false;
-    }
-    if (form.password !== form.password_confirm) {
-      setFormError('Passwords do not match.');
       return false;
     }
     return true;
@@ -120,25 +106,18 @@ export default function TeachersPage() {
     try {
       setCreating(true);
       await api.createTeacher({
-        username: form.username,
         email: form.email,
-        password: form.password,
-        password_confirm: form.password_confirm,
         first_name: form.first_name,
         last_name: form.last_name,
         department: form.department || undefined,
-        phone: form.phone || undefined,
       });
-      setFormSuccess('Teacher account created successfully.');
+      setFormSuccess('Teacher account created. A one-time password has been emailed to the teacher.');
       setForm({
         first_name: '',
         last_name: '',
-        username: '',
         email: '',
         department: '',
         phone: '',
-        password: '',
-        password_confirm: '',
       });
       await fetchTeachers(search.trim() || undefined);
       // Close panel after a short delay to show success message
@@ -151,6 +130,33 @@ export default function TeachersPage() {
     } finally {
       setCreating(false);
     }
+  };
+
+  const handleDeleteClick = (teacher: User, event: React.MouseEvent) => {
+    event.stopPropagation();
+    setTeacherToDelete(teacher);
+    setDeleteError(null);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!teacherToDelete) return;
+
+    try {
+      setDeleting(teacherToDelete.id);
+      setDeleteError(null);
+      await api.deleteTeacher(teacherToDelete.id);
+      setTeacherToDelete(null);
+      await fetchTeachers(search.trim() || undefined);
+    } catch (error: any) {
+      setDeleteError(error.message || 'Failed to delete teacher.');
+    } finally {
+      setDeleting(null);
+    }
+  };
+
+  const handleCancelDelete = () => {
+    setTeacherToDelete(null);
+    setDeleteError(null);
   };
 
   if (!mounted || !themeMounted) {
@@ -254,7 +260,7 @@ export default function TeachersPage() {
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       whileHover={{ y: -2 }}
-                      className={`group rounded-2xl border p-5 transition-all duration-200 ${isDark ? 'bg-white/[0.02] border-white/10 hover:bg-white/[0.04] hover:border-white/15' : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-md'} cursor-pointer`}
+                      className={`group rounded-2xl border p-5 transition-all duration-200 ${isDark ? 'bg-white/[0.02] border-white/10 hover:bg-white/[0.04] hover:border-white/15' : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-md'}`}
                     >
                       <div className="flex items-start justify-between mb-4">
                         <div className="flex-1 min-w-0">
@@ -265,12 +271,27 @@ export default function TeachersPage() {
                             {teacher.department || 'No department'}
                           </p>
                         </div>
-                        <span className={`text-xs px-2.5 py-1 rounded-lg font-semibold shrink-0 ml-2 ${teacher.is_active 
-                          ? (isDark ? 'bg-green-500/15 text-green-400 border border-green-500/20' : 'bg-green-50 text-green-700 border border-green-200')
-                          : (isDark ? 'bg-gray-500/15 text-gray-400 border border-gray-500/20' : 'bg-gray-50 text-gray-600 border border-gray-200')
-                        }`}>
-                          {teacher.is_active ? 'Active' : 'Inactive'}
-                        </span>
+                        <div className="flex items-center gap-2 shrink-0 ml-2">
+                          <span className={`text-xs px-2.5 py-1 rounded-lg font-semibold ${teacher.is_active 
+                            ? (isDark ? 'bg-green-500/15 text-green-400 border border-green-500/20' : 'bg-green-50 text-green-700 border border-green-200')
+                            : (isDark ? 'bg-gray-500/15 text-gray-400 border border-gray-500/20' : 'bg-gray-50 text-gray-600 border border-gray-200')
+                          }`}>
+                            {teacher.is_active ? 'Active' : 'Inactive'}
+                          </span>
+                          <motion.button
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                            onClick={(e) => handleDeleteClick(teacher, e)}
+                            disabled={deleting === teacher.id}
+                            className={`p-2 rounded-lg transition-all duration-200 ${isDark 
+                              ? 'text-red-400/70 hover:text-red-400 hover:bg-red-500/10' 
+                              : 'text-red-600/70 hover:text-red-600 hover:bg-red-50'
+                            } ${deleting === teacher.id ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                            title="Delete teacher"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </motion.button>
+                        </div>
                       </div>
                       
                       <div className="space-y-2.5">
@@ -376,19 +397,6 @@ export default function TeachersPage() {
                     
                     <div className="space-y-2">
                       <label className={`block text-xs font-semibold uppercase tracking-wider ${mutedText}`}>
-                        Username <span className="text-red-400">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={form.username}
-                        onChange={(e) => handleInputChange('username', e.target.value)}
-                        className={`w-full px-4 py-3 rounded-xl border transition-all duration-200 ${isDark ? 'bg-white/[0.03] border-white/10 text-white placeholder:text-white/30' : 'bg-white border-gray-200 text-gray-900 placeholder:text-gray-400'} focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500/50 outline-none text-sm font-medium`}
-                        required
-                      />
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <label className={`block text-xs font-semibold uppercase tracking-wider ${mutedText}`}>
                         Email <span className="text-red-400">*</span>
                       </label>
                       <input
@@ -426,33 +434,9 @@ export default function TeachersPage() {
                       />
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className={`block text-xs font-semibold uppercase tracking-wider ${mutedText}`}>
-                          Password <span className="text-red-400">*</span>
-                        </label>
-                        <input
-                          type="password"
-                          value={form.password}
-                          onChange={(e) => handleInputChange('password', e.target.value)}
-                          minLength={8}
-                          className={`w-full px-4 py-3 rounded-xl border transition-all duration-200 ${isDark ? 'bg-white/[0.03] border-white/10 text-white placeholder:text-white/30' : 'bg-white border-gray-200 text-gray-900 placeholder:text-gray-400'} focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500/50 outline-none text-sm font-medium`}
-                          required
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className={`block text-xs font-semibold uppercase tracking-wider ${mutedText}`}>
-                          Confirm <span className="text-red-400">*</span>
-                        </label>
-                        <input
-                          type="password"
-                          value={form.password_confirm}
-                          onChange={(e) => handleInputChange('password_confirm', e.target.value)}
-                          minLength={8}
-                          className={`w-full px-4 py-3 rounded-xl border transition-all duration-200 ${isDark ? 'bg-white/[0.03] border-white/10 text-white placeholder:text-white/30' : 'bg-white border-gray-200 text-gray-900 placeholder:text-gray-400'} focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500/50 outline-none text-sm font-medium`}
-                          required
-                        />
-                      </div>
+                    {/* Info box: password will be emailed */}
+                    <div className={`p-3.5 rounded-xl text-xs sm:text-sm ${isDark ? 'bg-purple-500/10 text-purple-200 border border-purple-500/30' : 'bg-purple-50 text-purple-800 border border-purple-200'}`}>
+                      When you create this teacher, a one-time temporary password will be generated and sent directly to their email address. They must change it on first login.
                     </div>
 
                     {formError && (
@@ -508,6 +492,91 @@ export default function TeachersPage() {
                       </div>
                     </div>
                   </form>
+                </div>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
+
+        {/* Delete Confirmation Modal */}
+        <AnimatePresence>
+          {teacherToDelete && (
+            <>
+              {/* Backdrop */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                onClick={handleCancelDelete}
+                className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+              />
+
+              {/* Modal */}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                className={`fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md ${isDark ? 'bg-gray-900' : 'bg-white'} rounded-3xl shadow-2xl z-50 border ${isDark ? 'border-white/10' : 'border-gray-200'}`}
+              >
+                <div className="p-6">
+                  <div className="flex items-start gap-4 mb-6">
+                    <div className={`p-3 rounded-xl ${isDark ? 'bg-red-500/10' : 'bg-red-50'}`}>
+                      <AlertTriangle className="w-6 h-6 text-red-500" />
+                    </div>
+                    <div className="flex-1">
+                      <h2 className={`text-xl font-bold ${text} mb-1`}>Delete Teacher</h2>
+                      <p className={`text-sm ${mutedText}`}>
+                        Are you sure you want to delete{' '}
+                        <span className="font-semibold text-white">{teacherToDelete.first_name} {teacherToDelete.last_name}</span>?
+                        This action cannot be undone.
+                      </p>
+                    </div>
+                  </div>
+
+                  {deleteError && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className={`mb-4 p-3 rounded-xl text-sm font-medium ${isDark ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-red-50 text-red-700 border border-red-200'}`}
+                    >
+                      {deleteError}
+                    </motion.div>
+                  )}
+
+                  <div className="flex items-center justify-end gap-3">
+                    <motion.button
+                      type="button"
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={handleCancelDelete}
+                      disabled={deleting === teacherToDelete.id}
+                      className={`px-5 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 ${isDark ? 'bg-white/5 border border-white/10 text-white hover:bg-white/10' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'} ${deleting === teacherToDelete.id ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      Cancel
+                    </motion.button>
+                    <motion.button
+                      type="button"
+                      whileHover={{ scale: deleting === teacherToDelete.id ? 1 : 1.02 }}
+                      whileTap={{ scale: deleting === teacherToDelete.id ? 1 : 0.98 }}
+                      onClick={handleConfirmDelete}
+                      disabled={deleting === teacherToDelete.id}
+                      className={`px-6 py-2.5 rounded-xl font-semibold text-sm transition-all duration-200 flex items-center gap-2 ${deleting === teacherToDelete.id ? 'opacity-70 cursor-not-allowed' : ''} ${isDark ? 'bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-500/20' : 'bg-red-600 hover:bg-red-700 text-white shadow-md'}`}
+                    >
+                      {deleting === teacherToDelete.id ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Deleting...
+                        </>
+                      ) : (
+                        <>
+                          <Trash2 className="w-4 h-4" />
+                          Delete Teacher
+                        </>
+                      )}
+                    </motion.button>
+                  </div>
                 </div>
               </motion.div>
             </>

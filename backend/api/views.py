@@ -28,7 +28,8 @@ from .serializers import (
     StudentGradeSerializer, StudentGradeDetailSerializer,
     StudentPOAchievementSerializer, StudentPOAchievementDetailSerializer,
     StudentDashboardSerializer, TeacherDashboardSerializer, InstitutionDashboardSerializer,
-    ContactRequestSerializer, ContactRequestCreateSerializer
+    ContactRequestSerializer, ContactRequestCreateSerializer,
+    TeacherCreateSerializer,
 )
 
 
@@ -79,6 +80,39 @@ def login_view(request):
         'error': error_message or 'Invalid credentials',
         'errors': errors
     }, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_teacher_view(request):
+    """
+    Admin/Institution creates a teacher with a backend-generated temporary password.
+
+    POST /api/teachers/
+    Body: { "email", "first_name", "last_name", "department" }
+    """
+    user = request.user
+    if user.role != User.Role.INSTITUTION and not user.is_staff:
+        return Response(
+            {"detail": "Only institution admins can create teachers."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    serializer = TeacherCreateSerializer(data=request.data, context={"request": request})
+    if serializer.is_valid():
+        teacher = serializer.save()
+        return Response(
+            {
+                "success": True,
+                "teacher": UserDetailSerializer(teacher).data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+    return Response(
+        {"success": False, "errors": serializer.errors},
+        status=status.HTTP_400_BAD_REQUEST,
+    )
 
 
 @api_view(['POST'])
@@ -247,12 +281,46 @@ class UserViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         user.set_password(new_password)
+        # If the user had a temporary password, mark it as no longer temporary
+        if hasattr(user, "is_temporary_password"):
+            user.is_temporary_password = False
         user.save()
         
         return Response({
             'success': True,
             'message': 'Password changed successfully'
         })
+    
+    def destroy(self, request, *args, **kwargs):
+        """Override destroy to add permission checks and return JSON response"""
+        instance = self.get_object()
+        user = request.user
+        
+        # Only INSTITUTION role or admin can delete users
+        if user.role != User.Role.INSTITUTION and not user.is_staff:
+            return Response({
+                'error': 'Only institution admins can delete users'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Only allow deleting teachers
+        if instance.role != User.Role.TEACHER:
+            return Response({
+                'error': 'Only teachers can be deleted through this endpoint'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Prevent deleting yourself
+        if instance.id == user.id:
+            return Response({
+                'error': 'You cannot delete your own account'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Delete the user
+        instance.delete()
+        
+        return Response({
+            'success': True,
+            'message': 'Teacher deleted successfully'
+        }, status=status.HTTP_200_OK)
 
 
 # =============================================================================

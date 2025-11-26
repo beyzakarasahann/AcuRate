@@ -25,3 +25,6 @@ myenv/
 .DS_Store
 .idea/
 .vscode/
+.venv/
+frontend/node_modules/
+backend/**/__pycache__/

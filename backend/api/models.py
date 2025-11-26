@@ -89,6 +89,21 @@ class User(AbstractUser):
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    # Onboarding / account management
+    is_temporary_password = models.BooleanField(
+        default=True,
+        help_text="If True, user must change password before full access"
+    )
+
+    created_by = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="created_teachers",
+        help_text="Admin/Institution user who created this account (for teachers)"
+    )
     
     class Meta:
         db_table = 'users'

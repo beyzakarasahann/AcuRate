@@ -5,6 +5,8 @@ Converts Django models to/from JSON for REST API endpoints
 
 from rest_framework import serializers
 from django.contrib.auth import authenticate
+import secrets
+import string
 from .models import (
     User, ProgramOutcome, Course, CoursePO, 
     Enrollment, Assessment, StudentGrade, StudentPOAchievement,
@@ -40,7 +42,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
             'id', 'username', 'email', 'first_name', 'last_name',
             'role', 'role_display', 'phone', 'profile_picture',
             'student_id', 'department', 'year_of_study',
-            'is_active', 'is_staff', 'is_superuser',
+            'is_active', 'is_staff', 'is_superuser', 'is_temporary_password',
             'created_at', 'updated_at', 'last_login'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'last_login']
@@ -62,6 +64,10 @@ class UserCreateSerializer(serializers.ModelSerializer):
     def validate(self, data):
         if data['password'] != data['password_confirm']:
             raise serializers.ValidationError({"password": "Passwords don't match"})
+        # Prevent self-registration as TEACHER or INSTITUTION via public register endpoint
+        role = data.get('role')
+        if role in [User.Role.TEACHER, User.Role.INSTITUTION]:
+            raise serializers.ValidationError({"role": "You cannot register as a teacher or institution directly."})
         return data
     
     def create(self, validated_data):
@@ -69,7 +75,79 @@ class UserCreateSerializer(serializers.ModelSerializer):
         password = validated_data.pop('password')
         user = User(**validated_data)
         user.set_password(password)
+        # Users created via public registration choose their own password,
+        # so they should not be marked as temporary-password users.
+        if hasattr(user, "is_temporary_password"):
+            user.is_temporary_password = False
         user.save()
+        return user
+
+
+def generate_temp_password(length: int = 12) -> str:
+    """
+    Generate a secure random temporary password consisting of letters and digits.
+    """
+    alphabet = string.ascii_letters + string.digits
+    return ''.join(secrets.choice(alphabet) for _ in range(length))
+
+
+class TeacherCreateSerializer(serializers.ModelSerializer):
+    """
+    Serializer used by Institution/Admin to create teacher accounts with a
+    backend-generated temporary password.
+    """
+
+    # Make some fields optional so that the endpoint is easier to use
+    first_name = serializers.CharField(required=False, allow_blank=True)
+    last_name = serializers.CharField(required=False, allow_blank=True)
+    department = serializers.CharField(required=False, allow_blank=True)
+
+    class Meta:
+        model = User
+        fields = ["email", "first_name", "last_name", "department"]
+
+    def create(self, validated_data):
+        request = self.context["request"]
+        temp_password = generate_temp_password()
+
+        # Provide safe fallbacks if optional fields are missing
+        user = User.objects.create_user(
+            username=validated_data["email"],
+            email=validated_data["email"],
+            first_name=validated_data.get("first_name") or "",
+            last_name=validated_data.get("last_name") or "",
+            role=User.Role.TEACHER,
+            password=temp_password,
+            is_temporary_password=True,
+            department=validated_data.get("department") or "",
+            created_by=request.user,
+        )
+
+        from django.core.mail import send_mail
+        from django.conf import settings
+
+        # Build a friendly display name and make username explicit in the email
+        full_name = (user.get_full_name() or "").strip()
+        if full_name:
+            greeting_line = f"Hello {full_name},\n\n"
+        else:
+            greeting_line = "Hello,\n\n"
+
+        send_mail(
+            subject="Your AcuRate Teacher Account",
+            message=(
+                greeting_line
+                + "Your AcuRate teacher account has been created.\n\n"
+                + f"Username: {user.username}\n"
+                + f"Temporary password: {temp_password}\n\n"
+                + "Please log in and change your password immediately. "
+                + "You will not be allowed to use the system until you update it.\n"
+            ),
+            from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
+            recipient_list=[user.email],
+            fail_silently=False,
+        )
+
         return user
 
 
