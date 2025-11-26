@@ -218,6 +218,7 @@ Test verileri oluşturulduktan sonra şu hesaplarla giriş yapabilirsiniz:
 - `GET /api/users/me/` - Mevcut kullanıcı bilgisi
 - `PATCH /api/users/me/` - Profil güncelleme
 - `POST /api/users/me/change-password/` - Şifre değiştirme
+- `POST /api/teachers/` - Kurum/administrator tarafından öğretmen hesabı oluşturma (geçici şifre ile)
 
 ## 🎨 Özellikler ve Özelleştirmeler
 
@@ -346,6 +347,27 @@ npm run lint
   - Slide-over panel tasarımı; smooth animasyon, modern form alanları, validation mesajları
 - ✅ **API Client**: Departman analytics endpoint entegrasyonu, öğretmen oluşturma/listeme fonksiyonları, unique key iyileştirmeleri
 
+#### Teacher Hesap Oluşturma & Geçici Şifre Zorunlu Değiştirme Akışı (🆕 YENİ)
+- ✅ **Backend**:
+  - `POST /api/teachers/` endpoint'i ile **Institution** rolü veya admin kullanıcılar, sadece e‑posta ve (opsiyonel) ad/soyad/departman vererek öğretmen hesabı oluşturabiliyor.
+  - Kullanıcı modeli üzerine `is_temporary_password` alanı eklendi; geçici şifre ile oluşturulan tüm öğretmenler için bu flag `True` olarak işaretleniyor.
+  - `TeacherCreateSerializer` öğretmene **SendGrid** üzerinden otomatik e‑posta gönderiyor; mail içeriğinde:
+    - Öğretmenin adı (varsa),
+    - **Kullanıcı adı (email)**,
+    - **Geçici şifre** açıkça belirtiliyor.
+  - `UserDetailSerializer` artık `is_temporary_password` bilgisini döndürüyor; `change_password` endpoint'i şifre değiştiğinde bu flag'i otomatik olarak `False` yapıyor.
+- ✅ **Frontend**:
+  - Login sonrasında, eğer giriş yapan kullanıcı **TEACHER** ve `is_temporary_password === true` ise:
+    - `must_change_password=true` cookie'si set ediliyor,
+    - Kullanıcı doğrudan `/teacher/change-password` sayfasına yönlendiriliyor (dashboard yerine).
+  - Yeni `/teacher/change-password` sayfası eklendi:
+    - Geçici şifreyi **Current Password** olarak alıyor, yeni şifreyi iki kez doğruluyor,
+    - Backend'deki `/api/users/change_password/` endpoint'ine bağlı çalışıyor,
+    - Başarılı olduğunda `must_change_password` cookie'sini siliyor ve öğretmeni `/teacher` dashboard'una yönlendiriyor.
+  - `middleware.ts` güncellendi:
+    - Cookie'de `must_change_password=true` varsa, tüm korumalı route'lar öğretmeni zorunlu olarak `/teacher/change-password` sayfasına yönlendiriyor,
+    - Böylece öğretmen **geçici şifreyi değiştirmeden sisteme devam edemiyor** (tam zorunlu şifre değişimi akışı).
+
 #### Teacher Settings & Dashboard Refresh (🆕 YENİ)
 - ✅ **Teacher Settings**:
   - Profil bilgileri backend’den okunuyor, kurum tarafından kilitlenen alanlar read-only gösteriliyor
@@ -453,12 +475,15 @@ Kurumsal demo talepleri için: `/contact` sayfasını kullanın.
 
 ## 📚 Ek Dokümantasyon
 
-Proje hakkında daha detaylı bilgi için:
-- `API_INTEGRATION_GUIDE.md` - API kullanım kılavuzu ve örnekler
-- `QUICK_START.md` - Hızlı başlangıç rehberi
-- `NEXT_STEPS.md` - Devam edilecek işler ve roadmap
-- `SESSION_SUMMARY.md` - Geliştirme süreci özeti
-- `TROUBLESHOOTING.md` - Sorun giderme rehberi
+Proje hakkında daha detaylı bilgi için `docs/` klasöründeki dokümantasyon dosyalarına bakabilirsiniz:
+- `docs/API_INTEGRATION_GUIDE.md` - API kullanım kılavuzu ve örnekler
+- `docs/QUICK_START.md` - Hızlı başlangıç rehberi
+- `docs/NEXT_STEPS.md` - Devam edilecek işler ve roadmap
+- `docs/SESSION_SUMMARY.md` - Geliştirme süreci özeti
+- `docs/TROUBLESHOOTING.md` - Sorun giderme rehberi
+- `docs/BRANCH_WORKFLOW.md` - Git branch workflow ve takım çalışması
+- `docs/TEAM_QUICK_START.md` - Takım için hızlı başlangıç rehberi
+- `docs/MERGE_GUIDE.md` - Merge işlemleri kılavuzu
 
 ## 🎯 Proje Durumu
 
