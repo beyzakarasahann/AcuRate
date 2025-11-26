@@ -6,6 +6,7 @@ export function middleware(request: NextRequest) {
   // Get auth token and role from cookies
   const authToken = request.cookies.get('auth_token')?.value;
   const userRole = request.cookies.get('user_role')?.value;
+  const mustChangePassword = request.cookies.get('must_change_password')?.value === 'true';
 
   // Check if user is authenticated
   if (!authToken) {
@@ -13,6 +14,16 @@ export function middleware(request: NextRequest) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirect', pathname);
     return NextResponse.redirect(loginUrl);
+  }
+
+  // Force password change for teachers with temporary password
+  if (mustChangePassword) {
+    const isOnChangePasswordPage = pathname.startsWith('/teacher/change-password');
+    // Only allow access to the forced change-password page
+    if (!isOnChangePasswordPage) {
+      const changePasswordUrl = new URL('/teacher/change-password', request.url);
+      return NextResponse.redirect(changePasswordUrl);
+    }
   }
 
   // Check role-based access

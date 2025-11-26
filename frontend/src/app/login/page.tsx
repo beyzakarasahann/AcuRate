@@ -73,6 +73,13 @@ export default function LoginPage() {
         document.cookie = `username=${response.user.username}; path=/; max-age=86400`;
         document.cookie = `auth_token=authenticated; path=/; max-age=86400`;
 
+        // If teacher is logging in with a temporary password, force password change
+        if (response.user.role === 'TEACHER' && response.user.is_temporary_password) {
+          document.cookie = `must_change_password=true; path=/; max-age=86400`;
+          router.push('/teacher/change-password');
+          return;
+        }
+
         // Redirect based on role
         const roleRedirect: Record<string, string> = {
           'STUDENT': '/student',

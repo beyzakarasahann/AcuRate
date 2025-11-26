@@ -21,6 +21,7 @@ export interface User {
   year_of_study?: number;
   office_location?: string;
   is_active: boolean;
+  is_temporary_password?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -290,6 +291,11 @@ class ApiClient {
           }
           throw new Error('Authentication failed');
         }
+      }
+
+      // Handle 204 No Content (common for DELETE requests)
+      if (response.status === 204) {
+        return {} as T;
       }
 
       // Check if response is JSON
@@ -584,19 +590,21 @@ class ApiClient {
   }
 
   async createTeacher(data: {
-    username: string;
-    email: string;
-    password: string;
-    password_confirm: string;
     first_name: string;
     last_name: string;
+    email: string;
     department?: string;
-    phone?: string;
   }): Promise<User> {
-    const payload = { ...data, role: 'TEACHER' };
-    return await this.request<User>('/users/', {
+    // Backend generates a temporary password and emails it to the teacher.
+    return await this.request<User>('/teachers/', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteTeacher(teacherId: number): Promise<void> {
+    await this.request(`/users/${teacherId}/`, {
+      method: 'DELETE',
     });
   }
 
