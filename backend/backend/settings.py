@@ -12,21 +12,33 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 from datetime import timedelta
+import os
+import ssl
+from dotenv import load_dotenv
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load environment variables from backend/.env
+load_dotenv(BASE_DIR / '.env')
+
+# Optional: disable SSL verification for SendGrid in dev if explicitly requested
+if os.environ.get("SENDGRID_SKIP_SSL_VERIFY", "").lower() == "true":
+    ssl._create_default_https_context = ssl._create_unverified_context
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-g#z9@_6j&#)fl!x#ymg^71a!n_jv_jpt1yh-_337xpf_n1wx0!'
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-g#z9@_6j&#)fl!x#ymg^71a!n_jv_jpt1yh-_337xpf_n1wx0!')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DJANGO_DEBUG', 'True').lower() == 'true'
 
-ALLOWED_HOSTS = []
+allowed_hosts = os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1')
+ALLOWED_HOSTS = [host.strip() for host in allowed_hosts.split(',') if host.strip()]
 
 
 # Application definition
@@ -83,11 +95,11 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'acurate_db',
-        'USER': 'acurate_user',
-        'PASSWORD': 'acurate_pass_2024',
-        'HOST': 'localhost',
-        'PORT': '5432',
+        'NAME': os.environ.get('POSTGRES_DB', 'acurate_db'),
+        'USER': os.environ.get('POSTGRES_USER', 'acurate_user'),
+        'PASSWORD': os.environ.get('POSTGRES_PASSWORD', 'acurate_pass_2024'),
+        'HOST': os.environ.get('POSTGRES_HOST', 'localhost'),
+        'PORT': os.environ.get('POSTGRES_PORT', '5432'),
     }
 }
 
@@ -135,6 +147,12 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Custom User Model
 AUTH_USER_MODEL = 'api.User'
+
+# Email / SendGrid configuration
+EMAIL_BACKEND = 'sendgrid_backend.SendgridBackend'
+SENDGRID_API_KEY = os.environ.get('SENDGRID_API_KEY', '')
+SENDGRID_SANDBOX_MODE_IN_DEBUG = False
+DEFAULT_FROM_EMAIL = 'beyza.karasahan@live.acibadem.edu.tr'
 
 # --- CORS Ayarları ---
 CORS_ALLOWED_ORIGINS = [
