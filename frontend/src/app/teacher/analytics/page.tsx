@@ -489,7 +489,7 @@ export default function TeacherAnalyticsPage() {
         >
             <h2 className={`text-xl font-bold ${whiteText} mb-4 flex items-center gap-2`}>
                 <Target className={`w-5 h-5 ${accentIconClass}`} />
-                Program Outcomes Breakdown
+                Learning Outcomes Breakdown
             </h2>
             <div className="h-[300px]">
                 <Bar data={poBreakdownChartData} options={dynamicBarOptions} />

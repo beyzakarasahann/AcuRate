@@ -10,7 +10,7 @@ import string
 from .models import (
     User, ProgramOutcome, Course, CoursePO, 
     Enrollment, Assessment, StudentGrade, StudentPOAchievement,
-    ContactRequest, LearningOutcome
+    ContactRequest, LearningOutcome, StudentLOAchievement
 )
 
 
@@ -573,4 +573,40 @@ class InstitutionDashboardSerializer(serializers.Serializer):
     active_enrollments = serializers.IntegerField()
     po_achievements = ProgramOutcomeStatsSerializer(many=True)
     department_stats = serializers.ListField()
+
+
+# =============================================================================
+# STUDENT LO ACHIEVEMENT SERIALIZER
+# =============================================================================
+
+class StudentLOAchievementSerializer(serializers.ModelSerializer):
+    """Serializer for Student LO Achievement model"""
+    
+    student_name = serializers.CharField(source='student.get_full_name', read_only=True)
+    student_id_number = serializers.CharField(source='student.student_id', read_only=True)
+    lo_code = serializers.CharField(source='learning_outcome.code', read_only=True)
+    lo_title = serializers.CharField(source='learning_outcome.title', read_only=True)
+    course_code = serializers.CharField(source='learning_outcome.course.code', read_only=True)
+    course_name = serializers.CharField(source='learning_outcome.course.name', read_only=True)
+    target_percentage = serializers.DecimalField(
+        source='learning_outcome.target_percentage', 
+        max_digits=5, 
+        decimal_places=2, 
+        read_only=True
+    )
+    is_target_met = serializers.BooleanField(read_only=True)
+    gap_to_target = serializers.DecimalField(max_digits=5, decimal_places=2, read_only=True)
+    completion_rate = serializers.FloatField(read_only=True)
+    
+    class Meta:
+        model = StudentLOAchievement
+        fields = [
+            'id', 'student', 'student_name', 'student_id_number',
+            'learning_outcome', 'lo_code', 'lo_title',
+            'course_code', 'course_name',
+            'current_percentage', 'target_percentage', 'is_target_met', 'gap_to_target',
+            'total_assessments', 'completed_assessments', 'completion_rate',
+            'last_calculated', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'last_calculated', 'created_at', 'updated_at']
 

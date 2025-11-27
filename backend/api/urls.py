@@ -21,7 +21,7 @@ from .views import (
     # ViewSets
     UserViewSet, ProgramOutcomeViewSet, LearningOutcomeViewSet, CourseViewSet,
     EnrollmentViewSet, AssessmentViewSet, StudentGradeViewSet,
-    StudentPOAchievementViewSet, ContactRequestViewSet
+    StudentPOAchievementViewSet, StudentLOAchievementViewSet, ContactRequestViewSet
 )
 
 # Create router for ViewSets
@@ -34,6 +34,7 @@ router.register(r'enrollments', EnrollmentViewSet, basename='enrollment')
 router.register(r'assessments', AssessmentViewSet, basename='assessment')
 router.register(r'grades', StudentGradeViewSet, basename='grade')
 router.register(r'po-achievements', StudentPOAchievementViewSet, basename='poachievement')
+router.register(r'lo-achievements', StudentLOAchievementViewSet, basename='loachievement')
 router.register(r'contact-requests', ContactRequestViewSet, basename='contactrequest')
 
 app_name = 'api'
