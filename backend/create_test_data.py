@@ -31,16 +31,19 @@ django.setup()
 
 from api.models import (
     User, ProgramOutcome, Course, CoursePO,
-    Enrollment, Assessment, StudentGrade, StudentPOAchievement
+    Enrollment, Assessment, StudentGrade, StudentPOAchievement,
+    LearningOutcome, StudentLOAchievement
 )
 
 
 def clear_existing_data():
     """Clear all existing test data"""
     print("🗑️  Clearing existing data...")
+    StudentLOAchievement.objects.all().delete()
     StudentPOAchievement.objects.all().delete()
     StudentGrade.objects.all().delete()
     Assessment.objects.all().delete()
+    LearningOutcome.objects.all().delete()
     Enrollment.objects.all().delete()
     CoursePO.objects.all().delete()
     Course.objects.all().delete()
@@ -48,6 +51,7 @@ def clear_existing_data():
     # Keep superusers and existing users, but clear their enrollments
     User.objects.filter(role=User.Role.STUDENT).exclude(username__in=['beyza2', 'beyza.karasahan']).delete()
     User.objects.filter(role=User.Role.TEACHER).exclude(username__in=['ahmet.bulut']).delete()
+    User.objects.filter(role=User.Role.INSTITUTION).exclude(username__in=['institution']).delete()
     print("✅ Existing data cleared\n")
 
 
@@ -138,6 +142,35 @@ def create_teacher():
     
     print(f"✅ Teacher ready\n")
     return teacher
+
+
+def create_institution():
+    """Create institution admin user"""
+    print("🏛️  Creating Institution Admin...")
+    
+    institution, created = User.objects.get_or_create(
+        username='institution',
+        defaults={
+            'email': 'institution@acurate.edu',
+            'first_name': 'Institution',
+            'last_name': 'Admin',
+            'role': User.Role.INSTITUTION,
+            'department': 'Administration'
+        }
+    )
+    
+    if created:
+        institution.set_password('institution123')
+        institution.save()
+        print(f"  ✓ Created {institution.get_full_name()} ({institution.username})")
+    else:
+        # Update password in case it changed
+        institution.set_password('institution123')
+        institution.save()
+        print(f"  → Using existing {institution.get_full_name()} ({institution.username})")
+    
+    print(f"✅ Institution ready\n")
+    return institution
 
 
 def create_students():
@@ -667,7 +700,7 @@ def create_student_po_achievements(students, pos):
     return achievements
 
 
-def print_summary(pos, teacher, students, courses, enrollments, assessments, grades, achievements):
+def print_summary(pos, teacher, students, courses, enrollments, assessments, grades, po_achievements, learning_outcomes=None, lo_achievements=None):
     """Print summary of created data"""
     print("\n" + "="*70)
     print("🎉 TEST DATA CREATION COMPLETED!")
@@ -675,6 +708,8 @@ def print_summary(pos, teacher, students, courses, enrollments, assessments, gra
     
     print("\n📊 SUMMARY:")
     print(f"  • Program Outcomes: {len(pos)}")
+    if learning_outcomes:
+        print(f"  • Learning Outcomes: {len(learning_outcomes)}")
     print(f"  • Teacher: {teacher.get_full_name()} ({teacher.username})")
     print(f"  • Students: {len(students)}")
     print(f"  • Courses: {len(courses)}")
@@ -682,7 +717,9 @@ def print_summary(pos, teacher, students, courses, enrollments, assessments, gra
     print(f"  • Enrollments: {len(enrollments)}")
     print(f"  • Assessments: {len(assessments)}")
     print(f"  • Student Grades: {len(grades)}")
-    print(f"  • PO Achievements: {len(achievements)}")
+    print(f"  • PO Achievements: {len(po_achievements)}")
+    if lo_achievements:
+        print(f"  • LO Achievements: {len(lo_achievements)}")
     
     # Show class sizes
     print("\n📚 CLASS SIZES:")
@@ -718,15 +755,108 @@ def print_summary(pos, teacher, students, courses, enrollments, assessments, gra
     print(f"    • Password: student123")
     print(f"    • Total: {len([s for s in students if s.username not in ['beyza2', 'beyza.karasahan']])} students")
     
+    print("\n🌐 LOGIN CREDENTIALS:")
+    print("\n  👨‍🏫 TEACHER:")
+    print("     Username: ahmet.bulut")
+    print("     Password: ahmet123")
+    print("\n  🏛️  INSTITUTION:")
+    print("     Username: institution")
+    print("     Password: institution123")
+    print("\n  👨‍🎓 STUDENTS:")
+    print("     Username: beyza2 or beyza.karasahan")
+    print("     Password: beyza123")
     print("\n🌐 NEXT STEPS:")
     print("  1. Start the development server:")
     print("     python manage.py runserver")
-    print("\n  2. Login with beyza2 or beyza.karasahan")
-    print("     Username: beyza2 or beyza.karasahan")
-    print("     Password: beyza123")
-    print("\n  3. Navigate to Course Analytics to see the graphs!")
+    print("\n  2. Login with any of the credentials above")
+    print("\n  3. Navigate to Analytics to see the graphs!")
     
     print("\n" + "="*70)
+
+
+def create_learning_outcomes(courses):
+    """Create Learning Outcomes for each course"""
+    print("🎯 Creating Learning Outcomes...")
+    
+    learning_outcomes = []
+    lo_definitions = {
+        'CS101': [
+            {'code': 'LO1', 'title': 'Understand Python Basics', 'description': 'Students will understand basic Python syntax and data types', 'target': 75.00},
+            {'code': 'LO2', 'title': 'Master Control Structures', 'description': 'Students will master if-else, loops and functions', 'target': 70.00},
+            {'code': 'LO3', 'title': 'Apply Programming Concepts', 'description': 'Students will apply programming concepts to solve problems', 'target': 80.00},
+        ],
+        'CS201': [
+            {'code': 'LO1', 'title': 'Understand Data Structures', 'description': 'Students will understand arrays, lists and dictionaries', 'target': 75.00},
+            {'code': 'LO2', 'title': 'Implement Sorting Algorithms', 'description': 'Students will implement various sorting algorithms', 'target': 70.00},
+            {'code': 'LO3', 'title': 'Analyze Algorithm Complexity', 'description': 'Students will analyze time and space complexity', 'target': 80.00},
+        ],
+        'CS301': [
+            {'code': 'LO1', 'title': 'Master Advanced Algorithms', 'description': 'Students will master divide-and-conquer algorithms', 'target': 75.00},
+            {'code': 'LO2', 'title': 'Apply Dynamic Programming', 'description': 'Students will apply dynamic programming techniques', 'target': 70.00},
+            {'code': 'LO3', 'title': 'Optimize Algorithm Solutions', 'description': 'Students will optimize solutions using greedy algorithms', 'target': 80.00},
+        ],
+    }
+    
+    for course in courses:
+        if course.code in lo_definitions:
+            for lo_def in lo_definitions[course.code]:
+                lo = LearningOutcome.objects.create(
+                    course=course,
+                    code=lo_def['code'],
+                    title=lo_def['title'],
+                    description=lo_def['description'],
+                    target_percentage=Decimal(str(lo_def['target'])),
+                    is_active=True
+                )
+                learning_outcomes.append(lo)
+                print(f"  ✓ {course.code} - {lo.code}: {lo.title}")
+    
+    print(f"✅ Created {len(learning_outcomes)} Learning Outcomes\n")
+    return learning_outcomes
+
+
+def create_student_lo_achievements(students, learning_outcomes):
+    """Create StudentLOAchievement records for all students"""
+    print("📊 Creating Student LO Achievements...")
+    
+    achievements = []
+    
+    for student in students:
+        # Get courses this student is enrolled in
+        enrollments = Enrollment.objects.filter(student=student)
+        enrolled_course_ids = enrollments.values_list('course_id', flat=True)
+        
+        # Get LOs for enrolled courses
+        student_los = [lo for lo in learning_outcomes if lo.course_id in enrolled_course_ids]
+        
+        for lo in student_los:
+            # Generate achievement percentage based on student
+            if student.username == 'beyza2':
+                base_percentage = random.uniform(85, 95)
+            elif student.username == 'beyza.karasahan':
+                base_percentage = random.uniform(45, 60)
+            else:
+                base_percentage = random.uniform(65, 85)
+            
+            # Get assessments for this LO's course
+            course_assessments = Assessment.objects.filter(course=lo.course)
+            total_assessments = course_assessments.count()
+            completed = random.randint(int(total_assessments * 0.7), total_assessments)
+            
+            achievement = StudentLOAchievement.objects.create(
+                student=student,
+                learning_outcome=lo,
+                current_percentage=Decimal(str(round(base_percentage, 2))),
+                total_assessments=total_assessments,
+                completed_assessments=completed
+            )
+            achievements.append(achievement)
+    
+    print(f"✅ Created {len(achievements)} Student LO Achievements")
+    print(f"  Students: {len(students)}")
+    print(f"  Learning Outcomes per student: ~{len(achievements) // len(students) if students else 0}\n")
+    
+    return achievements
 
 
 def main():
@@ -742,17 +872,20 @@ def main():
         # Create data in order
         pos = create_program_outcomes()
         teacher = create_teacher()
+        institution = create_institution()
         students = create_students()
         courses = create_courses(teacher)
         create_course_po_mappings(courses, pos)
+        learning_outcomes = create_learning_outcomes(courses)
         enrollments = create_enrollments(students, courses)
         assessments = create_assessments(courses, pos)
         grades = create_student_grades(students, assessments)
         calculate_final_grades(students, courses)
-        achievements = create_student_po_achievements(students, pos)
+        po_achievements = create_student_po_achievements(students, pos)
+        lo_achievements = create_student_lo_achievements(students, learning_outcomes)
         
         # Print summary
-        print_summary(pos, teacher, students, courses, enrollments, assessments, grades, achievements)
+        print_summary(pos, teacher, students, courses, enrollments, assessments, grades, po_achievements, learning_outcomes, lo_achievements)
         
     except Exception as e:
         print(f"\n❌ ERROR: {str(e)}")

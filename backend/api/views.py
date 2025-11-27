@@ -17,7 +17,7 @@ from django.utils import timezone
 from .models import (
     User, ProgramOutcome, Course, CoursePO,
     Enrollment, Assessment, StudentGrade, StudentPOAchievement,
-    ContactRequest, LearningOutcome
+    ContactRequest, LearningOutcome, StudentLOAchievement
 )
 from .serializers import (
     UserSerializer, UserDetailSerializer, UserCreateSerializer, LoginSerializer,
@@ -27,6 +27,7 @@ from .serializers import (
     EnrollmentSerializer, AssessmentSerializer,
     StudentGradeSerializer, StudentGradeDetailSerializer,
     StudentPOAchievementSerializer, StudentPOAchievementDetailSerializer,
+    StudentLOAchievementSerializer,
     StudentDashboardSerializer, TeacherDashboardSerializer, InstitutionDashboardSerializer,
     ContactRequestSerializer, ContactRequestCreateSerializer,
     TeacherCreateSerializer,
@@ -1791,3 +1792,111 @@ def analytics_alerts(request):
         'success': True,
         'alerts': alerts
     })
+
+
+# =============================================================================
+# STUDENT LO ACHIEVEMENT VIEWSET
+# =============================================================================
+
+class StudentLOAchievementViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for Student LO Achievement model
+    Endpoints: /api/lo-achievements/
+    """
+    queryset = StudentLOAchievement.objects.all()
+    serializer_class = StudentLOAchievementSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['student__username', 'student__student_id', 
+                     'learning_outcome__code', 'learning_outcome__title',
+                     'learning_outcome__course__code']
+    ordering_fields = ['last_calculated', 'current_percentage']
+    ordering = ['-last_calculated']
+    
+    def get_queryset(self):
+        """Filter based on user role"""
+        user = self.request.user
+        queryset = super().get_queryset()
+        
+        if user.role == User.Role.STUDENT:
+            # Students can only see their own LO achievements
+            return queryset.filter(student=user)
+        elif user.role == User.Role.TEACHER:
+            # Teachers can see LO achievements for their courses
+            teacher_courses = Course.objects.filter(teacher=user)
+            return queryset.filter(learning_outcome__course__in=teacher_courses)
+        elif user.role == User.Role.INSTITUTION:
+            # Institution can see all
+            return queryset
+        
+        return queryset.none()
+    
+    @action(detail=False, methods=['get'])
+    def by_student(self, request):
+        """Get LO achievements by student"""
+        student_id = request.query_params.get('student_id', None)
+        if not student_id:
+            return Response({'error': 'student_id parameter required'}, status=400)
+        
+        # Check permission
+        if request.user.role == User.Role.STUDENT and str(request.user.id) != student_id:
+            raise PermissionDenied("You can only view your own LO achievements")
+        
+        achievements = self.get_queryset().filter(student_id=student_id)
+        serializer = self.get_serializer(achievements, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def by_course(self, request):
+        """Get LO achievements by course"""
+        course_id = request.query_params.get('course_id', None)
+        if not course_id:
+            return Response({'error': 'course_id parameter required'}, status=400)
+        
+        # Check if teacher has access to this course
+        if request.user.role == User.Role.TEACHER:
+            course = get_object_or_404(Course, id=course_id)
+            if course.teacher != request.user:
+                raise PermissionDenied("You can only view LO achievements for your own courses")
+        
+        achievements = self.get_queryset().filter(learning_outcome__course_id=course_id)
+        serializer = self.get_serializer(achievements, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def by_learning_outcome(self, request):
+        """Get LO achievements by learning outcome"""
+        lo_id = request.query_params.get('lo_id', None)
+        if not lo_id:
+            return Response({'error': 'lo_id parameter required'}, status=400)
+        
+        achievements = self.get_queryset().filter(learning_outcome_id=lo_id)
+        serializer = self.get_serializer(achievements, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def summary(self, request):
+        """Get summary statistics for LO achievements"""
+        queryset = self.get_queryset()
+        
+        total_achievements = queryset.count()
+        targets_met = queryset.filter(
+            current_percentage__gte=F('learning_outcome__target_percentage')
+        ).count()
+        
+        avg_percentage = queryset.aggregate(
+            avg=Avg('current_percentage')
+        )['avg'] or 0
+        
+        avg_completion = queryset.aggregate(
+            avg=Avg('completion_rate')
+        )['avg'] or 0
+        
+        return Response({
+            'total_achievements': total_achievements,
+            'targets_met': targets_met,
+            'targets_not_met': total_achievements - targets_met,
+            'average_percentage': round(avg_percentage, 2),
+            'average_completion_rate': round(avg_completion, 2),
+            'success_rate': round((targets_met / total_achievements * 100) if total_achievements > 0 else 0, 2)
+        })
