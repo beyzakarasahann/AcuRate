@@ -49,8 +49,11 @@ export interface ProgramOutcome {
   code: string;
   title: string;
   description: string;
+  department: string;
   target_percentage: number;
   is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface LearningOutcome {
@@ -573,10 +576,51 @@ class ApiClient {
     }
   }
 
+  async getUsers(params?: { role?: string; search?: string; department?: string }): Promise<User[]> {
+    const query = new URLSearchParams();
+    if (params?.role) {
+      query.append('role', params.role);
+    }
+    if (params?.search) {
+      query.append('search', params.search);
+    }
+    if (params?.department) {
+      query.append('department', params.department);
+    }
+    const endpoint = `/users/${query.toString() ? `?${query.toString()}` : ''}`;
+    const response = await this.request<any>(endpoint);
+    if (response && typeof response === 'object' && 'results' in response && Array.isArray(response.results)) {
+      return response.results;
+    }
+    if (Array.isArray(response)) {
+      return response;
+    }
+    return [];
+  }
+
   async getTeachers(params?: { search?: string }): Promise<User[]> {
     const query = new URLSearchParams({ role: 'TEACHER' });
     if (params?.search) {
       query.append('search', params.search);
+    }
+    const endpoint = `/users/?${query.toString()}`;
+    const response = await this.request<any>(endpoint);
+    if (response && typeof response === 'object' && 'results' in response && Array.isArray(response.results)) {
+      return response.results;
+    }
+    if (Array.isArray(response)) {
+      return response;
+    }
+    return [];
+  }
+
+  async getStudents(params?: { search?: string; department?: string }): Promise<User[]> {
+    const query = new URLSearchParams({ role: 'STUDENT' });
+    if (params?.search) {
+      query.append('search', params.search);
+    }
+    if (params?.department) {
+      query.append('department', params.department);
     }
     const endpoint = `/users/?${query.toString()}`;
     const response = await this.request<any>(endpoint);
@@ -664,14 +708,47 @@ class ApiClient {
   }
 
   // Program Outcomes
-  async getProgramOutcomes(): Promise<ProgramOutcome[]> {
-    const response = await this.request<ProgramOutcome[]>('/program-outcomes/');
+  async getProgramOutcomes(params?: { department?: string }): Promise<ProgramOutcome[]> {
+    const queryParams = new URLSearchParams();
+    if (params?.department) {
+      queryParams.append('department', params.department);
+    }
+    const queryString = queryParams.toString();
+    const endpoint = `/program-outcomes/${queryString ? `?${queryString}` : ''}`;
+    const response = await this.request<ProgramOutcome[]>(endpoint);
     // Ensure response is an array (ViewSet returns array directly)
     return Array.isArray(response) ? response : [];
   }
 
   async getProgramOutcome(id: number): Promise<ProgramOutcome> {
     return await this.request<ProgramOutcome>(`/program-outcomes/${id}/`);
+  }
+
+  async createProgramOutcome(data: Partial<ProgramOutcome>): Promise<ProgramOutcome> {
+    return await this.request<ProgramOutcome>('/program-outcomes/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateProgramOutcome(id: number, data: Partial<ProgramOutcome>): Promise<ProgramOutcome> {
+    return await this.request<ProgramOutcome>(`/program-outcomes/${id}/`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async patchProgramOutcome(id: number, data: Partial<ProgramOutcome>): Promise<ProgramOutcome> {
+    return await this.request<ProgramOutcome>(`/program-outcomes/${id}/`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteProgramOutcome(id: number): Promise<void> {
+    return await this.request<void>(`/program-outcomes/${id}/`, {
+      method: 'DELETE',
+    });
   }
 
   // Learning Outcomes
@@ -738,6 +815,33 @@ class ApiClient {
 
   async getCourse(id: number): Promise<Course> {
     return await this.request<Course>(`/courses/${id}/`);
+  }
+
+  async createCourse(data: Partial<Course>): Promise<Course> {
+    return await this.request<Course>('/courses/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateCourse(id: number, data: Partial<Course>): Promise<Course> {
+    return await this.request<Course>(`/courses/${id}/`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async patchCourse(id: number, data: Partial<Course>): Promise<Course> {
+    return await this.request<Course>(`/courses/${id}/`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteCourse(id: number): Promise<void> {
+    return await this.request<void>(`/courses/${id}/`, {
+      method: 'DELETE',
+    });
   }
 
   // Enrollments
@@ -1041,6 +1145,163 @@ class ApiClient {
       }>;
     }>('/analytics/departments/');
     return response.departments || [];
+  }
+
+  // Department Curriculum
+  // Departments CRUD
+  async getDepartmentsList(): Promise<Array<{
+    id: number;
+    name: string;
+    code?: string;
+    description?: string;
+    contact_email?: string;
+    contact_phone?: string;
+    created_at: string;
+    updated_at: string;
+  }>> {
+    const response = await this.request<any>('/departments/');
+    // Handle paginated response
+    if (response && typeof response === 'object' && 'results' in response && Array.isArray(response.results)) {
+      return response.results;
+    }
+    if (Array.isArray(response)) {
+      return response;
+    }
+    return [];
+  }
+
+  async getDepartment(id: number): Promise<{
+    id: number;
+    name: string;
+    code?: string;
+    description?: string;
+    contact_email?: string;
+    contact_phone?: string;
+    created_at: string;
+    updated_at: string;
+  }> {
+    return await this.request(`/departments/${id}/`);
+  }
+
+  async createDepartment(data: {
+    name: string;
+    code?: string;
+    description?: string;
+    contact_email?: string;
+    contact_phone?: string;
+  }): Promise<{
+    id: number;
+    name: string;
+    code?: string;
+    description?: string;
+    contact_email?: string;
+    contact_phone?: string;
+    created_at: string;
+    updated_at: string;
+  }> {
+    return await this.request('/departments/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateDepartment(id: number, data: Partial<{
+    name: string;
+    code?: string;
+    description?: string;
+    contact_email?: string;
+    contact_phone?: string;
+  }>): Promise<{
+    id: number;
+    name: string;
+    code?: string;
+    description?: string;
+    contact_email?: string;
+    contact_phone?: string;
+    created_at: string;
+    updated_at: string;
+  }> {
+    return await this.request(`/departments/${id}/`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async patchDepartment(id: number, data: Partial<{
+    name: string;
+    code?: string;
+    description?: string;
+    contact_email?: string;
+    contact_phone?: string;
+  }>): Promise<{
+    id: number;
+    name: string;
+    code?: string;
+    description?: string;
+    contact_email?: string;
+    contact_phone?: string;
+    created_at: string;
+    updated_at: string;
+  }> {
+    return await this.request(`/departments/${id}/`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteDepartment(id: number): Promise<void> {
+    return await this.request(`/departments/${id}/`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getDepartmentCurriculum(department: string): Promise<{
+    success: boolean;
+    department: string;
+    curriculum: Array<{
+      year: number;
+      fall_semester: Array<{
+        course_id: number;
+        course_code: string;
+        course_name: string;
+        credits: number;
+        semester: string;
+        academic_year: string;
+        teacher: string;
+        enrollment_count: number;
+        description: string;
+      }>;
+      spring_semester: Array<{
+        course_id: number;
+        course_code: string;
+        course_name: string;
+        credits: number;
+        semester: string;
+        academic_year: string;
+        teacher: string;
+        enrollment_count: number;
+        description: string;
+      }>;
+      summer_semester: Array<{
+        course_id: number;
+        course_code: string;
+        course_name: string;
+        credits: number;
+        semester: string;
+        academic_year: string;
+        teacher: string;
+        enrollment_count: number;
+        description: string;
+      }>;
+      total_credits_fall: number;
+      total_credits_spring: number;
+      total_credits_summer: number;
+    }>;
+    total_credits: number;
+    total_years: number;
+  }> {
+    const queryParams = new URLSearchParams({ department });
+    return await this.request(`/analytics/department-curriculum/?${queryParams.toString()}`);
   }
 }
 

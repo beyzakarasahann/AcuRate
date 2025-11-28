@@ -8,10 +8,27 @@ from django.contrib.auth import authenticate
 import secrets
 import string
 from .models import (
-    User, ProgramOutcome, Course, CoursePO, 
+    User, Department, ProgramOutcome, Course, CoursePO, 
     Enrollment, Assessment, StudentGrade, StudentPOAchievement,
     ContactRequest, LearningOutcome, StudentLOAchievement
 )
+
+
+# =============================================================================
+# DEPARTMENT SERIALIZERS
+# =============================================================================
+
+class DepartmentSerializer(serializers.ModelSerializer):
+    """Serializer for Department model"""
+    
+    class Meta:
+        model = Department
+        fields = [
+            'id', 'name', 'code', 'description',
+            'contact_email', 'contact_phone',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
 
 
 # =============================================================================
@@ -183,7 +200,7 @@ class ProgramOutcomeSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProgramOutcome
         fields = [
-            'id', 'code', 'title', 'description',
+            'id', 'code', 'title', 'description', 'department',
             'target_percentage', 'is_active',
             'created_at', 'updated_at'
         ]
@@ -200,7 +217,7 @@ class ProgramOutcomeStatsSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProgramOutcome
         fields = [
-            'id', 'code', 'title', 'description', 'target_percentage',
+            'id', 'code', 'title', 'description', 'department', 'target_percentage',
             'total_students', 'students_achieved', 'average_achievement', 'achievement_rate'
         ]
 
