@@ -14,6 +14,9 @@ import {
   ChevronDown,
   Users,
   Network,
+  Target,
+  GraduationCap,
+  BookOpen,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTheme } from 'next-themes';
@@ -23,7 +26,10 @@ import { api, TokenManager, type User } from '@/lib/api';
 const navItems = [
   { name: 'Dashboard', icon: Building2, slug: '' },
   { name: 'Teachers', icon: Users, slug: 'teachers' },
+  { name: 'Students', icon: GraduationCap, slug: 'students' },
   { name: 'Departments', icon: Network, slug: 'departments' },
+  { name: 'Lessons', icon: BookOpen, slug: 'lessons' },
+  { name: 'PO Management', icon: Target, slug: 'po-management' },
   { name: 'Analytics', icon: BarChart3, slug: 'analytics' },
   { name: 'Settings', icon: Settings, slug: 'settings', disabled: true },
 ];
