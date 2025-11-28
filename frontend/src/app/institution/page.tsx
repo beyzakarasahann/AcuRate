@@ -246,8 +246,10 @@ export default function InstitutionDashboard() {
     URL.revokeObjectURL(url);
   };
 
-  // Get available departments for filter
-  const availableDepartments = departments.map(d => d.name);
+  // Get available departments for filter (remove duplicates)
+  const availableDepartments = Array.from(
+    new Set(departments.map(d => d.name.trim()))
+  ).filter(name => name).sort();
 
   // 1. Kancadan Dinamik Tema Değerlerini Alma
   const { 
@@ -776,8 +778,8 @@ export default function InstitutionDashboard() {
                     className={`w-full px-4 py-2 rounded-xl ${themeClasses.card.replace('shadow-2xl', '').replace('rounded-2xl', 'rounded-xl')} ${isDark ? 'bg-white/5 text-white border border-white/10' : 'bg-white text-gray-700 border border-gray-200'} focus:outline-none focus:ring-2 focus:ring-indigo-500`}
                   >
                     <option value="all">All Departments</option>
-                    {availableDepartments.map(dept => (
-                      <option key={dept} value={dept}>{dept}</option>
+                    {availableDepartments.map((dept, index) => (
+                      <option key={`${dept}-${index}`} value={dept}>{dept}</option>
                     ))}
                   </select>
                 </div>

@@ -15,12 +15,13 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
 from .models import (
-    User, ProgramOutcome, Course, CoursePO,
+    User, Department, ProgramOutcome, Course, CoursePO,
     Enrollment, Assessment, StudentGrade, StudentPOAchievement,
     ContactRequest, LearningOutcome, StudentLOAchievement
 )
 from .serializers import (
     UserSerializer, UserDetailSerializer, UserCreateSerializer, LoginSerializer,
+    DepartmentSerializer,
     ProgramOutcomeSerializer, ProgramOutcomeStatsSerializer,
     LearningOutcomeSerializer,
     CourseSerializer, CourseDetailSerializer,
@@ -220,6 +221,11 @@ class UserViewSet(viewsets.ModelViewSet):
         if role:
             queryset = queryset.filter(role=role)
         
+        # Filter by department if specified
+        department = self.request.query_params.get('department', None)
+        if department:
+            queryset = queryset.filter(department=department)
+        
         # Non-admin users can only see active users
         if not user.is_staff:
             queryset = queryset.filter(is_active=True)
@@ -325,6 +331,62 @@ class UserViewSet(viewsets.ModelViewSet):
 
 
 # =============================================================================
+# DEPARTMENT VIEWSET
+# =============================================================================
+
+class DepartmentViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for Department CRUD operations
+    Only INSTITUTION role can create/update/delete departments
+    """
+    queryset = Department.objects.all()
+    serializer_class = DepartmentSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['name', 'code', 'description']
+    ordering_fields = ['name', 'created_at']
+    ordering = ['name']
+    
+    def get_permissions(self):
+        """Only allow INSTITUTION role to create/update/delete departments"""
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            # Check if user is INSTITUTION or staff
+            if self.request.user.role != User.Role.INSTITUTION and not self.request.user.is_staff:
+                return [IsAdminUser()]  # This will deny access
+        return [IsAuthenticated()]
+    
+    def create(self, request, *args, **kwargs):
+        """Only INSTITUTION can create departments"""
+        if request.user.role != User.Role.INSTITUTION and not request.user.is_staff:
+            return Response({
+                'error': 'Only institution administrators can create departments'
+            }, status=status.HTTP_403_FORBIDDEN)
+        return super().create(request, *args, **kwargs)
+    
+    def update(self, request, *args, **kwargs):
+        """Only INSTITUTION can update departments"""
+        if request.user.role != User.Role.INSTITUTION and not request.user.is_staff:
+            return Response({
+                'error': 'Only institution administrators can update departments'
+            }, status=status.HTTP_403_FORBIDDEN)
+        return super().update(request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        """Only INSTITUTION can delete departments"""
+        if request.user.role != User.Role.INSTITUTION and not request.user.is_staff:
+            return Response({
+                'error': 'Only institution administrators can delete departments'
+            }, status=status.HTTP_403_FORBIDDEN)
+        return super().destroy(request, *args, **kwargs)
+    
+    def list(self, request, *args, **kwargs):
+        """Override list to ensure proper response format"""
+        queryset = self.filter_queryset(self.get_queryset())
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+
+# =============================================================================
 # PROGRAM OUTCOME VIEWSET
 # =============================================================================
 
@@ -342,10 +404,16 @@ class ProgramOutcomeViewSet(viewsets.ModelViewSet):
     ordering = ['code']
     
     def get_queryset(self):
-        """Filter active POs for non-admin users"""
+        """Filter active POs for non-admin users and filter by department if provided"""
         queryset = ProgramOutcome.objects.all()
         if not self.request.user.is_staff:
             queryset = queryset.filter(is_active=True)
+        
+        # Filter by department if provided as query parameter
+        department = self.request.query_params.get('department', None)
+        if department:
+            queryset = queryset.filter(department=department)
+        
         return queryset
     
     def get_permissions(self):
@@ -431,6 +499,11 @@ class CourseViewSet(viewsets.ModelViewSet):
         # Filter by teacher
         if user.role == User.Role.TEACHER:
             queryset = queryset.filter(teacher=user)
+        
+        # Filter by department if specified
+        department = self.request.query_params.get('department', None)
+        if department:
+            queryset = queryset.filter(department=department)
         
         # Filter by semester/academic_year if specified
         semester = self.request.query_params.get('semester', None)
@@ -867,11 +940,25 @@ def institution_dashboard(request):
     )
     
     # Department statistics with detailed calculations
-    department_list = User.objects.filter(
+    # Get all unique departments and normalize them
+    department_list_raw = User.objects.filter(
         role=User.Role.STUDENT,
         is_active=True,
         department__isnull=False
-    ).values_list('department', flat=True).distinct()
+    ).exclude(department='').values_list('department', flat=True).distinct()
+    
+    # Normalize department names (remove duplicates with different whitespace/case)
+    def normalize_dept(name):
+        return ' '.join(name.strip().split())
+    
+    # Group by normalized name, keep the first occurrence
+    seen_normalized = {}
+    department_list = []
+    for dept in department_list_raw:
+        normalized = normalize_dept(dept)
+        if normalized.lower() not in seen_normalized:
+            seen_normalized[normalized.lower()] = dept
+            department_list.append(dept)
     
     department_stats = []
     for dept in department_list:
@@ -1354,12 +1441,25 @@ def analytics_departments(request):
             'error': 'This endpoint is only for institution admins'
         }, status=status.HTTP_403_FORBIDDEN)
     
-    # Get all departments
-    department_list = User.objects.filter(
+    # Get all departments and normalize them
+    department_list_raw = User.objects.filter(
         role=User.Role.STUDENT,
         is_active=True,
         department__isnull=False
-    ).values_list('department', flat=True).distinct()
+    ).exclude(department='').values_list('department', flat=True).distinct()
+    
+    # Normalize department names (remove duplicates with different whitespace/case)
+    def normalize_dept(name):
+        return ' '.join(name.strip().split())
+    
+    # Group by normalized name, keep the first occurrence
+    seen_normalized = {}
+    department_list = []
+    for dept in department_list_raw:
+        normalized = normalize_dept(dept)
+        if normalized.lower() not in seen_normalized:
+            seen_normalized[normalized.lower()] = dept
+            department_list.append(dept)
     
     departments = []
     for dept in department_list:
@@ -1791,6 +1891,126 @@ def analytics_alerts(request):
     return Response({
         'success': True,
         'alerts': alerts
+    })
+
+
+# =============================================================================
+# DEPARTMENT CURRICULUM VIEW
+# =============================================================================
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def department_curriculum(request):
+    """
+    Get department curriculum organized by year of study
+    
+    GET /api/analytics/department-curriculum/?department=Computer Science
+    Returns curriculum structure with courses organized by year and semester
+    """
+    user = request.user
+    
+    if user.role != User.Role.INSTITUTION and not user.is_staff:
+        return Response({
+            'error': 'This endpoint is only for institution admins'
+        }, status=status.HTTP_403_FORBIDDEN)
+    
+    department = request.query_params.get('department', None)
+    if not department:
+        return Response({
+            'error': 'Department parameter is required'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Get all courses for this department
+    courses = Course.objects.filter(department=department).select_related('teacher').order_by('code', 'academic_year')
+    
+    # Helper function to extract year of study from course code
+    # Examples: CS101 -> 1, CS201 -> 2, CS301 -> 3, CS401 -> 4
+    def extract_year_from_code(course_code):
+        """Extract year of study from course code (assuming format like CS101, CS201, CS301, CS401, etc.)"""
+        import re
+        # Try to find a 3-digit number pattern (e.g., 101, 201, 301, 401)
+        # This matches patterns like: CS101, CS201, CS301, CS401, MATH101, etc.
+        match = re.search(r'(\d{3})', course_code)
+        if match:
+            code_number = int(match.group(1))
+            # Extract the hundreds digit
+            hundreds = code_number // 100
+            # Course codes typically follow: 1xx = year 1, 2xx = year 2, 3xx = year 3, 4xx = year 4, 5xx = year 5, 6xx = year 6
+            if 1 <= hundreds <= 6:
+                return hundreds
+        # Fallback: try to find any first digit
+        match = re.search(r'(\d)', course_code)
+        if match:
+            first_digit = int(match.group(1))
+            if 1 <= first_digit <= 6:
+                return first_digit
+        return 0  # Unknown year
+    
+    # Initialize all 6 years (1-6) with empty data (to support 2, 4, and 6 year programs)
+    curriculum_by_year = {}
+    for year in range(1, 7):
+        curriculum_by_year[year] = {
+            'year': year,
+            'fall_semester': [],
+            'spring_semester': [],
+            'summer_semester': [],
+            'total_credits_fall': 0,
+            'total_credits_spring': 0,
+            'total_credits_summer': 0,
+        }
+    
+    # Group courses by year of study
+    for course in courses:
+        year = extract_year_from_code(course.code)
+        if year == 0 or year > 6:
+            continue  # Skip courses we can't categorize or beyond year 6
+        
+        # Get enrollment count for this course
+        enrollment_count = Enrollment.objects.filter(
+            course=course,
+            is_active=True
+        ).count()
+        
+        course_data = {
+            'course_id': course.id,
+            'course_code': course.code,
+            'course_name': course.name,
+            'credits': course.credits,
+            'semester': course.get_semester_display(),
+            'academic_year': course.academic_year,
+            'teacher': course.teacher.get_full_name() if course.teacher else 'TBA',
+            'enrollment_count': enrollment_count,
+            'description': course.description or '',
+        }
+        
+        # Add to appropriate semester
+        if course.semester == Course.Semester.FALL:
+            curriculum_by_year[year]['fall_semester'].append(course_data)
+            curriculum_by_year[year]['total_credits_fall'] += course.credits
+        elif course.semester == Course.Semester.SPRING:
+            curriculum_by_year[year]['spring_semester'].append(course_data)
+            curriculum_by_year[year]['total_credits_spring'] += course.credits
+        elif course.semester == Course.Semester.SUMMER:
+            curriculum_by_year[year]['summer_semester'].append(course_data)
+            curriculum_by_year[year]['total_credits_summer'] += course.credits
+    
+    # Convert to list and sort by year (should already be sorted 1-4)
+    curriculum_list = sorted(curriculum_by_year.values(), key=lambda x: x['year'])
+    
+    # Calculate totals
+    total_credits = sum(
+        year_data['total_credits_fall'] + 
+        year_data['total_credits_spring'] + 
+        year_data['total_credits_summer']
+        for year_data in curriculum_list
+    )
+    
+    return Response({
+        'success': True,
+        'department': department,
+        'curriculum': curriculum_list,
+        'total_credits': total_credits,
+        'total_years': len(curriculum_list),
     })
 
 

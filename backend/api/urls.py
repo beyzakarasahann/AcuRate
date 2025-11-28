@@ -16,16 +16,18 @@ from .views import (
     # Institution Analytics views
     analytics_departments, analytics_po_trends,
     analytics_performance_distribution, analytics_course_success, analytics_alerts,
+    department_curriculum,
     # Contact views
     create_contact_request,
     # ViewSets
-    UserViewSet, ProgramOutcomeViewSet, LearningOutcomeViewSet, CourseViewSet,
+    DepartmentViewSet, UserViewSet, ProgramOutcomeViewSet, LearningOutcomeViewSet, CourseViewSet,
     EnrollmentViewSet, AssessmentViewSet, StudentGradeViewSet,
     StudentPOAchievementViewSet, StudentLOAchievementViewSet, ContactRequestViewSet
 )
 
 # Create router for ViewSets
 router = DefaultRouter()
+router.register(r'departments', DepartmentViewSet, basename='department')
 router.register(r'users', UserViewSet, basename='user')
 router.register(r'program-outcomes', ProgramOutcomeViewSet, basename='programoutcome')
 router.register(r'learning-outcomes', LearningOutcomeViewSet, basename='learningoutcome')
@@ -59,6 +61,7 @@ urlpatterns = [
     
     # Institution Analytics endpoints
     path('analytics/departments/', analytics_departments, name='analytics-departments'),
+    path('analytics/department-curriculum/', department_curriculum, name='department-curriculum'),
     path('analytics/po-trends/', analytics_po_trends, name='analytics-po-trends'),
     path('analytics/performance-distribution/', analytics_performance_distribution, name='analytics-performance-distribution'),
     path('analytics/course-success/', analytics_course_success, name='analytics-course-success'),
