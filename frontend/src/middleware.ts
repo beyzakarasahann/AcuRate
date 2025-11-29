@@ -16,25 +16,50 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Force password change for teachers with temporary password
+  // Force password change for teachers and institutions with temporary password
   if (mustChangePassword) {
-    const isOnChangePasswordPage = pathname.startsWith('/teacher/change-password');
+    const isOnChangePasswordPage = pathname.startsWith('/teacher/change-password') || pathname.startsWith('/institution/change-password');
     // Only allow access to the forced change-password page
     if (!isOnChangePasswordPage) {
-      const changePasswordUrl = new URL('/teacher/change-password', request.url);
-      return NextResponse.redirect(changePasswordUrl);
+      if (userRole === 'teacher') {
+        const changePasswordUrl = new URL('/teacher/change-password', request.url);
+        return NextResponse.redirect(changePasswordUrl);
+      } else if (userRole === 'institution') {
+        const changePasswordUrl = new URL('/institution/change-password', request.url);
+        return NextResponse.redirect(changePasswordUrl);
+      }
     }
   }
 
   // Check role-based access
-  if (pathname.startsWith('/institution')) {
-    // Institution routes: accessible by INSTITUTION and TEACHER roles
+  if (pathname.startsWith('/super-admin')) {
+    // Super admin routes: accessible by superadmin role only
+    if (userRole !== 'superadmin') {
+      const homeUrl = new URL('/', request.url);
+      homeUrl.searchParams.set('error', 'unauthorized');
+      return NextResponse.redirect(homeUrl);
+    }
+  } else if (pathname.startsWith('/institution')) {
+    // Institution routes: accessible by INSTITUTION and TEACHER roles only
+    // Super admins should NOT access institution pages (they are separate)
+    if (userRole === 'superadmin') {
+      const homeUrl = new URL('/', request.url);
+      homeUrl.searchParams.set('error', 'unauthorized');
+      return NextResponse.redirect(homeUrl);
+    }
     if (userRole !== 'institution' && userRole !== 'teacher') {
       const homeUrl = new URL('/', request.url);
       homeUrl.searchParams.set('error', 'unauthorized');
       return NextResponse.redirect(homeUrl);
     }
   } else if (pathname.startsWith('/teacher')) {
+    // Teacher routes: accessible by TEACHER role only
+    // Super admins should NOT access teacher pages
+    if (userRole === 'superadmin') {
+      const homeUrl = new URL('/', request.url);
+      homeUrl.searchParams.set('error', 'unauthorized');
+      return NextResponse.redirect(homeUrl);
+    }
     // Teacher routes: accessible by TEACHER role only
     if (userRole !== 'teacher') {
       const homeUrl = new URL('/', request.url);
@@ -43,6 +68,12 @@ export function middleware(request: NextRequest) {
     }
   } else if (pathname.startsWith('/student')) {
     // Student routes: accessible by STUDENT role only
+    // Super admins should NOT access student pages
+    if (userRole === 'superadmin') {
+      const homeUrl = new URL('/', request.url);
+      homeUrl.searchParams.set('error', 'unauthorized');
+      return NextResponse.redirect(homeUrl);
+    }
     if (userRole !== 'student') {
       const homeUrl = new URL('/', request.url);
       homeUrl.searchParams.set('error', 'unauthorized');
@@ -57,6 +88,7 @@ export function middleware(request: NextRequest) {
 // Configure which routes to protect
 export const config = {
   matcher: [
+    '/super-admin/:path*',
     '/institution/:path*',
     '/teacher/:path*',
     '/student/:path*',
