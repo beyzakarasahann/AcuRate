@@ -21,6 +21,8 @@ export interface User {
   year_of_study?: number;
   office_location?: string;
   is_active: boolean;
+  is_staff?: boolean;
+  is_superuser?: boolean;
   is_temporary_password?: boolean;
   created_at: string;
   updated_at: string;
@@ -181,6 +183,69 @@ export interface DashboardData {
   } | null;
 }
 
+export interface SuperAdminDashboardData {
+  total_institutions: number;
+  total_teachers: number;
+  total_students: number;
+  institution_logins: {
+    last_24h: number;
+    last_7d: number;
+    last_30d: number;
+  };
+  today_activities: number;
+  most_active_institution: string | null;
+  most_active_user: string | null;
+  recent_logs: Array<{
+    type: string;
+    action: string;
+    description: string;
+    timestamp: string;
+    user: string;
+  }>;
+}
+
+export interface ContactRequest {
+  id: number;
+  institution_name: string;
+  institution_type: string;
+  institution_type_display?: string;
+  contact_name: string;
+  contact_email: string;
+  contact_phone?: string;
+  request_type: string;
+  request_type_display?: string;
+  message?: string;
+  status: 'pending' | 'contacted' | 'demo_scheduled' | 'completed' | 'archived';
+  status_display?: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ActivityLog {
+  id: number;
+  action_type: string;
+  action_type_display: string;
+  description: string;
+  user: {
+    id: number;
+    username: string;
+    full_name: string;
+    role: string;
+  } | null;
+  institution: {
+    id: number;
+    username: string;
+    full_name: string;
+  } | null;
+  department: string | null;
+  related_object_type: string | null;
+  related_object_id: number | null;
+  metadata: Record<string, any>;
+  created_at: string;
+  time_ago: string;
+}
+
 // Token management
 class TokenManager {
   private static ACCESS_TOKEN_KEY = 'access_token';
@@ -278,8 +343,28 @@ class ApiClient {
           headers['Authorization'] = `Bearer ${newToken}`;
           const retryResponse = await fetch(url, { ...options, headers });
           if (!retryResponse.ok) {
-            const errorText = await retryResponse.text();
-            throw new Error(`Request failed: ${retryResponse.status} ${retryResponse.statusText}`);
+            // If retry also fails with 401, check if it's a super admin endpoint
+            // Super admin endpoints might return 401 for permission issues, not auth issues
+            const isSuperAdminEndpoint = requestEndpoint.includes('/super-admin/');
+            if (retryResponse.status === 401 && !isSuperAdminEndpoint && method !== 'DELETE') {
+              TokenManager.clearTokens();
+              if (typeof window !== 'undefined') {
+                window.location.href = '/login';
+              }
+              throw new Error('Authentication failed');
+            }
+            // Try to get error message from response
+            let errorMessage = `Request failed: ${retryResponse.status} ${retryResponse.statusText}`;
+            try {
+              const errorData = await retryResponse.json();
+              errorMessage = errorData.error || errorData.message || errorData.detail || errorMessage;
+            } catch {
+              const errorText = await retryResponse.text();
+              if (errorText) {
+                errorMessage = errorText.substring(0, 200);
+              }
+            }
+            throw new Error(errorMessage);
           }
           try {
             return await retryResponse.json();
@@ -287,18 +372,40 @@ class ApiClient {
             throw new Error('Invalid JSON response from server');
           }
         } else {
-          // Refresh failed, logout
-          TokenManager.clearTokens();
-          if (typeof window !== 'undefined') {
-            window.location.href = '/login';
+          // Refresh failed, but only logout if it's not a DELETE or super admin request
+          // DELETE requests and super admin endpoints might return 401 for permission issues, not auth issues
+          const isSuperAdminEndpoint = requestEndpoint.includes('/super-admin/');
+          if (method !== 'DELETE' && !isSuperAdminEndpoint) {
+            TokenManager.clearTokens();
+            if (typeof window !== 'undefined') {
+              window.location.href = '/login';
+            }
+            throw new Error('Authentication failed');
+          } else {
+            // For super admin endpoints or DELETE requests, don't logout
+            // Just throw a more descriptive error
+            const errorMsg = isSuperAdminEndpoint 
+              ? 'Permission denied. Please ensure you have super admin access.'
+              : 'Request failed. Please check your permissions.';
+            throw new Error(errorMsg);
           }
-          throw new Error('Authentication failed');
         }
       }
 
       // Handle 204 No Content (common for DELETE requests)
       if (response.status === 204) {
-        return {} as T;
+        return { success: true } as T;
+      }
+
+      // Handle 200 OK for DELETE requests (some APIs return 200 with success message)
+      if (response.status === 200 && method === 'DELETE') {
+        try {
+          const data = await response.json();
+          return data;
+        } catch {
+          // If no JSON, return success
+          return { success: true } as T;
+        }
       }
 
       // Check if response is JSON
@@ -356,11 +463,23 @@ class ApiClient {
             ) {
               throw new Error('Incorrect username or password');
             }
-            // For other authentication errors, use the actual error message
-            if (response.status === 401) {
+            // For super admin endpoints, don't logout on 401 - it might be a permission issue
+            const isSuperAdminEndpoint = requestEndpoint.includes('/super-admin/');
+            if (response.status === 401 && !isSuperAdminEndpoint && method !== 'DELETE') {
+              // Only logout for non-super-admin, non-DELETE requests
+              TokenManager.clearTokens();
+              if (typeof window !== 'undefined') {
+                window.location.href = '/login';
+              }
               throw new Error(errorMessage || 'Authentication failed. Please log in again.');
             }
             throw new Error(errorMessage);
+          }
+          
+          // Check for errors object (Django REST Framework validation errors)
+          if (data?.errors && typeof data.errors === 'object') {
+            // Return errors object for form validation
+            throw new Error(JSON.stringify({ errors: data.errors }));
           }
           
           // Check for non_field_errors (Django REST Framework format)
@@ -442,6 +561,9 @@ class ApiClient {
                            error.message === 'Authentication failed' ||
                            error.message.toLowerCase().includes('incorrect username or password');
         
+        // Check if this is a super admin endpoint
+        const isSuperAdminEndpoint = requestEndpoint?.includes('/super-admin/');
+        
         // Clean up error messages that might contain HTML
         let cleanMessage = error.message;
         if (cleanMessage.includes('<!DOCTYPE') || cleanMessage.includes('<html')) {
@@ -457,8 +579,19 @@ class ApiClient {
           }
         }
         
+        // Don't log authentication/permission errors for super admin endpoints (they might be permission issues)
         if (!isAuthError) {
-          console.error('API Error:', cleanMessage);
+          if (isSuperAdminEndpoint) {
+            // For super admin endpoints, only log if it's not a permission/auth issue
+            if (!cleanMessage.toLowerCase().includes('permission') && 
+                !cleanMessage.toLowerCase().includes('authentication') &&
+                !cleanMessage.toLowerCase().includes('unauthorized') &&
+                !cleanMessage.toLowerCase().includes('401')) {
+              console.error('API Error:', cleanMessage);
+            }
+          } else {
+            console.error('API Error:', cleanMessage);
+          }
         }
         
         // Update error message if it was cleaned
@@ -670,6 +803,55 @@ class ApiClient {
       throw new Error(response.errors ? JSON.stringify(response.errors) : 'Failed to submit contact request');
     }
     return response;
+  }
+
+  async getContactRequests(params?: { status?: string; search?: string }): Promise<ContactRequest[]> {
+    const queryParams = new URLSearchParams();
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.search) queryParams.append('search', params.search);
+    const queryString = queryParams.toString();
+    // Django REST Framework expects trailing slash for ViewSet list endpoints
+    const endpoint = `/contact-requests/${queryString ? `?${queryString}` : ''}`;
+    console.log('🔵 Fetching contact requests from:', `${this.baseUrl}${endpoint}`);
+    try {
+      const response = await this.request<ContactRequest[]>(endpoint);
+      console.log('🔵 API Response type:', typeof response, 'Is Array:', Array.isArray(response));
+      console.log('🔵 API Response:', response);
+      // Ensure we always return an array
+      if (Array.isArray(response)) {
+        console.log(`✅ Returning ${response.length} contact requests`);
+        return response;
+      } else if (response && typeof response === 'object') {
+        // Sometimes DRF returns objects, try to extract array
+        console.warn('⚠️ Response is not an array, attempting to extract:', response);
+        // Check if it's a paginated response
+        if ('results' in response && Array.isArray(response.results)) {
+          console.log('✅ Found paginated response, returning results array');
+          return response.results;
+        }
+        return [];
+      }
+      console.warn('⚠️ Response is not an array or object, returning empty array');
+      return [];
+    } catch (error: any) {
+      console.error('❌ Error fetching contact requests:', error);
+      console.error('❌ Error details:', {
+        message: error.message,
+        stack: error.stack
+      });
+      // If it's a 403 or 401, user might not have permission
+      if (error.message?.includes('403') || error.message?.includes('401')) {
+        throw new Error('You do not have permission to view contact requests. Make sure you are logged in as superuser.');
+      }
+      throw error;
+    }
+  }
+
+  async updateContactRequest(id: number, data: Partial<ContactRequest>): Promise<ContactRequest> {
+    return await this.request<ContactRequest>(`/contact-requests/${id}/`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
   }
 
   async register(userData: {
@@ -1303,6 +1485,120 @@ class ApiClient {
     const queryParams = new URLSearchParams({ department });
     return await this.request(`/analytics/department-curriculum/?${queryParams.toString()}`);
   }
+
+  // Super Admin Dashboard
+  async getSuperAdminDashboard(): Promise<SuperAdminDashboardData> {
+    return await this.request<SuperAdminDashboardData>('/dashboard/super-admin/');
+  }
+
+  // Super Admin Institutions
+  async getSuperAdminInstitutions(): Promise<Institution[]> {
+    return await this.request<Institution[]>('/super-admin/institutions/');
+  }
+
+  // Create Institution
+  async createInstitution(data: {
+    email: string;
+    first_name: string;
+    last_name: string;
+    phone?: string;
+    institution_name: string;
+    institution_type?: string;
+    department?: string;
+    address?: string;
+    city?: string;
+    country?: string;
+    website?: string;
+    description?: string;
+  }): Promise<{ success: boolean; message?: string; institution?: Institution; errors?: any }> {
+    try {
+      const response = await this.request<{ success: boolean; message?: string; institution?: Institution; errors?: any }>('/super-admin/institutions/create/', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+      return response;
+    } catch (error: any) {
+      // If error message contains JSON with errors, parse it
+      try {
+        const errorData = JSON.parse(error.message);
+        if (errorData.errors) {
+          return {
+            success: false,
+            errors: errorData.errors
+          };
+        }
+      } catch {
+        // Not JSON, continue with normal error handling
+      }
+      
+      // If it's a validation error about email, return it with errors structure
+      if (error.message && (error.message.includes('email') || error.message.includes('already exists'))) {
+        return {
+          success: false,
+          errors: {
+            email: ['This email is already in use. Please use a different email address.']
+          }
+        };
+      }
+      
+      // Return error in expected format
+      return {
+        success: false,
+        errors: {
+          non_field_errors: [error.message || 'Failed to create institution']
+        }
+      };
+    }
+  }
+
+  // Delete Institution
+  async deleteInstitution(institutionId: number): Promise<{ success: boolean; message?: string; error?: string }> {
+    return await this.request(`/super-admin/institutions/${institutionId}/`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Super Admin Activity Logs
+  async getSuperAdminActivityLogs(params?: {
+    institution_id?: number;
+    action_type?: string;
+    department?: string;
+    search?: string;
+    limit?: number;
+  }): Promise<{ success: boolean; logs: ActivityLog[]; count: number }> {
+    const queryParams = new URLSearchParams();
+    if (params?.institution_id) queryParams.append('institution_id', params.institution_id.toString());
+    if (params?.action_type) queryParams.append('action_type', params.action_type);
+    if (params?.department) queryParams.append('department', params.department);
+    if (params?.search) queryParams.append('search', params.search);
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+    
+    const queryString = queryParams.toString();
+    let endpoint = '/super-admin/activity-logs/';
+    if (queryString) {
+      endpoint += `?${queryString}`;
+    }
+    return await this.request<{ success: boolean; logs: ActivityLog[]; count: number }>(endpoint);
+  }
+}
+
+export interface Institution {
+  id: number;
+  username: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  full_name: string;
+  department?: string;
+  phone?: string;
+  is_active: boolean;
+  is_superuser?: boolean;  // Flag to prevent deletion of super admin accounts
+  date_joined: string;
+  last_login?: string | null;
+  login_status: 'never' | 'today' | 'recent' | 'month' | 'old';
+  student_count: number;
+  teacher_count: number;
+  course_count: number;
 }
 
 // Export singleton instance
