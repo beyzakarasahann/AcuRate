@@ -10,7 +10,9 @@ from .views import (
     # Auth views
     login_view, logout_view, current_user_view, register_view, create_teacher_view,
     # Dashboard views
-    student_dashboard, teacher_dashboard, institution_dashboard,
+    student_dashboard, teacher_dashboard, institution_dashboard, super_admin_dashboard,
+    # Super Admin views
+    super_admin_institutions, super_admin_activity_logs, create_institution, delete_institution,
     # Course Analytics views
     course_analytics_overview, course_analytics_detail,
     # Institution Analytics views
@@ -54,6 +56,13 @@ urlpatterns = [
     path('dashboard/student/', student_dashboard, name='student-dashboard'),
     path('dashboard/teacher/', teacher_dashboard, name='teacher-dashboard'),
     path('dashboard/institution/', institution_dashboard, name='institution-dashboard'),
+    path('dashboard/super-admin/', super_admin_dashboard, name='super-admin-dashboard'),
+    
+    # Super Admin endpoints
+    path('super-admin/institutions/', super_admin_institutions, name='super-admin-institutions'),
+    path('super-admin/institutions/create/', create_institution, name='create-institution'),
+    path('super-admin/institutions/<int:institution_id>/', delete_institution, name='delete-institution'),
+    path('super-admin/activity-logs/', super_admin_activity_logs, name='super-admin-activity-logs'),
     
     # Course Analytics endpoints
     path('course-analytics/', course_analytics_overview, name='course-analytics-overview'),

@@ -68,19 +68,31 @@ export default function LoginPage() {
       const response = await api.login(username, password);
 
       if (response.success && response.user) {
+        // Check if user is super admin - super admins should NOT use normal login
+        // They should use the special super admin login page
+        if (response.user.is_superuser) {
+          setError('Super admins must use the dedicated super admin login page.');
+          setLoading(false);
+          return;
+        }
+
         // Store user info in cookie for middleware (lowercase for middleware compatibility)
         document.cookie = `user_role=${response.user.role.toLowerCase()}; path=/; max-age=86400`;
         document.cookie = `username=${response.user.username}; path=/; max-age=86400`;
         document.cookie = `auth_token=authenticated; path=/; max-age=86400`;
 
-        // If teacher is logging in with a temporary password, force password change
-        if (response.user.role === 'TEACHER' && response.user.is_temporary_password) {
+        // If teacher or institution is logging in with a temporary password, force password change
+        if ((response.user.role === 'TEACHER' || response.user.role === 'INSTITUTION') && response.user.is_temporary_password) {
           document.cookie = `must_change_password=true; path=/; max-age=86400`;
-          router.push('/teacher/change-password');
+          if (response.user.role === 'TEACHER') {
+            router.push('/teacher/change-password');
+          } else if (response.user.role === 'INSTITUTION') {
+            router.push('/institution/change-password');
+          }
           return;
         }
 
-        // Redirect based on role
+        // Redirect based on role (only for non-super-admin users)
         const roleRedirect: Record<string, string> = {
           'STUDENT': '/student',
           'TEACHER': '/teacher',
