@@ -380,21 +380,23 @@ export default function InstitutionAnalytics() {
             transition={{ delay: 0.4 }}
             className={`backdrop-blur-xl ${themeClasses.card} p-6 shadow-2xl rounded-2xl`}
           >
-            <h2 className={`text-xl font-bold ${whiteTextClass} mb-4 flex items-center gap-2`}>
+            <h2 className={`text-xl font-bold ${whiteTextClass} mb-6 flex items-center gap-2`}>
               <BarChart3 className="w-5 h-5" style={{ color: accentStart }} />
               Performance Distribution
             </h2>
-            {performanceData && (
+            {performanceData && performanceChartData.length > 0 ? (
               <div>
-                <ResponsiveContainer width="100%" height={250}>
+                {/* Simple Pie Chart - No Labels */}
+                <ResponsiveContainer width="100%" height={280}>
                   <PieChart>
                     <Pie
                       data={performanceChartData}
                       cx="50%"
                       cy="50%"
                       labelLine={false}
-                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                      outerRadius={80}
+                      label={false}
+                      outerRadius={90}
+                      innerRadius={50}
                       fill="#8884d8"
                       dataKey="value"
                     >
@@ -403,18 +405,66 @@ export default function InstitutionAnalytics() {
                       ))}
                     </Pie>
                     <Tooltip
+                      formatter={(value: any) => {
+                        const total = performanceChartData.reduce((sum: number, item: any) => sum + item.value, 0);
+                        const percentage = ((value / total) * 100).toFixed(1);
+                        return `${value} students (${percentage}%)`;
+                      }}
                       contentStyle={{
-                        backgroundColor: isDark ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.95)',
-                        border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
+                        backgroundColor: isDark ? 'rgba(0,0,0,0.95)' : 'rgba(255,255,255,0.98)',
+                        border: `1px solid ${isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.2)'}`,
                         borderRadius: '8px',
+                        padding: '8px 12px',
+                        color: isDark ? '#fff' : '#000',
+                        fontSize: '13px',
                       }}
                     />
                   </PieChart>
                 </ResponsiveContainer>
-                <div className={`mt-4 text-sm ${secondaryTextClass} text-center`}>
-                  <p>Total Students: {performanceData.statistics?.total_students || 0}</p>
-                  <p>Average: {performanceData.statistics?.average || 0}% | Median: {performanceData.statistics?.median || 0}%</p>
+                
+                {/* Clean Legend */}
+                <div className="mt-6 space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    {performanceChartData.map((entry: any, index: number) => {
+                      const total = performanceChartData.reduce((sum: number, item: any) => sum + item.value, 0);
+                      const percentage = ((entry.value / total) * 100).toFixed(1);
+                      return (
+                        <div key={`legend-${index}`} className="flex items-center gap-3">
+                          <div 
+                            className="w-5 h-5 rounded" 
+                            style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                          />
+                          <div className="flex-1">
+                            <div className={`text-sm font-medium ${whiteTextClass}`}>{entry.name}%</div>
+                            <div className={`text-xs ${secondaryTextClass}`}>{entry.value} students ({percentage}%)</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  
+                  {/* Statistics */}
+                  <div className={`mt-6 pt-4 border-t ${isDark ? 'border-white/10' : 'border-gray-200'}`}>
+                    <div className="grid grid-cols-3 gap-4 text-center">
+                      <div>
+                        <div className={`text-xs ${secondaryTextClass} mb-1`}>Total Students</div>
+                        <div className={`text-lg font-bold ${whiteTextClass}`}>{performanceData.statistics?.total_students || 0}</div>
+                      </div>
+                      <div>
+                        <div className={`text-xs ${secondaryTextClass} mb-1`}>Average</div>
+                        <div className={`text-lg font-bold text-green-400`}>{performanceData.statistics?.average?.toFixed(1) || 0}%</div>
+                      </div>
+                      <div>
+                        <div className={`text-xs ${secondaryTextClass} mb-1`}>Median</div>
+                        <div className={`text-lg font-bold text-blue-400`}>{performanceData.statistics?.median?.toFixed(1) || 0}%</div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
+              </div>
+            ) : (
+              <div className={`h-[280px] flex items-center justify-center ${secondaryTextClass}`}>
+                <p>No performance data available</p>
               </div>
             )}
           </motion.div>
