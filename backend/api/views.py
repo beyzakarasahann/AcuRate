@@ -2027,12 +2027,6 @@ class LearningOutcomeViewSet(viewsets.ModelViewSet):
             raise PermissionDenied('You can only delete Learning Outcomes for your own courses')
         
         instance.delete()
-    
-    def list(self, request, *args, **kwargs):
-        """Override list to ensure proper response format"""
-        queryset = self.filter_queryset(self.get_queryset())
-        serializer = self.get_serializer(queryset, many=True)
-        return Response(serializer.data)
 
 
 # =============================================================================

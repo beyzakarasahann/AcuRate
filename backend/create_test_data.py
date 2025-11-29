@@ -780,20 +780,20 @@ def create_learning_outcomes(courses):
     
     learning_outcomes = []
     lo_definitions = {
-        'CS101': [
-            {'code': 'LO1', 'title': 'Understand Python Basics', 'description': 'Students will understand basic Python syntax and data types', 'target': 75.00},
-            {'code': 'LO2', 'title': 'Master Control Structures', 'description': 'Students will master if-else, loops and functions', 'target': 70.00},
-            {'code': 'LO3', 'title': 'Apply Programming Concepts', 'description': 'Students will apply programming concepts to solve problems', 'target': 80.00},
-        ],
-        'CS201': [
-            {'code': 'LO1', 'title': 'Understand Data Structures', 'description': 'Students will understand arrays, lists and dictionaries', 'target': 75.00},
-            {'code': 'LO2', 'title': 'Implement Sorting Algorithms', 'description': 'Students will implement various sorting algorithms', 'target': 70.00},
-            {'code': 'LO3', 'title': 'Analyze Algorithm Complexity', 'description': 'Students will analyze time and space complexity', 'target': 80.00},
-        ],
-        'CS301': [
+        'CSE301': [
             {'code': 'LO1', 'title': 'Master Advanced Algorithms', 'description': 'Students will master divide-and-conquer algorithms', 'target': 75.00},
             {'code': 'LO2', 'title': 'Apply Dynamic Programming', 'description': 'Students will apply dynamic programming techniques', 'target': 70.00},
             {'code': 'LO3', 'title': 'Optimize Algorithm Solutions', 'description': 'Students will optimize solutions using greedy algorithms', 'target': 80.00},
+        ],
+        'CSE302': [
+            {'code': 'LO1', 'title': 'Understand Database Design', 'description': 'Students will understand database design principles and normalization', 'target': 75.00},
+            {'code': 'LO2', 'title': 'Master SQL Queries', 'description': 'Students will master complex SQL queries and database operations', 'target': 70.00},
+            {'code': 'LO3', 'title': 'Apply Database Management', 'description': 'Students will apply database management concepts in real-world scenarios', 'target': 80.00},
+        ],
+        'CSE303': [
+            {'code': 'LO1', 'title': 'Understand Software Engineering Principles', 'description': 'Students will understand software development lifecycle and methodologies', 'target': 75.00},
+            {'code': 'LO2', 'title': 'Apply Design Patterns', 'description': 'Students will apply design patterns and best practices', 'target': 70.00},
+            {'code': 'LO3', 'title': 'Master Project Management', 'description': 'Students will master project management and team collaboration', 'target': 80.00},
         ],
     }
     
