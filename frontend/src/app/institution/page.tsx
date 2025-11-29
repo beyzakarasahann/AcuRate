@@ -364,9 +364,14 @@ export default function InstitutionDashboard() {
                 <Building2 className="w-8 h-8 text-white" />
               </motion.div>
               <div>
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400 bg-clip-text text-transparent">
-                  Institution Dashboard
-                </h1>
+                <div className="flex items-center gap-3 mb-2">
+                  <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400 bg-clip-text text-transparent">
+                    Institution Dashboard
+                  </h1>
+                  <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-500/20 text-green-400 border border-green-500/30">
+                    Active
+                  </span>
+                </div>
                 {/* Metin Rengi: Dinamik mutedText kullanıldı */}
                 <p className={`${secondaryTextClass} text-sm`}>Academic Performance Overview</p>
               </div>
