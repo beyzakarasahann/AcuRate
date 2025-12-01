@@ -6,6 +6,8 @@ import { Building2, PlusCircle, RefreshCw, Search, Users, BookOpen, Award, Edit2
 import { api } from '@/lib/api';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { Inter } from 'next/font/google';
+import toast from 'react-hot-toast';
+import { ConfirmationModal } from '@/components/ui/ConfirmationModal';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
@@ -131,6 +133,7 @@ export default function DepartmentsPage() {
       setDepartments(merged);
     } catch (error: any) {
       console.error('Failed to load departments', error);
+      toast.error('Failed to load departments. Please refresh the page.');
       // Fallback: try to load just the list if analytics fails
       try {
         const departmentsList = await api.getDepartmentsList();
@@ -145,6 +148,7 @@ export default function DepartmentsPage() {
         })));
       } catch (fallbackError: any) {
         console.error('Failed to load departments list', fallbackError);
+        toast.error('Failed to load departments list.');
       }
     } finally {
       setLoading(false);
@@ -201,26 +205,35 @@ export default function DepartmentsPage() {
     setFormSuccess(null);
 
     if (!form.name.trim()) {
-      setFormError('Department name is required.');
+      const errorMsg = 'Department name is required.';
+      setFormError(errorMsg);
+      toast.error(errorMsg);
       return;
     }
 
     if (form.code && form.code.length > 10) {
-      setFormError('Department code must be 10 characters or less.');
+      const errorMsg = 'Department code must be 10 characters or less.';
+      setFormError(errorMsg);
+      toast.error(errorMsg);
       return;
     }
 
     if (form.contact_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.contact_email)) {
-      setFormError('Please enter a valid email address.');
+      const errorMsg = 'Please enter a valid email address.';
+      setFormError(errorMsg);
+      toast.error(errorMsg);
       return;
     }
 
     // Check if department already exists
     if (departments.some(dept => dept.name.toLowerCase() === form.name.trim().toLowerCase())) {
-      setFormError('Department already exists.');
+      const errorMsg = 'Department already exists.';
+      setFormError(errorMsg);
+      toast.error(errorMsg);
       return;
     }
 
+    const toastId = toast.loading('Creating department...');
     try {
       setCreating(true);
       
@@ -255,8 +268,9 @@ export default function DepartmentsPage() {
           );
         } catch (courseError: any) {
           console.error('Failed to create some courses', courseError);
-          setFormSuccess(`Department created successfully, but some courses could not be added: ${courseError.message}`);
-          // Still reload departments even if some courses failed
+          const msg = `Department created, but some courses failed: ${courseError.message}`;
+          toast.error(msg, { id: toastId });
+          setFormSuccess(msg);
           await fetchDepartments();
           setTimeout(() => {
             handleCloseForm();
@@ -270,18 +284,22 @@ export default function DepartmentsPage() {
       await fetchDepartments();
       
       if (coursesToAdd.length > 0) {
+        toast.success(`Department and ${coursesToAdd.length} course(s) created successfully!`, { id: toastId });
         setFormSuccess(`Department and ${coursesToAdd.length} course(s) created successfully.`);
       } else {
-      setFormSuccess('Department created successfully.');
+        toast.success('Department created successfully!', { id: toastId });
+        setFormSuccess('Department created successfully.');
       }
       
       setTimeout(() => {
         handleCloseForm();
         setFormSuccess(null);
-      }, 2000);
+      }, 1000);
     } catch (error: any) {
       console.error('Failed to create department', error);
-      setFormError(error.message || 'Failed to create department. Please try again.');
+      const errorMsg = error.message || 'Failed to create department. Please try again.';
+      toast.error(errorMsg, { id: toastId });
+      setFormError(errorMsg);
     } finally {
       setCreating(false);
     }

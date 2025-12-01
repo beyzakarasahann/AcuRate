@@ -8,6 +8,8 @@ import { useRouter } from 'next/navigation';
 import { api, TokenManager } from '../../../lib/api';
 import { useThemeColors } from '../../../hooks/useThemeColors';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
+import toast from 'react-hot-toast';
+import { exportAnalyticsData } from '../../../lib/export';
 
 export default function InstitutionAnalytics() {
   const router = useRouter();
@@ -257,14 +259,61 @@ export default function InstitutionAnalytics() {
               </div>
             </div>
             <div className="flex gap-3">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className={`px-4 py-2 rounded-xl ${themeClasses.card.replace('shadow-2xl', '').replace('rounded-2xl', 'rounded-xl')} ${isDark ? 'hover:bg-white/10 text-white' : 'hover:bg-gray-100 text-gray-700'} flex items-center gap-2 transition-all backdrop-blur-xl`}
-              >
-                <Download className="w-4 h-4" />
-                Export
-              </motion.button>
+              <div className="relative group">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => {
+                    try {
+                      exportAnalyticsData(
+                        departmentsData,
+                        poTrendsData,
+                        performanceData,
+                        courseSuccessData,
+                        'json'
+                      );
+                      toast.success('Analytics data exported successfully!');
+                    } catch (error: any) {
+                      toast.error('Failed to export analytics data.');
+                    }
+                  }}
+                  className={`px-4 py-2 rounded-xl ${themeClasses.card.replace('shadow-2xl', '').replace('rounded-2xl', 'rounded-xl')} ${isDark ? 'hover:bg-white/10 text-white' : 'hover:bg-gray-100 text-gray-700'} flex items-center gap-2 transition-all backdrop-blur-xl`}
+                >
+                  <Download className="w-4 h-4" />
+                  Export
+                </motion.button>
+                {/* Dropdown menu */}
+                <div className="absolute right-0 mt-2 w-48 rounded-xl shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+                  <div className={`${themeClasses.card} p-2 space-y-1`}>
+                    <button
+                      onClick={() => {
+                        try {
+                          exportAnalyticsData(departmentsData, poTrendsData, performanceData, courseSuccessData, 'json');
+                          toast.success('Analytics exported as JSON!');
+                        } catch (error: any) {
+                          toast.error('Failed to export.');
+                        }
+                      }}
+                      className={`w-full text-left px-3 py-2 rounded-lg text-sm ${isDark ? 'hover:bg-white/10 text-white' : 'hover:bg-gray-100 text-gray-700'}`}
+                    >
+                      Export as JSON
+                    </button>
+                    <button
+                      onClick={() => {
+                        try {
+                          exportAnalyticsData(departmentsData, poTrendsData, performanceData, courseSuccessData, 'csv');
+                          toast.success('Analytics exported as CSV!');
+                        } catch (error: any) {
+                          toast.error('Failed to export.');
+                        }
+                      }}
+                      className={`w-full text-left px-3 py-2 rounded-lg text-sm ${isDark ? 'hover:bg-white/10 text-white' : 'hover:bg-gray-100 text-gray-700'}`}
+                    >
+                      Export as CSV
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </motion.div>
