@@ -26,6 +26,8 @@ from .views import (
     EnrollmentViewSet, AssessmentViewSet, StudentGradeViewSet,
     StudentPOAchievementViewSet, StudentLOAchievementViewSet, ContactRequestViewSet
 )
+from .views_file_upload import upload_profile_picture, upload_file
+from .views_bulk_operations import bulk_import_students, bulk_export_grades, bulk_import_grades
 
 # Create router for ViewSets
 router = DefaultRouter()
@@ -78,6 +80,15 @@ urlpatterns = [
     
     # Contact endpoints
     path('contact/', create_contact_request, name='create-contact-request'),
+    
+    # File Upload endpoints
+    path('files/upload/profile-picture/', upload_profile_picture, name='upload-profile-picture'),
+    path('files/upload/', upload_file, name='upload-file'),
+    
+    # Bulk Operations endpoints
+    path('bulk/import/students/', bulk_import_students, name='bulk-import-students'),
+    path('bulk/import/grades/', bulk_import_grades, name='bulk-import-grades'),
+    path('bulk/export/grades/', bulk_export_grades, name='bulk-export-grades'),
     
     # Router URLs (CRUD endpoints)
     path('', include(router.urls)),

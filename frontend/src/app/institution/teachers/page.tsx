@@ -2,10 +2,12 @@
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { useEffect, useState } from 'react';
-import { Users, PlusCircle, RefreshCw, Search, Mail, Phone, Building2, Loader2, X, Trash2, AlertTriangle } from 'lucide-react';
+import { Users, PlusCircle, RefreshCw, Search, Mail, Phone, Building2, Loader2, X, Trash2 } from 'lucide-react';
 import { api, type User } from '@/lib/api';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { Inter } from 'next/font/google';
+import toast from 'react-hot-toast';
+import { ConfirmationModal } from '@/components/ui/ConfirmationModal';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
@@ -59,6 +61,7 @@ export default function TeachersPage() {
       setTeachers(data);
     } catch (error: any) {
       console.error('Failed to load teachers', error);
+      toast.error('Failed to load teachers. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -103,6 +106,7 @@ export default function TeachersPage() {
       return;
     }
 
+    const toastId = toast.loading('Creating teacher account...');
     try {
       setCreating(true);
       await api.createTeacher({
@@ -111,7 +115,7 @@ export default function TeachersPage() {
         last_name: form.last_name,
         department: form.department || undefined,
       });
-      setFormSuccess('Teacher account created. A one-time password has been emailed to the teacher.');
+      toast.success('Teacher account created successfully! A one-time password has been emailed.', { id: toastId });
       setForm({
         first_name: '',
         last_name: '',
@@ -120,12 +124,12 @@ export default function TeachersPage() {
         phone: '',
       });
       await fetchTeachers(search.trim() || undefined);
-      // Close panel after a short delay to show success message
+      // Close panel after a short delay
       setTimeout(() => {
         setIsFormOpen(false);
-        setFormSuccess(null);
-      }, 1500);
+      }, 500);
     } catch (error: any) {
+      toast.error(error.message || 'Failed to create teacher account.', { id: toastId });
       setFormError(error.message || 'Failed to create teacher.');
     } finally {
       setCreating(false);
@@ -141,13 +145,16 @@ export default function TeachersPage() {
   const handleConfirmDelete = async () => {
     if (!teacherToDelete) return;
 
+    const toastId = toast.loading('Deleting teacher...');
     try {
       setDeleting(teacherToDelete.id);
       setDeleteError(null);
       await api.deleteTeacher(teacherToDelete.id);
+      toast.success('Teacher deleted successfully.', { id: toastId });
       setTeacherToDelete(null);
       await fetchTeachers(search.trim() || undefined);
     } catch (error: any) {
+      toast.error(error.message || 'Failed to delete teacher.', { id: toastId });
       setDeleteError(error.message || 'Failed to delete teacher.');
     } finally {
       setDeleting(null);
@@ -499,89 +506,21 @@ export default function TeachersPage() {
         </AnimatePresence>
 
         {/* Delete Confirmation Modal */}
-        <AnimatePresence>
-          {teacherToDelete && (
-            <>
-              {/* Backdrop */}
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                onClick={handleCancelDelete}
-                className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
-              />
-
-              {/* Modal */}
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                className={`fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md ${isDark ? 'bg-gray-900' : 'bg-white'} rounded-3xl shadow-2xl z-50 border ${isDark ? 'border-white/10' : 'border-gray-200'}`}
-              >
-                <div className="p-6">
-                  <div className="flex items-start gap-4 mb-6">
-                    <div className={`p-3 rounded-xl ${isDark ? 'bg-red-500/10' : 'bg-red-50'}`}>
-                      <AlertTriangle className="w-6 h-6 text-red-500" />
-                    </div>
-                    <div className="flex-1">
-                      <h2 className={`text-xl font-bold ${text} mb-1`}>Delete Teacher</h2>
-                      <p className={`text-sm ${mutedText}`}>
-                        Are you sure you want to delete{' '}
-                        <span className="font-semibold text-white">{teacherToDelete.first_name} {teacherToDelete.last_name}</span>?
-                        This action cannot be undone.
-                      </p>
-                    </div>
-                  </div>
-
-                  {deleteError && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className={`mb-4 p-3 rounded-xl text-sm font-medium ${isDark ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-red-50 text-red-700 border border-red-200'}`}
-                    >
-                      {deleteError}
-                    </motion.div>
-                  )}
-
-                  <div className="flex items-center justify-end gap-3">
-                    <motion.button
-                      type="button"
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={handleCancelDelete}
-                      disabled={deleting === teacherToDelete.id}
-                      className={`px-5 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 ${isDark ? 'bg-white/5 border border-white/10 text-white hover:bg-white/10' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'} ${deleting === teacherToDelete.id ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    >
-                      Cancel
-                    </motion.button>
-                    <motion.button
-                      type="button"
-                      whileHover={{ scale: deleting === teacherToDelete.id ? 1 : 1.02 }}
-                      whileTap={{ scale: deleting === teacherToDelete.id ? 1 : 0.98 }}
-                      onClick={handleConfirmDelete}
-                      disabled={deleting === teacherToDelete.id}
-                      className={`px-6 py-2.5 rounded-xl font-semibold text-sm transition-all duration-200 flex items-center gap-2 ${deleting === teacherToDelete.id ? 'opacity-70 cursor-not-allowed' : ''} ${isDark ? 'bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-500/20' : 'bg-red-600 hover:bg-red-700 text-white shadow-md'}`}
-                    >
-                      {deleting === teacherToDelete.id ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Deleting...
-                        </>
-                      ) : (
-                        <>
-                          <Trash2 className="w-4 h-4" />
-                          Delete Teacher
-                        </>
-                      )}
-                    </motion.button>
-                  </div>
-                </div>
-              </motion.div>
-            </>
-          )}
-        </AnimatePresence>
+        <ConfirmationModal
+          isOpen={!!teacherToDelete}
+          onClose={handleCancelDelete}
+          onConfirm={handleConfirmDelete}
+          title="Delete Teacher"
+          message={
+            teacherToDelete
+              ? `Are you sure you want to delete ${teacherToDelete.first_name} ${teacherToDelete.last_name}? This action cannot be undone.`
+              : ''
+          }
+          confirmText="Delete Teacher"
+          cancelText="Cancel"
+          variant="danger"
+          isLoading={deleting === teacherToDelete?.id}
+        />
       </div>
     </div>
   );

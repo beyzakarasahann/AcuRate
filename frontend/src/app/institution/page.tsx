@@ -6,6 +6,8 @@ import { useState, useEffect } from 'react';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
 import { api, DashboardData } from '../../lib/api';
+import toast from 'react-hot-toast';
+import { exportDashboardReport } from '../../lib/export';
 
 // 🎨 DİNAMİK TEMA KANCASI BURAYA MİRAS ALINDI
 import { useThemeColors } from '../../hooks/useThemeColors';
@@ -223,27 +225,14 @@ export default function InstitutionDashboard() {
   ];
 
   // Export report function
-  const handleExportReport = () => {
-    // Create a simple text report
-    const reportData = {
-      title: 'Institution Dashboard Report',
-      date: new Date().toLocaleDateString(),
-      stats: stats,
-      departments: departments,
-      programOutcomes: programOutcomes,
-    };
-
-    // Convert to JSON and download
-    const dataStr = JSON.stringify(reportData, null, 2);
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `institution-dashboard-report-${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+  const handleExportReport = (format: 'json' | 'csv' = 'json') => {
+    try {
+      exportDashboardReport(stats, departments, programOutcomes, format);
+      toast.success(`Report exported as ${format.toUpperCase()} successfully!`);
+    } catch (error: any) {
+      toast.error('Failed to export report. Please try again.');
+      console.error('Export error:', error);
+    }
   };
 
   // Get available departments for filter (remove duplicates)
@@ -414,17 +403,36 @@ export default function InstitutionDashboard() {
                 </motion.button>
               </Link>
               
-              {/* Rapor Butonu (Dinamik Gradient) */}
-              <motion.button
-                onClick={handleExportReport}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                style={{ backgroundImage: `linear-gradient(to right, ${accentStart}, ${accentEnd})` }}
-                className="px-4 py-2 rounded-xl text-white flex items-center gap-2 transition-all shadow-lg shadow-indigo-500/30"
-              >
-                <FileText className="w-4 h-4" />
-                Export Report
-              </motion.button>
+              {/* Rapor Butonu (Dinamik Gradient) - Dropdown */}
+              <div className="relative group">
+                <motion.button
+                  onClick={() => handleExportReport('json')}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  style={{ backgroundImage: `linear-gradient(to right, ${accentStart}, ${accentEnd})` }}
+                  className="px-4 py-2 rounded-xl text-white flex items-center gap-2 transition-all shadow-lg shadow-indigo-500/30"
+                >
+                  <FileText className="w-4 h-4" />
+                  Export Report
+                </motion.button>
+                {/* Dropdown menu */}
+                <div className="absolute right-0 mt-2 w-48 rounded-xl shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+                  <div className={`${themeClasses.card} p-2 space-y-1`}>
+                    <button
+                      onClick={() => handleExportReport('json')}
+                      className={`w-full text-left px-3 py-2 rounded-lg text-sm ${isDark ? 'hover:bg-white/10 text-white' : 'hover:bg-gray-100 text-gray-700'}`}
+                    >
+                      Export as JSON
+                    </button>
+                    <button
+                      onClick={() => handleExportReport('csv')}
+                      className={`w-full text-left px-3 py-2 rounded-lg text-sm ${isDark ? 'hover:bg-white/10 text-white' : 'hover:bg-gray-100 text-gray-700'}`}
+                    >
+                      Export as CSV
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </motion.div>

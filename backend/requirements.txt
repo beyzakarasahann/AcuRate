@@ -35,3 +35,12 @@ pytest-django==4.9.0
 pytest-cov==6.0.0
 coverage==7.6.1
 
+# API Documentation
+drf-spectacular==0.29.0
+
+# Rate Limiting
+django-ratelimit==4.1.0
+
+# Logging
+python-json-logger==2.0.7
+
