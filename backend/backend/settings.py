@@ -35,10 +35,24 @@ if os.environ.get("SENDGRID_SKIP_SSL_VERIFY", "").lower() == "true":
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-g#z9@_6j&#)fl!x#ymg^71a!n_jv_jpt1yh-_337xpf_n1wx0!')
 
 # SECURITY WARNING: don't run with debug turned on in production!
+# Default to True for development, set DJANGO_DEBUG=False in production
 DEBUG = os.environ.get('DJANGO_DEBUG', 'True').lower() == 'true'
 
 allowed_hosts = os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1')
 ALLOWED_HOSTS = [host.strip() for host in allowed_hosts.split(',') if host.strip()]
+
+# Security settings for production
+if not DEBUG:
+    # Security headers
+    SECURE_SSL_REDIRECT = os.environ.get('SECURE_SSL_REDIRECT', 'False').lower() == 'true'
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = 'DENY'
+    SECURE_HSTS_SECONDS = 31536000  # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
 
 
 # Application definition
@@ -53,6 +67,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',  # For token blacklisting
+    'drf_spectacular',  # API Documentation
     'corsheaders',
     'api',
 ]
@@ -66,6 +81,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'api.middleware.RequestLoggingMiddleware',  # Request logging
+    'api.middleware.RateLimitMiddleware',  # Rate limiting (only in production)
 ]
 
 ROOT_URLCONF = 'backend.urls'
@@ -172,6 +189,10 @@ REST_FRAMEWORK = {
     ),
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
+    # API Documentation
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    # Exception handling
+    'EXCEPTION_HANDLER': 'api.exceptions.custom_exception_handler',
 }
 
 # --- JWT Ayarları ---
@@ -182,3 +203,76 @@ SIMPLE_JWT = {
     'BLACKLIST_AFTER_ROTATION': True,
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
+
+# --- API Documentation (drf-spectacular) ---
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'AcuRate API',
+    'DESCRIPTION': 'Academic Performance Analysis System API Documentation',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'COMPONENT_SPLIT_REQUEST': True,
+    'SCHEMA_PATH_PREFIX': '/api/',
+    'AUTHENTICATION_WHITELIST': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ],
+}
+
+# --- Rate Limiting ---
+RATELIMIT_ENABLE = not DEBUG  # Enable in production
+RATELIMIT_USE_CACHE = 'default'
+RATELIMIT_KEY_PREFIX = 'rl:'
+
+# --- Media Files (for file uploads) ---
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
+# --- Static Files ---
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# --- Logging Configuration ---
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+        'json': {
+            '()': 'pythonjsonlogger.jsonlogger.JsonFormatter',
+            'format': '%(asctime)s %(name)s %(levelname)s %(message)s %(pathname)s %(lineno)d',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+        'file': {
+            'class': 'logging.FileHandler',
+            'filename': BASE_DIR / 'logs' / 'acurate.log',
+            'formatter': 'json',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'api': {
+            'handlers': ['console', 'file'],
+            'level': 'DEBUG' if DEBUG else 'INFO',
+            'propagate': False,
+        },
+    },
+}
+
+# Create logs directory if it doesn't exist
+import os
+logs_dir = BASE_DIR / 'logs'
+os.makedirs(logs_dir, exist_ok=True)

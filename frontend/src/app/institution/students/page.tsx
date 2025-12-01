@@ -6,6 +6,7 @@ import { GraduationCap, Search, Mail, Building2, Loader2, User as UserIcon, Book
 import { api, type User } from '@/lib/api';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { Inter } from 'next/font/google';
+import toast from 'react-hot-toast';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
@@ -52,7 +53,9 @@ export default function StudentsPage() {
       setAllStudents(studentsWithDept);
     } catch (error: any) {
       console.error('Failed to load students', error);
-      setError(error.message || 'Failed to load students');
+      const errorMsg = error.message || 'Failed to load students';
+      setError(errorMsg);
+      toast.error(errorMsg);
     } finally {
       setLoading(false);
     }

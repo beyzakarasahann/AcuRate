@@ -736,15 +736,33 @@ class ApiClient {
     if (params?.search) {
       query.append('search', params.search);
     }
-    const endpoint = `/users/?${query.toString()}`;
-    const response = await this.request<any>(endpoint);
-    if (response && typeof response === 'object' && 'results' in response && Array.isArray(response.results)) {
-      return response.results;
+    
+    // Handle pagination - fetch all pages
+    let allTeachers: User[] = [];
+    let page = 1;
+    let hasNext = true;
+    
+    while (hasNext) {
+      const pageQuery = new URLSearchParams(query);
+      pageQuery.append('page', page.toString());
+      const endpoint = `/users/?${pageQuery.toString()}`;
+      const response = await this.request<any>(endpoint);
+      
+      if (response && typeof response === 'object' && 'results' in response && Array.isArray(response.results)) {
+        allTeachers = [...allTeachers, ...response.results];
+        // Check if there's a next page
+        hasNext = !!response.next;
+        page++;
+      } else if (Array.isArray(response)) {
+        // If response is directly an array (no pagination)
+        allTeachers = [...allTeachers, ...response];
+        hasNext = false;
+      } else {
+        hasNext = false;
+      }
     }
-    if (Array.isArray(response)) {
-      return response;
-    }
-    return [];
+    
+    return allTeachers;
   }
 
   async getStudents(params?: { search?: string; department?: string }): Promise<User[]> {
@@ -755,15 +773,33 @@ class ApiClient {
     if (params?.department) {
       query.append('department', params.department);
     }
-    const endpoint = `/users/?${query.toString()}`;
-    const response = await this.request<any>(endpoint);
-    if (response && typeof response === 'object' && 'results' in response && Array.isArray(response.results)) {
-      return response.results;
+    
+    // Handle pagination - fetch all pages
+    let allStudents: User[] = [];
+    let page = 1;
+    let hasNext = true;
+    
+    while (hasNext) {
+      const pageQuery = new URLSearchParams(query);
+      pageQuery.append('page', page.toString());
+      const endpoint = `/users/?${pageQuery.toString()}`;
+      const response = await this.request<any>(endpoint);
+      
+      if (response && typeof response === 'object' && 'results' in response && Array.isArray(response.results)) {
+        allStudents = [...allStudents, ...response.results];
+        // Check if there's a next page
+        hasNext = !!response.next;
+        page++;
+      } else if (Array.isArray(response)) {
+        // If response is directly an array (no pagination)
+        allStudents = [...allStudents, ...response];
+        hasNext = false;
+      } else {
+        hasNext = false;
+      }
     }
-    if (Array.isArray(response)) {
-      return response;
-    }
-    return [];
+    
+    return allStudents;
   }
 
   async createTeacher(data: {

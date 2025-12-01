@@ -31,7 +31,7 @@ const navItems = [
   { name: 'Lessons', icon: BookOpen, slug: 'lessons' },
   { name: 'PO Management', icon: Target, slug: 'po-management' },
   { name: 'Analytics', icon: BarChart3, slug: 'analytics' },
-  { name: 'Settings', icon: Settings, slug: 'settings', disabled: true },
+  { name: 'Settings', icon: Settings, slug: 'settings' },
 ];
 
 export default function SidebarAdmin() {
