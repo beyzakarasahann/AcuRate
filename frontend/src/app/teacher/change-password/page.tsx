@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Lock, ArrowLeft } from 'lucide-react';
@@ -20,6 +20,24 @@ export default function TeacherChangePasswordPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [isTemporaryPassword, setIsTemporaryPassword] = useState(false);
+
+  useEffect(() => {
+    // Check if user has temporary password
+    const checkTemporaryPassword = async () => {
+      try {
+        const user = await api.getCurrentUser();
+        setIsTemporaryPassword(user.is_temporary_password || false);
+        if (!user.is_temporary_password) {
+          // Not a temporary password, redirect to dashboard
+          router.push('/teacher');
+        }
+      } catch (err) {
+        console.error('Error checking user:', err);
+      }
+    };
+    checkTemporaryPassword();
+  }, [router]);
 
   const toggleTheme = () => {
     setTheme(isDark ? 'light' : 'dark');
@@ -61,17 +79,33 @@ export default function TeacherChangePasswordPage() {
         return;
       }
 
-      await api.changePassword(oldPassword, newPassword, newPasswordConfirm);
+      // For temporary password, old password is optional
+      await api.changePassword(
+        isTemporaryPassword ? '' : oldPassword, 
+        newPassword, 
+        newPasswordConfirm
+      );
 
-      // Clear the must_change_password flag so middleware stops redirecting
-      document.cookie = 'must_change_password=; path=/; max-age=0';
+      // Clear the temporary password cookie
+      document.cookie = 'is_temporary_password=false; path=/; max-age=0';
 
       setSuccess('Password updated successfully. Redirecting to your dashboard...');
       setLoading(false);
 
-      setTimeout(() => {
-        router.push('/teacher');
-      }, 1500);
+      // Refresh user data to get updated is_temporary_password status
+      try {
+        const updatedUser = await api.getCurrentUser();
+        if (!updatedUser.is_temporary_password) {
+          setTimeout(() => {
+            router.push('/teacher');
+          }, 1500);
+        }
+      } catch {
+        // If API call fails, still redirect after 1.5 seconds
+        setTimeout(() => {
+          router.push('/teacher');
+        }, 1500);
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to change password. Please try again.');
       setLoading(false);
@@ -139,15 +173,20 @@ export default function TeacherChangePasswordPage() {
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label className={`text-sm font-medium mb-2 block ${textColorClass}`}>
-                Current (Temporary) Password
+                {isTemporaryPassword ? 'Temporary Password (Optional)' : 'Current Password'}
               </label>
+              {isTemporaryPassword && (
+                <p className={`text-xs mb-2 ${mutedTextColorClass}`}>
+                  You can leave this empty if you're using the temporary password from your email.
+                </p>
+              )}
               <input
                 type="password"
                 value={oldPassword}
                 onChange={(e) => setOldPassword(e.target.value)}
                 className={`w-full px-4 py-3 rounded-xl focus:outline-none focus:border-indigo-500/50 transition-all ${inputBgClass} ${inputPlaceholderClass} ${inputFocusClass}`}
-                placeholder="Enter the temporary password from your email"
-                required
+                placeholder={isTemporaryPassword ? "Leave empty if using temporary password" : "Enter your current password"}
+                required={!isTemporaryPassword}
               />
             </div>
 

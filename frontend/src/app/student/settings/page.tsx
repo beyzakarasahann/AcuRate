@@ -103,13 +103,15 @@ const SecurityTab = ({
   themeClasses, 
   text, 
   mutedText, 
-  onChangePassword 
+  onChangePassword,
+  isTemporaryPassword = false
 }: {
   isDark: boolean;
   themeClasses: any;
   text: string;
   mutedText: string;
   onChangePassword: (oldPassword: string, newPassword: string, newPasswordConfirm: string) => Promise<void>;
+  isTemporaryPassword?: boolean;
 }) => {
   const [passwords, setPasswords] = useState({
     oldPassword: '',
@@ -130,8 +132,14 @@ const SecurityTab = ({
     setMessage(null);
 
     // Validation
-    if (!passwords.oldPassword || !passwords.newPassword || !passwords.newPasswordConfirm) {
-      setMessage({ type: 'error', text: 'All password fields are required' });
+    // For temporary password, old password is optional
+    if (!isTemporaryPassword && !passwords.oldPassword) {
+      setMessage({ type: 'error', text: 'Current password is required' });
+      setLoading(false);
+      return;
+    }
+    if (!passwords.newPassword || !passwords.newPasswordConfirm) {
+      setMessage({ type: 'error', text: 'New password fields are required' });
       setLoading(false);
       return;
     }
@@ -149,9 +157,17 @@ const SecurityTab = ({
     }
 
     try {
-      await onChangePassword(passwords.oldPassword, passwords.newPassword, passwords.newPasswordConfirm);
+      await onChangePassword(
+        isTemporaryPassword ? '' : passwords.oldPassword, 
+        passwords.newPassword, 
+        passwords.newPasswordConfirm
+      );
       setMessage({ type: 'success', text: 'Password changed successfully!' });
       setPasswords({ oldPassword: '', newPassword: '', newPasswordConfirm: '' });
+      // Clear temporary password cookie
+      if (isTemporaryPassword) {
+        document.cookie = 'is_temporary_password=false; path=/; max-age=0';
+      }
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message || 'Failed to change password' });
     } finally {
@@ -186,13 +202,21 @@ const SecurityTab = ({
             <form onSubmit={handleSubmit}>
               <div className="space-y-4 max-w-lg">
                    <div>
-                      <label className={`block text-sm font-medium ${mutedText} mb-1`}>Current Password</label>
+                      <label className={`block text-sm font-medium ${mutedText} mb-1`}>
+                        {isTemporaryPassword ? 'Temporary Password (Optional)' : 'Current Password'}
+                      </label>
+                      {isTemporaryPassword && (
+                        <p className={`text-xs mb-2 ${mutedText}`}>
+                          You can leave this empty if you're using the temporary password from your email.
+                        </p>
+                      )}
                       <div className="relative">
                         <input 
                           type={showPasswords.old ? 'text' : 'password'} 
                           value={passwords.oldPassword}
                           onChange={(e) => setPasswords({ ...passwords, oldPassword: e.target.value })}
-                          placeholder="Enter current password"
+                          placeholder={isTemporaryPassword ? "Leave empty if using temporary password" : "Enter current password"}
+                          required={!isTemporaryPassword}
                           className={`w-full p-3 pr-10 rounded-lg ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-gray-100 border-gray-300 text-gray-900'} border transition-colors focus:ring-2 focus:ring-indigo-500 outline-none`} 
                         />
                         <button
@@ -381,7 +405,17 @@ export default function SettingsPage() {
 
   const handleChangePassword = async (oldPassword: string, newPassword: string, newPasswordConfirm: string) => {
     await api.changePassword(oldPassword, newPassword, newPasswordConfirm);
+    // Refresh user data after password change
+    await fetchUserData();
   };
+
+  // Check if user has temporary password and redirect if needed
+  useEffect(() => {
+    if (user && user.is_temporary_password && activeTab !== 'security') {
+      // Force user to security tab if they have temporary password
+      setActiveTab('security');
+    }
+  }, [user, activeTab]);
 
   const { isDark, themeClasses, text, mutedText } = useThemeColors(); 
 
@@ -423,7 +457,7 @@ export default function SettingsPage() {
         case 'profile': 
           return <ProfileTab {...props} user={user} />;
         case 'security': 
-          return <SecurityTab {...props} onChangePassword={handleChangePassword} />;
+          return <SecurityTab {...props} onChangePassword={handleChangePassword} isTemporaryPassword={user?.is_temporary_password || false} />;
         case 'preferences': 
           return <PreferencesTab {...props} />;
         default: return null;

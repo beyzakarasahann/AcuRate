@@ -11,7 +11,8 @@ from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from .models import (
     User, ProgramOutcome, Course, CoursePO, 
     Enrollment, Assessment, StudentGrade, StudentPOAchievement,
-    ContactRequest, LearningOutcome, StudentLOAchievement, ActivityLog
+    ContactRequest, LearningOutcome, StudentLOAchievement, ActivityLog,
+    AssessmentLO, LOPO
 )
 
 
@@ -142,6 +143,14 @@ class ProgramOutcomeAdmin(admin.ModelAdmin):
 # LEARNING OUTCOME ADMIN
 # =============================================================================
 
+class LOPOInline(admin.TabularInline):
+    """Inline for LO-PO mappings"""
+    model = LOPO
+    extra = 1
+    fields = ['program_outcome', 'weight']
+    autocomplete_fields = ['program_outcome']
+
+
 @admin.register(LearningOutcome)
 class LearningOutcomeAdmin(admin.ModelAdmin):
     """
@@ -184,6 +193,7 @@ class LearningOutcomeAdmin(admin.ModelAdmin):
     search_fields = ['code', 'title', 'description', 'course__code', 'course__name']
     autocomplete_fields = ['course']
     date_hierarchy = 'created_at'
+    inlines = [LOPOInline]
     
     fieldsets = (
         ('Basic Information', {
@@ -226,6 +236,22 @@ class StudentGradeInline(admin.TabularInline):
     fields = ['student', 'score', 'feedback', 'graded_at']
     readonly_fields = ['graded_at']
     autocomplete_fields = ['student']
+
+
+class AssessmentLOInline(admin.TabularInline):
+    """Inline for Assessment-LO mappings"""
+    model = AssessmentLO
+    extra = 1
+    fields = ['learning_outcome', 'weight']
+    autocomplete_fields = ['learning_outcome']
+
+
+class LOPOInline(admin.TabularInline):
+    """Inline for LO-PO mappings"""
+    model = LOPO
+    extra = 1
+    fields = ['program_outcome', 'weight']
+    autocomplete_fields = ['program_outcome']
 
 
 # =============================================================================
@@ -429,10 +455,10 @@ class AssessmentAdmin(admin.ModelAdmin):
     search_fields = ['title', 'course__code', 'course__name', 'description']
     list_editable = ['is_active']
     autocomplete_fields = ['course']
-    filter_horizontal = ['related_pos', 'related_los']
+    filter_horizontal = ['related_pos']
     date_hierarchy = 'due_date'
     
-    inlines = [StudentGradeInline]
+    inlines = [StudentGradeInline, AssessmentLOInline]
     
     fieldsets = (
         ('Basic Information', {
@@ -448,10 +474,7 @@ class AssessmentAdmin(admin.ModelAdmin):
             'fields': ('related_pos',),
             'description': 'Select program outcomes this assessment evaluates'
         }),
-        ('Learning Outcomes', {
-            'fields': ('related_los',),
-            'description': 'Select learning outcomes this assessment evaluates'
-        }),
+        # Learning Outcomes are managed via AssessmentLO inline (through model)
         ('Schedule & Status', {
             'fields': ('due_date', 'is_active')
         }),

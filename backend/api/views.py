@@ -13,11 +13,15 @@ from django.contrib.auth import authenticate
 from django.db.models import Q, Avg, Count, F, Min, Max, StdDev
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.core.mail import send_mail
+from django.core.cache import cache
+from django.conf import settings
 
 from .models import (
     User, Department, ProgramOutcome, Course, CoursePO,
     Enrollment, Assessment, StudentGrade, StudentPOAchievement,
-    ContactRequest, LearningOutcome, StudentLOAchievement, ActivityLog
+    ContactRequest, LearningOutcome, StudentLOAchievement, ActivityLog,
+    AssessmentLO, LOPO
 )
 from .utils import log_activity, get_institution_for_user
 from .serializers import (
@@ -33,7 +37,9 @@ from .serializers import (
     StudentLOAchievementSerializer,
     StudentDashboardSerializer, TeacherDashboardSerializer, InstitutionDashboardSerializer,
     ContactRequestSerializer, ContactRequestCreateSerializer,
+    AssessmentLOSerializer, LOPOSerializer,
     TeacherCreateSerializer,
+    generate_temp_password,
 )
 
 
@@ -96,6 +102,139 @@ def login_view(request):
         'error': error_message or 'Invalid credentials',
         'errors': errors
     }, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def forgot_password_view(request):
+    """
+    Forgot password endpoint - generates a temporary password and emails it to the user.
+
+    POST /api/auth/forgot-password/
+    Body: {"username": "..."} OR {"email": "..."}
+    """
+    identifier = request.data.get('username') or request.data.get('email')
+
+    if not identifier:
+        return Response(
+            {
+                'success': False,
+                'error': 'Username or email is required'
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # Look up user by username or email (case-insensitive)
+    user = User.objects.filter(
+        Q(username__iexact=identifier) | Q(email__iexact=identifier),
+        is_active=True,
+    ).first()
+
+    # For security, don't reveal whether the user exists.
+    if not user:
+        return Response(
+            {
+                'success': True,
+                'message': 'If an account with this username/email exists, a temporary password has been sent.'
+            }
+        )
+
+    # Rate limiting: Check if password reset was requested recently (within 3 minutes)
+    cache_key = f'password_reset_{user.id}_{user.email}'
+    last_reset_time = cache.get(cache_key)
+    
+    if last_reset_time:
+        # Calculate remaining time in seconds
+        elapsed = (timezone.now() - last_reset_time).total_seconds()
+        remaining_seconds = 180 - elapsed  # 3 minutes = 180 seconds
+        
+        if remaining_seconds > 0:
+            remaining_minutes = int(remaining_seconds // 60)
+            
+            remaining_secs = int(remaining_seconds % 60)
+            if remaining_minutes > 0:
+                time_message = f"{remaining_minutes} minute{'s' if remaining_minutes > 1 else ''} and {remaining_secs} second{'s' if remaining_secs != 1 else ''}"
+            else:
+                time_message = f"{remaining_secs} second{'s' if remaining_secs != 1 else ''}"
+            
+            return Response(
+                {
+                    'success': False,
+                    'error': f'Please wait {time_message} before requesting another password reset. This helps prevent spam.'
+                },
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+    # Generate temporary password and set it
+    temp_password = generate_temp_password()
+    # Ensure password is clean (no whitespace issues)
+    temp_password = temp_password.strip()
+    user.set_password(temp_password)
+    if hasattr(user, "is_temporary_password"):
+        user.is_temporary_password = True
+    user.save()
+    
+    # Verify password was set correctly (for debugging)
+    if not user.check_password(temp_password):
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Password verification failed for user {user.username} after setting temporary password")
+
+    # Build email
+    full_name = (user.get_full_name() or "").strip()
+    if full_name:
+        greeting_line = f"Hello {full_name},\n\n"
+    else:
+        greeting_line = "Hello,\n\n"
+
+    message = (
+        greeting_line
+        + "You requested to reset your AcuRate account password.\n\n"
+        + f"Email address: {user.email}\n"
+        + f"Temporary password: {temp_password}\n\n"
+        + "Please log in using your EMAIL ADDRESS and this temporary password.\n"
+        + "After logging in, change your password immediately from your profile settings.\n\n"
+        + "If you did not request this, please contact your administrator."
+    )
+
+    try:
+        send_mail(
+            subject="AcuRate - Temporary Password",
+            message=message,
+            from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
+            recipient_list=[user.email],
+            fail_silently=False,
+        )
+        
+        # Set cache to prevent spam (3 minutes = 180 seconds)
+        cache.set(cache_key, timezone.now(), 180)
+    except Exception as e:
+        return Response(
+            {
+                'success': False,
+                'error': f'Failed to send email: {e}'
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    # Log password reset request
+    institution = get_institution_for_user(user)
+    log_activity(
+        action_type=ActivityLog.ActionType.PASSWORD_RESET,
+        user=user,
+        institution=institution,
+        department=user.department,
+        description=f"Temporary password generated and emailed to user {user.username}",
+        related_object_type='User',
+        related_object_id=user.id,
+    )
+
+    return Response(
+        {
+            'success': True,
+            'message': 'If an account with this username/email exists, a temporary password has been sent.'
+        }
+    )
 
 
 @api_view(['POST'])
@@ -3026,3 +3165,93 @@ class StudentLOAchievementViewSet(viewsets.ModelViewSet):
             'average_completion_rate': round(avg_completion, 2),
             'success_rate': round((targets_met / total_achievements * 100) if total_achievements > 0 else 0, 2)
         })
+
+
+class AssessmentLOViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for Assessment-LO mapping CRUD operations
+    Teachers can manage which assessments contribute to which LOs and their weights
+    """
+    queryset = AssessmentLO.objects.all()
+    serializer_class = AssessmentLOSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['assessment__title', 'learning_outcome__code', 'learning_outcome__title']
+    ordering_fields = ['weight', 'created_at']
+    ordering = ['-created_at']
+    
+    def get_queryset(self):
+        """Filter by teacher's courses"""
+        user = self.request.user
+        queryset = AssessmentLO.objects.all()
+        
+        if user.role == User.Role.TEACHER:
+            # Only show AssessmentLOs for assessments in teacher's courses
+            queryset = queryset.filter(assessment__course__teacher=user)
+        elif user.role == User.Role.STUDENT:
+            # Students can only view AssessmentLOs for their enrolled courses
+            queryset = queryset.filter(assessment__course__enrollments__student=user)
+        elif user.role == User.Role.INSTITUTION:
+            # Institution can view all AssessmentLOs in their institution
+            institution = get_institution_for_user(user)
+            if institution:
+                queryset = queryset.filter(assessment__course__department__institution=institution)
+        
+        return queryset.distinct()
+    
+    def perform_create(self, serializer):
+        """Only allow teachers to create AssessmentLO mappings for their courses"""
+        user = self.request.user
+        if user.role != User.Role.TEACHER:
+            raise PermissionDenied("Only teachers can create Assessment-LO mappings")
+        
+        assessment = serializer.validated_data['assessment']
+        if assessment.course.teacher != user:
+            raise PermissionDenied("You can only create mappings for assessments in your courses")
+        
+        serializer.save()
+
+
+class LOPOViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for LO-PO mapping CRUD operations
+    Teachers can manage which LOs contribute to which POs and their weights
+    """
+    queryset = LOPO.objects.all()
+    serializer_class = LOPOSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['learning_outcome__code', 'learning_outcome__title', 'program_outcome__code', 'program_outcome__title']
+    ordering_fields = ['weight', 'created_at']
+    ordering = ['-created_at']
+    
+    def get_queryset(self):
+        """Filter by teacher's courses"""
+        user = self.request.user
+        queryset = LOPO.objects.all()
+        
+        if user.role == User.Role.TEACHER:
+            # Only show LOPOs for LOs in teacher's courses
+            queryset = queryset.filter(learning_outcome__course__teacher=user)
+        elif user.role == User.Role.STUDENT:
+            # Students can only view LOPOs for their enrolled courses
+            queryset = queryset.filter(learning_outcome__course__enrollments__student=user)
+        elif user.role == User.Role.INSTITUTION:
+            # Institution can view all LOPOs in their institution
+            institution = get_institution_for_user(user)
+            if institution:
+                queryset = queryset.filter(learning_outcome__course__department__institution=institution)
+        
+        return queryset.distinct()
+    
+    def perform_create(self, serializer):
+        """Only allow teachers to create LOPO mappings for their courses"""
+        user = self.request.user
+        if user.role != User.Role.TEACHER:
+            raise PermissionDenied("Only teachers can create LO-PO mappings")
+        
+        learning_outcome = serializer.validated_data['learning_outcome']
+        if learning_outcome.course.teacher != user:
+            raise PermissionDenied("You can only create mappings for LOs in your courses")
+        
+        serializer.save()

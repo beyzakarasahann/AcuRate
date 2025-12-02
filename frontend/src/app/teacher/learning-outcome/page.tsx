@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Target, Plus, X, Save, BookOpen, AlertCircle, CheckCircle2, Trash2, Edit2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useThemeColors } from '@/hooks/useThemeColors';
-import { api, LearningOutcome, Course } from '@/lib/api';
+import { api, LearningOutcome, Course, ProgramOutcome, LOPO } from '@/lib/api';
 
 // --- TİPLER ---
 
@@ -31,6 +31,10 @@ export default function LearningOutcomePage() {
     description: '',
     target_percentage: 70
   });
+  const [programOutcomes, setProgramOutcomes] = useState<ProgramOutcome[]>([]);
+  const [loPOs, setLoPOs] = useState<LOPO[]>([]);
+  const [newLOPOs, setNewLOPOs] = useState<Array<{ program_outcome: number; weight: number }>>([]);
+  const [editingLOPOs, setEditingLOPOs] = useState<Record<number, Array<{ program_outcome: number; weight: number }>>>({});
 
   const { 
     isDark, 
@@ -59,8 +63,11 @@ export default function LearningOutcomePage() {
   useEffect(() => {
     if (selectedCourse) {
       loadLearningOutcomes();
+      loadProgramOutcomes();
     } else {
       setLearningOutcomes([]);
+      setProgramOutcomes([]);
+      setLoPOs([]);
     }
   }, [selectedCourse]);
 
@@ -70,9 +77,33 @@ export default function LearningOutcomePage() {
     try {
       const los = await api.getLearningOutcomes({ course: selectedCourse });
       setLearningOutcomes(los);
+      
+      // Load LO-PO mappings for all LOs
+      for (const lo of los) {
+        try {
+          const lopos = await api.getLOPOs({ learning_outcome: lo.id });
+          setLoPOs(prev => [...prev.filter(lopo => lopo.learning_outcome !== lo.id), ...lopos]);
+        } catch (err) {
+          console.error(`Error loading LO-PO mappings for LO ${lo.id}:`, err);
+        }
+      }
     } catch (error) {
       console.error('Error loading learning outcomes:', error);
       setSaveStatus('error');
+    }
+  };
+
+  const loadProgramOutcomes = async () => {
+    if (!selectedCourse) return;
+    
+    try {
+      const course = courses.find(c => c.id === selectedCourse);
+      if (course?.department) {
+        const pos = await api.getProgramOutcomes({ department: course.department });
+        setProgramOutcomes(Array.isArray(pos) ? pos : []);
+      }
+    } catch (error) {
+      console.error('Error loading program outcomes:', error);
     }
   };
 
@@ -518,6 +549,86 @@ export default function LearningOutcomePage() {
                       className={`w-full p-3 rounded-lg ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'} border transition-colors focus:ring-2 focus:ring-indigo-500 outline-none`}
                     />
                     <p className={`${mutedText} text-xs mt-1`}>Default target percentage for this LO (0-100%)</p>
+                  </div>
+
+                  {/* Program Outcomes Mapping */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className={`block text-sm font-medium ${mutedText}`}>
+                        Program Outcomes Contribution (Optional)
+                      </label>
+                      <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => {
+                          if (programOutcomes.length === 0) {
+                            alert('No program outcomes found for this department. Please create program outcomes first.');
+                            return;
+                          }
+                          setNewLOPOs([...newLOPOs, { program_outcome: programOutcomes[0].id, weight: 1.0 }]);
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-xs ${isDark ? 'bg-indigo-500/20 text-indigo-300 hover:bg-indigo-500/30' : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'} transition-all flex items-center gap-1`}
+                      >
+                        <Plus className="w-3 h-3" />
+                        Add PO
+                      </motion.button>
+                    </div>
+                    <p className={`${mutedText} text-xs mb-3`}>
+                      Define how much this Learning Outcome contributes to each Program Outcome (weight: 0.1 - 10.0, default: 1.0 = 100%)
+                    </p>
+                    {newLOPOs.length === 0 ? (
+                      <div className={`p-4 rounded-lg ${isDark ? 'bg-white/5 border border-white/10' : 'bg-gray-50 border border-gray-200'} text-center`}>
+                        <p className={mutedText}>No Program Outcomes mapped yet. Click "Add PO" to add one.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {newLOPOs.map((mapping, index) => {
+                          const po = programOutcomes.find(p => p.id === mapping.program_outcome);
+                          return (
+                            <div key={index} className={`p-3 rounded-lg ${isDark ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-200'} flex items-center gap-3`}>
+                              <select
+                                value={mapping.program_outcome}
+                                onChange={(e) => {
+                                  const updated = [...newLOPOs];
+                                  updated[index].program_outcome = Number(e.target.value);
+                                  setNewLOPOs(updated);
+                                }}
+                                className={`flex-1 p-2 rounded-lg text-sm ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'} border focus:ring-2 focus:ring-indigo-500 outline-none`}
+                              >
+                                {programOutcomes.map(po => (
+                                  <option key={po.id} value={po.id}>{po.code} - {po.title}</option>
+                                ))}
+                              </select>
+                              <input
+                                type="number"
+                                min="0.1"
+                                max="10.0"
+                                step="0.1"
+                                value={mapping.weight}
+                                onChange={(e) => {
+                                  const updated = [...newLOPOs];
+                                  updated[index].weight = Number(e.target.value) || 1.0;
+                                  setNewLOPOs(updated);
+                                }}
+                                className="w-24 p-2 rounded-lg text-sm border focus:ring-2 focus:ring-indigo-500 outline-none"
+                                placeholder="Weight"
+                              />
+                              <span className={`text-xs ${mutedText}`}>×</span>
+                              <motion.button
+                                whileHover={{ scale: 1.1 }}
+                                whileTap={{ scale: 0.9 }}
+                                onClick={() => {
+                                  setNewLOPOs(newLOPOs.filter((_, i) => i !== index));
+                                }}
+                                className={`p-1.5 rounded ${isDark ? 'bg-red-500/20 text-red-300 hover:bg-red-500/30' : 'bg-red-100 text-red-600 hover:bg-red-200'} transition-all`}
+                              >
+                                <X className="w-4 h-4" />
+                              </motion.button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
 
