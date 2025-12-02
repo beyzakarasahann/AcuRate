@@ -130,3 +130,4 @@ Eğer şifre sıfırlama işlemi başarısız olursa:
    User.objects.filter(is_superuser=True).values('username', 'email', 'is_superuser')
    ```
 
+
