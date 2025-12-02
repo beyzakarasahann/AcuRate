@@ -57,6 +57,13 @@ if not DEBUG:
 
 # Application definition
 
+# Check if optional packages are available
+try:
+    import drf_spectacular
+    SPECTACULAR_AVAILABLE = True
+except ImportError:
+    SPECTACULAR_AVAILABLE = False
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -67,10 +74,13 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',  # For token blacklisting
-    'drf_spectacular',  # API Documentation
     'corsheaders',
     'api',
 ]
+
+# Add drf_spectacular only if available
+if SPECTACULAR_AVAILABLE:
+    INSTALLED_APPS.insert(-1, 'drf_spectacular')  # Add before 'api'
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
@@ -189,11 +199,13 @@ REST_FRAMEWORK = {
     ),
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
-    # API Documentation
-    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     # Exception handling
     'EXCEPTION_HANDLER': 'api.exceptions.custom_exception_handler',
 }
+
+# Add API Documentation schema only if drf-spectacular is available
+if SPECTACULAR_AVAILABLE:
+    REST_FRAMEWORK['DEFAULT_SCHEMA_CLASS'] = 'drf_spectacular.openapi.AutoSchema'
 
 # --- JWT Ayarları ---
 SIMPLE_JWT = {
@@ -205,17 +217,19 @@ SIMPLE_JWT = {
 }
 
 # --- API Documentation (drf-spectacular) ---
-SPECTACULAR_SETTINGS = {
-    'TITLE': 'AcuRate API',
-    'DESCRIPTION': 'Academic Performance Analysis System API Documentation',
-    'VERSION': '1.0.0',
-    'SERVE_INCLUDE_SCHEMA': False,
-    'COMPONENT_SPLIT_REQUEST': True,
-    'SCHEMA_PATH_PREFIX': '/api/',
-    'AUTHENTICATION_WHITELIST': [
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-    ],
-}
+# Only define if drf-spectacular is available
+if SPECTACULAR_AVAILABLE:
+    SPECTACULAR_SETTINGS = {
+        'TITLE': 'AcuRate API',
+        'DESCRIPTION': 'Academic Performance Analysis System API Documentation',
+        'VERSION': '1.0.0',
+        'SERVE_INCLUDE_SCHEMA': False,
+        'COMPONENT_SPLIT_REQUEST': True,
+        'SCHEMA_PATH_PREFIX': '/api/',
+        'AUTHENTICATION_WHITELIST': [
+            'rest_framework_simplejwt.authentication.JWTAuthentication',
+        ],
+    }
 
 # --- Rate Limiting ---
 RATELIMIT_ENABLE = not DEBUG  # Enable in production
@@ -230,49 +244,72 @@ MEDIA_ROOT = BASE_DIR / 'media'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # --- Logging Configuration ---
+# Check if python-json-logger is available
+try:
+    import pythonjsonlogger.jsonlogger
+    JSON_LOGGER_AVAILABLE = True
+except ImportError:
+    JSON_LOGGER_AVAILABLE = False
+
+# Build formatters dictionary
+formatters = {
+    'verbose': {
+        'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+        'style': '{',
+    },
+}
+
+# Add JSON formatter only if python-json-logger is available
+if JSON_LOGGER_AVAILABLE:
+    formatters['json'] = {
+        '()': 'pythonjsonlogger.jsonlogger.JsonFormatter',
+        'format': '%(asctime)s %(name)s %(levelname)s %(message)s %(pathname)s %(lineno)d',
+    }
+
+# Build handlers dictionary
+handlers = {
+    'console': {
+        'class': 'logging.StreamHandler',
+        'formatter': 'verbose',
+    },
+}
+
+# Create logs directory if it doesn't exist
+logs_dir = BASE_DIR / 'logs'
+os.makedirs(logs_dir, exist_ok=True)
+
+# Add file handler - use json formatter if available, otherwise verbose
+file_formatter = 'json' if JSON_LOGGER_AVAILABLE else 'verbose'
+handlers['file'] = {
+    'class': 'logging.FileHandler',
+    'filename': BASE_DIR / 'logs' / 'acurate.log',
+    'formatter': file_formatter,
+}
+
+# Determine which handlers to use
+# Use file handler only if logs directory exists and is writable
+log_handlers = ['console', 'file']
+loggers_handlers = ['console', 'file']
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
-    'formatters': {
-        'verbose': {
-            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
-            'style': '{',
-        },
-        'json': {
-            '()': 'pythonjsonlogger.jsonlogger.JsonFormatter',
-            'format': '%(asctime)s %(name)s %(levelname)s %(message)s %(pathname)s %(lineno)d',
-        },
-    },
-    'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
-            'formatter': 'verbose',
-        },
-        'file': {
-            'class': 'logging.FileHandler',
-            'filename': BASE_DIR / 'logs' / 'acurate.log',
-            'formatter': 'json',
-        },
-    },
+    'formatters': formatters,
+    'handlers': handlers,
     'root': {
         'handlers': ['console'],
         'level': 'INFO',
     },
     'loggers': {
         'django': {
-            'handlers': ['console', 'file'],
+            'handlers': loggers_handlers,
             'level': 'INFO',
             'propagate': False,
         },
         'api': {
-            'handlers': ['console', 'file'],
+            'handlers': loggers_handlers,
             'level': 'DEBUG' if DEBUG else 'INFO',
             'propagate': False,
         },
     },
 }
-
-# Create logs directory if it doesn't exist
-import os
-logs_dir = BASE_DIR / 'logs'
-os.makedirs(logs_dir, exist_ok=True)
