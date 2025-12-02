@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { FileText, Search, Save, Download, Upload, Filter, CheckCircle2, AlertCircle, User, BookOpen, Plus, X, Edit, TrendingUp, Info, Loader2, Trash2 } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import { useThemeColors } from '@/hooks/useThemeColors';
-import { api, type Course, type Assessment, type Enrollment, type StudentGrade } from '@/lib/api';
+import { api, type Course, type Assessment, type Enrollment, type StudentGrade, type LearningOutcome, type AssessmentLO } from '@/lib/api';
 
 // Assessment type seçenekleri (backend'deki AssessmentType ile uyumlu)
 const assessmentTypes = [
@@ -57,6 +57,9 @@ export default function TeacherGradesPage() {
     weight: 30,
     description: ''
   });
+  const [learningOutcomes, setLearningOutcomes] = useState<LearningOutcome[]>([]);
+  const [assessmentLOs, setAssessmentLOs] = useState<AssessmentLO[]>([]);
+  const [newAssessmentLOs, setNewAssessmentLOs] = useState<Array<{ learning_outcome: number; weight: number }>>([]);
 
   // Load data from backend
   useEffect(() => {
@@ -70,10 +73,13 @@ export default function TeacherGradesPage() {
       fetchAssessments(selectedCourse);
       fetchEnrollments(selectedCourse);
       fetchGrades(selectedCourse);
+      fetchLearningOutcomes(selectedCourse);
     } else {
       setAssessments([]);
       setEnrollments([]);
       setExistingGrades([]);
+      setLearningOutcomes([]);
+      setAssessmentLOs([]);
     }
   }, [selectedCourse]);
 
@@ -186,6 +192,26 @@ export default function TeacherGradesPage() {
       console.error('Failed to fetch grades:', err);
       setExistingGrades([]);
       setGrades({});
+    }
+  };
+
+  const fetchLearningOutcomes = async (courseId: number) => {
+    try {
+      const los = await api.getLearningOutcomes({ course: courseId });
+      setLearningOutcomes(Array.isArray(los) ? los : []);
+    } catch (err: any) {
+      console.error('Failed to fetch learning outcomes:', err);
+      setLearningOutcomes([]);
+    }
+  };
+
+  const fetchAssessmentLOs = async (assessmentId: number) => {
+    try {
+      const assessmentLOsData = await api.getAssessmentLOs({ assessment: assessmentId });
+      setAssessmentLOs(Array.isArray(assessmentLOsData) ? assessmentLOsData : []);
+    } catch (err: any) {
+      console.error('Failed to fetch assessment-LO mappings:', err);
+      setAssessmentLOs([]);
     }
   };
 
@@ -546,6 +572,21 @@ export default function TeacherGradesPage() {
         is_active: true
       });
 
+      // Create Assessment-LO mappings if any
+      if (newAssessmentLOs.length > 0) {
+        for (const mapping of newAssessmentLOs) {
+          try {
+            await api.createAssessmentLO({
+              assessment: createdAssessment.id,
+              learning_outcome: mapping.learning_outcome,
+              weight: mapping.weight
+            });
+          } catch (err: any) {
+            console.error('Failed to create Assessment-LO mapping:', err);
+          }
+        }
+      }
+
       // Refresh assessments
       await fetchAssessments(selectedCourse);
       
@@ -554,6 +595,7 @@ export default function TeacherGradesPage() {
 
       // Form'u temizle ve modal'ı kapat
       setNewAssessment({ title: '', type: 'MIDTERM', maxScore: 100, weight: 30, description: '' });
+      setNewAssessmentLOs([]);
       setShowCreateAssessment(false);
     } catch (err: any) {
       console.error('Failed to create assessment:', err);
@@ -1258,6 +1300,7 @@ export default function TeacherGradesPage() {
                     onClick={() => {
                       setShowCreateAssessment(false);
                       setNewAssessment({ title: '', type: 'MIDTERM', maxScore: 100, weight: 30, description: '' });
+                      setNewAssessmentLOs([]);
                     }}
                     className={`p-2 rounded-lg ${isDark ? 'hover:bg-white/10' : 'hover:bg-gray-100'} transition-all`}
                   >
@@ -1381,6 +1424,86 @@ export default function TeacherGradesPage() {
                       className={`w-full p-3 rounded-lg ${isDark ? 'bg-white/5 border-white/10 text-white placeholder-gray-500' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'} border transition-colors focus:ring-2 focus:ring-indigo-500 outline-none resize-none`}
                     />
                   </div>
+
+                  {/* Learning Outcomes Mapping */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className={`block text-sm font-medium ${mutedText}`}>
+                        Learning Outcomes Contribution (Optional)
+                      </label>
+                      <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => {
+                          if (learningOutcomes.length === 0) {
+                            alert('No learning outcomes found for this course. Please create learning outcomes first.');
+                            return;
+                          }
+                          setNewAssessmentLOs([...newAssessmentLOs, { learning_outcome: learningOutcomes[0].id, weight: 1.0 }]);
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-xs ${isDark ? 'bg-indigo-500/20 text-indigo-300 hover:bg-indigo-500/30' : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'} transition-all flex items-center gap-1`}
+                      >
+                        <Plus className="w-3 h-3" />
+                        Add LO
+                      </motion.button>
+                    </div>
+                    <p className={`${mutedText} text-xs mb-3`}>
+                      Define how much this assessment contributes to each Learning Outcome (weight: 0.1 - 10.0, default: 1.0 = 100%)
+                    </p>
+                    {newAssessmentLOs.length === 0 ? (
+                      <div className={`p-4 rounded-lg ${isDark ? 'bg-white/5 border border-white/10' : 'bg-gray-50 border border-gray-200'} text-center`}>
+                        <p className={mutedText}>No Learning Outcomes mapped yet. Click "Add LO" to add one.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {newAssessmentLOs.map((mapping, index) => {
+                          const lo = learningOutcomes.find(l => l.id === mapping.learning_outcome);
+                          return (
+                            <div key={index} className={`p-3 rounded-lg ${isDark ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-200'} flex items-center gap-3`}>
+                              <select
+                                value={mapping.learning_outcome}
+                                onChange={(e) => {
+                                  const updated = [...newAssessmentLOs];
+                                  updated[index].learning_outcome = Number(e.target.value);
+                                  setNewAssessmentLOs(updated);
+                                }}
+                                className={`flex-1 p-2 rounded-lg text-sm ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'} border focus:ring-2 focus:ring-indigo-500 outline-none`}
+                              >
+                                {learningOutcomes.map(lo => (
+                                  <option key={lo.id} value={lo.id}>{lo.code} - {lo.title}</option>
+                                ))}
+                              </select>
+                              <input
+                                type="number"
+                                min="0.1"
+                                max="10.0"
+                                step="0.1"
+                                value={mapping.weight}
+                                onChange={(e) => {
+                                  const updated = [...newAssessmentLOs];
+                                  updated[index].weight = Number(e.target.value) || 1.0;
+                                  setNewAssessmentLOs(updated);
+                                }}
+                                className="w-24 p-2 rounded-lg text-sm border focus:ring-2 focus:ring-indigo-500 outline-none"
+                                placeholder="Weight"
+                              />
+                              <span className={`text-xs ${mutedText}`}>×</span>
+                              <motion.button
+                                whileHover={{ scale: 1.1 }}
+                                whileTap={{ scale: 0.9 }}
+                                onClick={() => {
+                                  setNewAssessmentLOs(newAssessmentLOs.filter((_, i) => i !== index));
+                                }}
+                                className={`p-1.5 rounded ${isDark ? 'bg-red-500/20 text-red-300 hover:bg-red-500/30' : 'bg-red-100 text-red-600 hover:bg-red-200'} transition-all`}
+                              >
+                                <X className="w-4 h-4" />
+                              </motion.button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Action Buttons */}
@@ -1391,6 +1514,7 @@ export default function TeacherGradesPage() {
                     onClick={() => {
                       setShowCreateAssessment(false);
                       setNewAssessment({ title: '', type: 'MIDTERM', maxScore: 100, weight: 30, description: '' });
+                      setNewAssessmentLOs([]);
                     }}
                     className={`px-6 py-2 rounded-xl ${isDark ? 'bg-white/5 hover:bg-white/10 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'} transition-all`}
                   >

@@ -6,6 +6,7 @@ export function middleware(request: NextRequest) {
   // Get auth token and role from cookies
   const authToken = request.cookies.get('auth_token')?.value;
   const userRole = request.cookies.get('user_role')?.value;
+  const isTemporaryPassword = request.cookies.get('is_temporary_password')?.value === 'true';
 
   // Check if user is authenticated
   if (!authToken) {
@@ -13,6 +14,25 @@ export function middleware(request: NextRequest) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirect', pathname);
     return NextResponse.redirect(loginUrl);
+  }
+
+  // If user has temporary password, force them to change it
+  // Allow access to change password pages and settings pages
+  if (isTemporaryPassword) {
+    const isChangePasswordPage = 
+      pathname.includes('/change-password') || 
+      pathname.includes('/settings');
+    
+    if (!isChangePasswordPage) {
+      // Redirect to appropriate change password page based on role
+      const changePasswordRedirect: Record<string, string> = {
+        'student': '/student/settings',
+        'teacher': '/teacher/change-password',
+        'institution': '/institution/change-password'
+      };
+      const redirectPath = changePasswordRedirect[userRole || ''] || '/login';
+      return NextResponse.redirect(new URL(redirectPath, request.url));
+    }
   }
 
   // Check role-based access
