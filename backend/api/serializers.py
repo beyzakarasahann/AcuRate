@@ -436,13 +436,14 @@ class CourseDetailSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
     
-    def get_teacher_name(self, obj):
+    def get_teacher_name(self, obj) -> str | None:
         """Safely get teacher's full name, handling null teacher"""
         if obj.teacher:
             return obj.teacher.get_full_name() or obj.teacher.username
         return None
     
-    def get_enrollment_count(self, obj):
+    def get_enrollment_count(self, obj) -> int:
+        """Get count of active enrollments for this course"""
         return obj.enrollments.filter(is_active=True).count()
 
 
