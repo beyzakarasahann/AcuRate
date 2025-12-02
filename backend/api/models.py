@@ -430,8 +430,61 @@ class LearningOutcome(models.Model):
         verbose_name = 'Learning Outcome'
         verbose_name_plural = 'Learning Outcomes'
     
+    program_outcomes = models.ManyToManyField(
+        ProgramOutcome,
+        through='LOPO',
+        related_name='learning_outcomes',
+        blank=True,
+        help_text="Program outcomes this LO contributes to"
+    )
+    
     def __str__(self):
         return f"{self.course.code} - {self.code}: {self.title}"
+
+
+# =============================================================================
+# LO-PO MAPPING MODEL
+# =============================================================================
+
+class LOPO(models.Model):
+    """
+    Through model for LearningOutcome-ProgramOutcome relationship.
+    Allows weighting of how much each LO contributes to a PO.
+    """
+    
+    learning_outcome = models.ForeignKey(
+        LearningOutcome,
+        on_delete=models.CASCADE,
+        related_name='lo_pos',
+        help_text="Learning Outcome"
+    )
+    
+    program_outcome = models.ForeignKey(
+        ProgramOutcome,
+        on_delete=models.CASCADE,
+        related_name='lo_pos',
+        help_text="Program Outcome"
+    )
+    
+    weight = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=1.00,
+        validators=[MinValueValidator(0.1), MaxValueValidator(10.0)],
+        help_text="Weight/contribution of this LO to the PO (default: 1.0, meaning 100%)"
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'lo_program_outcomes'
+        unique_together = ['learning_outcome', 'program_outcome']
+        verbose_name = 'LO-PO Mapping'
+        verbose_name_plural = 'LO-PO Mappings'
+    
+    def __str__(self):
+        return f"{self.learning_outcome.code} → {self.program_outcome.code} (weight: {self.weight})"
 
 
 # =============================================================================
@@ -558,9 +611,10 @@ class Assessment(models.Model):
     
     related_los = models.ManyToManyField(
         LearningOutcome,
+        through='AssessmentLO',
         related_name='assessments',
         blank=True,
-        help_text="Learning outcomes this assessment evaluates"
+        help_text="Learning outcomes this assessment evaluates (with weights)"
     )
     
     due_date = models.DateTimeField(
@@ -607,6 +661,53 @@ class Assessment(models.Model):
                 return range_item.get('feedback', '')
         
         return ""
+
+
+# =============================================================================
+# ASSESSMENT-LO MAPPING MODEL
+# =============================================================================
+
+class AssessmentLO(models.Model):
+    """
+    Through model for Assessment-LearningOutcome relationship.
+    Allows weighting of how much each assessment contributes to an LO.
+    This is used to calculate LO scores from assessment scores.
+    Example: Midterm %60 + Project %40 → LO
+    """
+    
+    assessment = models.ForeignKey(
+        Assessment,
+        on_delete=models.CASCADE,
+        related_name='assessment_los',
+        help_text="Assessment"
+    )
+    
+    learning_outcome = models.ForeignKey(
+        LearningOutcome,
+        on_delete=models.CASCADE,
+        related_name='assessment_los',
+        help_text="Learning Outcome"
+    )
+    
+    weight = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=1.00,
+        validators=[MinValueValidator(0.1), MaxValueValidator(10.0)],
+        help_text="Weight/contribution of this assessment to the LO (default: 1.0)"
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'assessment_learning_outcomes'
+        unique_together = ['assessment', 'learning_outcome']
+        verbose_name = 'Assessment-LO Mapping'
+        verbose_name_plural = 'Assessment-LO Mappings'
+    
+    def __str__(self):
+        return f"{self.assessment.title} → {self.learning_outcome.code} (weight: {self.weight})"
 
 
 # =============================================================================
@@ -964,6 +1065,7 @@ class ActivityLog(models.Model):
         PO_CREATED = 'po_created', 'Program Outcome Created'
         PO_UPDATED = 'po_updated', 'Program Outcome Updated'
         LOGIN = 'login', 'User Login'
+        PASSWORD_RESET = 'password_reset', 'Password Reset'
     
     action_type = models.CharField(
         max_length=50,

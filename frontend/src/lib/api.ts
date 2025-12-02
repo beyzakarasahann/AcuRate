@@ -84,6 +84,21 @@ export interface Course {
   department: string;
   teacher: number;
   teacher_name: string;
+  program_outcomes?: Array<{
+    id: number;
+    program_outcome: number;
+    po_code: string;
+    po_title: string;
+    weight: number | string;
+  }>;
+  learning_outcomes?: Array<{
+    id: number;
+    code: string;
+    title: string;
+    description: string;
+    course: number;
+    target_percentage: number;
+  }>;
   created_at?: string;
   updated_at?: string;
 }
@@ -120,6 +135,34 @@ export interface Assessment {
   type_display?: string;
   weight: number;
   max_score: number;
+}
+
+export interface AssessmentLO {
+  id: number;
+  assessment: number;
+  assessment_title?: string;
+  assessment_type?: string;
+  learning_outcome: number;
+  lo_code?: string;
+  lo_title?: string;
+  course_code?: string;
+  weight: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface LOPO {
+  id: number;
+  learning_outcome: number;
+  lo_code?: string;
+  lo_title?: string;
+  program_outcome: number;
+  po_code?: string;
+  po_title?: string;
+  course_code?: string;
+  weight: number;
+  created_at?: string;
+  updated_at?: string;
   due_date?: string;
   is_active: boolean;
   related_pos?: number[];
@@ -601,12 +644,31 @@ class ApiClient {
         throw error;
       }
       
-      // Handle unknown errors
-      console.error('API Error:', error);
+      // Handle unknown errors - convert to string properly
+      let errorMessage = 'An unexpected error occurred';
+      if (error && typeof error === 'object') {
+        try {
+          // Try to extract meaningful error info from object
+          if ('message' in error && typeof error.message === 'string') {
+            errorMessage = error.message;
+          } else if ('error' in error && typeof error.error === 'string') {
+            errorMessage = error.error;
+          } else {
+            // Try to stringify the error object
+            errorMessage = JSON.stringify(error);
+          }
+        } catch {
+          // If JSON.stringify fails, use a generic message
+          errorMessage = 'An unexpected error occurred';
+        }
+      } else if (error) {
+        errorMessage = String(error);
+      }
+      
       // Include endpoint info if available
       const endpointInfo = requestEndpoint ? ` on ${method} ${requestEndpoint}` : '';
-      const errorDetails = error instanceof Error ? error.message : String(error);
-      throw new Error(`An unexpected error occurred${endpointInfo}: ${errorDetails}. Please check the console for details.`);
+      console.error('API Error:', errorMessage);
+      throw new Error(`${errorMessage}${endpointInfo}. Please check the console for details.`);
     }
   }
 
@@ -706,6 +768,51 @@ class ApiClient {
     });
     if (!response.success) {
       throw new Error(response.error || response.message || 'Failed to change password');
+    }
+  }
+
+  async forgotPassword(data: { username?: string; email?: string }): Promise<{ success: boolean; message?: string; error?: string }> {
+    try {
+      const response = await this.request<{ success: boolean; message?: string; error?: string }>('/auth/forgot-password/', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+      return response;
+    } catch (error: any) {
+      // Handle error properly - extract message from error object
+      let errorMessage = 'Failed to process password reset request. Please try again.';
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (error && typeof error === 'object') {
+        // Try to extract error message from object
+        if ('error' in error && typeof error.error === 'string') {
+          errorMessage = error.error;
+        } else if ('message' in error && typeof error.message === 'string') {
+          errorMessage = error.message;
+        } else if ('detail' in error && typeof error.detail === 'string') {
+          errorMessage = error.detail;
+        } else {
+          // If it's an object but we can't extract a message, stringify it
+          try {
+            const errorStr = JSON.stringify(error);
+            // Only use stringified version if it's not just "[object Object]"
+            if (errorStr && errorStr !== '{}' && !errorStr.includes('[object')) {
+              errorMessage = errorStr;
+            }
+          } catch {
+            // If stringify fails, use default message
+          }
+        }
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      
+      // Return error response in expected format
+      return {
+        success: false,
+        error: errorMessage
+      };
     }
   }
 
@@ -1615,6 +1722,74 @@ class ApiClient {
       endpoint += `?${queryString}`;
     }
     return await this.request<{ success: boolean; logs: ActivityLog[]; count: number }>(endpoint);
+  }
+
+  // Assessment-LO Mappings
+  async getAssessmentLOs(params?: { assessment?: number; learning_outcome?: number }): Promise<AssessmentLO[]> {
+    const queryParams = new URLSearchParams();
+    if (params?.assessment) queryParams.append('assessment', params.assessment.toString());
+    if (params?.learning_outcome) queryParams.append('learning_outcome', params.learning_outcome.toString());
+    
+    const queryString = queryParams.toString();
+    let endpoint = '/assessment-los/';
+    if (queryString) {
+      endpoint += `?${queryString}`;
+    }
+    return await this.request<AssessmentLO[]>(endpoint);
+  }
+
+  async createAssessmentLO(data: Partial<AssessmentLO>): Promise<AssessmentLO> {
+    return await this.request<AssessmentLO>('/assessment-los/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateAssessmentLO(id: number, data: Partial<AssessmentLO>): Promise<AssessmentLO> {
+    return await this.request<AssessmentLO>(`/assessment-los/${id}/`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteAssessmentLO(id: number): Promise<void> {
+    return await this.request(`/assessment-los/${id}/`, {
+      method: 'DELETE',
+    });
+  }
+
+  // LO-PO Mappings
+  async getLOPOs(params?: { learning_outcome?: number; program_outcome?: number }): Promise<LOPO[]> {
+    const queryParams = new URLSearchParams();
+    if (params?.learning_outcome) queryParams.append('learning_outcome', params.learning_outcome.toString());
+    if (params?.program_outcome) queryParams.append('program_outcome', params.program_outcome.toString());
+    
+    const queryString = queryParams.toString();
+    let endpoint = '/lo-pos/';
+    if (queryString) {
+      endpoint += `?${queryString}`;
+    }
+    return await this.request<LOPO[]>(endpoint);
+  }
+
+  async createLOPO(data: Partial<LOPO>): Promise<LOPO> {
+    return await this.request<LOPO>('/lo-pos/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateLOPO(id: number, data: Partial<LOPO>): Promise<LOPO> {
+    return await this.request<LOPO>(`/lo-pos/${id}/`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteLOPO(id: number): Promise<void> {
+    return await this.request(`/lo-pos/${id}/`, {
+      method: 'DELETE',
+    });
   }
 }
 

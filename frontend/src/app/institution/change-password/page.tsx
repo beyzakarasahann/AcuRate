@@ -75,13 +75,24 @@ export default function InstitutionChangePasswordPage() {
       );
 
       setSuccess(true);
-      // Clear the must_change_password cookie
-      document.cookie = 'must_change_password=false; path=/; max-age=0';
+      // Clear the temporary password cookie
+      document.cookie = 'is_temporary_password=false; path=/; max-age=0';
       
-      // Redirect after 2 seconds
-      setTimeout(() => {
-        router.push('/institution');
-      }, 2000);
+      // Refresh user data to get updated is_temporary_password status
+      try {
+        const updatedUser = await api.getCurrentUser();
+        if (!updatedUser.is_temporary_password) {
+          // Redirect after 2 seconds
+          setTimeout(() => {
+            router.push('/institution');
+          }, 2000);
+        }
+      } catch {
+        // If API call fails, still redirect after 2 seconds
+        setTimeout(() => {
+          router.push('/institution');
+        }, 2000);
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to change password. Please try again.');
     } finally {

@@ -31,6 +31,10 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotMessage, setForgotMessage] = useState('');
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
 
   // Not: useEffect(() => { setMounted(true); }, []); kaldırıldı.
 
@@ -80,6 +84,24 @@ export default function LoginPage() {
         document.cookie = `user_role=${response.user.role.toLowerCase()}; path=/; max-age=86400`;
         document.cookie = `username=${response.user.username}; path=/; max-age=86400`;
         document.cookie = `auth_token=authenticated; path=/; max-age=86400`;
+        
+        // Store temporary password flag in cookie for middleware
+        if (response.user.is_temporary_password) {
+          document.cookie = `is_temporary_password=true; path=/; max-age=86400`;
+        } else {
+          document.cookie = `is_temporary_password=false; path=/; max-age=86400`;
+        }
+
+        // If user has temporary password, force them to change it
+        if (response.user.is_temporary_password) {
+          const changePasswordRedirect: Record<string, string> = {
+            'STUDENT': '/student/settings', // Student doesn't have separate change password page
+            'TEACHER': '/teacher/change-password',
+            'INSTITUTION': '/institution/change-password'
+          };
+          router.push(changePasswordRedirect[response.user.role] || '/');
+          return;
+        }
 
         // Redirect based on role (only for non-super-admin users)
         const roleRedirect: Record<string, string> = {
@@ -100,12 +122,82 @@ export default function LoginPage() {
       if (errorMessage.includes('Failed to fetch') || errorMessage.includes('Network')) {
         setError('Unable to connect to the server. Please check your internet connection and try again.');
       } else if (errorMessage.includes('status 400') || errorMessage.includes('status 401')) {
-        setError('Incorrect username or password');
+        setError('Incorrect email or password');
       } else {
         setError(errorMessage);
       }
       setLoading(false);
     }
+  };
+
+  const handleForgotPassword = async (e?: React.FormEvent) => {
+    if (e) {
+      e.preventDefault();
+    }
+
+    // E-posta girilmediyse uyar
+    if (!forgotEmail.trim()) {
+      setError('Please enter your email address to receive a new temporary password.');
+      return;
+    }
+
+    setError('');
+    setForgotMessage('');
+    setForgotLoading(true);
+
+    try {
+      const response = await api.forgotPassword({ email: forgotEmail.trim() });
+      if (response.success) {
+        setForgotMessage(
+          response.message ||
+            'If an account with this email exists, a temporary password has been sent to your email address.'
+        );
+        // Başarılı mesajdan sonra 3 saniye bekle ve login formuna geri dön
+        setTimeout(() => {
+          setShowForgotPassword(false);
+          setForgotEmail('');
+          setForgotMessage('');
+        }, 3000);
+      } else {
+        setError(response.error || 'Failed to process password reset request. Please try again.');
+      }
+    } catch (err: any) {
+      // Extract error message properly
+      let errorMessage = 'An error occurred while processing your request. Please try again later.';
+      
+      if (err instanceof Error) {
+        errorMessage = err.message;
+      } else if (err && typeof err === 'object') {
+        // Try to extract message from error object
+        if (err.message && typeof err.message === 'string') {
+          errorMessage = err.message;
+        } else if (err.error && typeof err.error === 'string') {
+          errorMessage = err.error;
+        } else if (typeof err === 'string') {
+          errorMessage = err;
+        }
+      } else if (typeof err === 'string') {
+        errorMessage = err;
+      }
+      
+      setError(errorMessage);
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  const handleForgotPasswordClick = () => {
+    setShowForgotPassword(true);
+    setError('');
+    setForgotMessage('');
+    setForgotEmail('');
+  };
+
+  const handleBackToLogin = () => {
+    setShowForgotPassword(false);
+    setForgotEmail('');
+    setError('');
+    setForgotMessage('');
   };
 
   // 2. ✨ YENİ: Temayı değiştirme fonksiyonu
@@ -277,26 +369,113 @@ export default function LoginPage() {
             className={`backdrop-blur-xl rounded-2xl p-8 shadow-2xl transition-colors duration-500 ${cardBgClass}`}
           >
             <div className="mb-8">
-              <h2 className={`text-2xl font-bold mb-2 ${textColorClass}`}>Sign In</h2>
+              <h2 className={`text-2xl font-bold mb-2 ${textColorClass}`}>
+                {showForgotPassword ? 'Reset Password' : 'Sign In'}
+              </h2>
               <p className={`text-sm ${mutedTextColorClass}`}>
-                Enter your credentials to access your dashboard
+                {showForgotPassword
+                  ? 'Enter your email address to receive a new temporary password'
+                  : 'Enter your credentials to access your dashboard'}
               </p>
             </div>
 
-            <form onSubmit={handleLogin} className="space-y-6">
-              {/* Username */}
+            {showForgotPassword ? (
+              /* Forgot Password Form */
+              <form onSubmit={handleForgotPassword} className="space-y-6">
+                {/* Email Input */}
+                <div>
+                  <label className={`text-sm font-medium mb-2 block ${textColorClass}`}>
+                    Email Address
+                  </label>
+                  <div className="relative">
+                    <User className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 ${isDark ? 'text-gray-400' : 'text-gray-500'}`} />
+                    <input
+                      type="email"
+                      value={forgotEmail}
+                      onChange={(e) => setForgotEmail(e.target.value)}
+                      className={`w-full pl-12 pr-4 py-3 rounded-xl focus:outline-none focus:border-indigo-500/50 transition-all ${inputBgClass} ${inputPlaceholderClass} ${inputFocusClass}`}
+                      placeholder="Enter your email address"
+                      required
+                      autoFocus
+                    />
+                  </div>
+                </div>
+
+                {/* Success Message */}
+                {forgotMessage && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={`border rounded-xl p-4 text-sm ${isDark ? 'bg-green-500/10 border-green-500/30 text-green-300' : 'bg-green-100 border-green-400 text-green-700'}`}
+                  >
+                    {forgotMessage}
+                  </motion.div>
+                )}
+
+                {/* Error Message */}
+                {error && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={`border rounded-xl p-4 text-sm ${isDark ? 'bg-red-500/10 border-red-500/30 text-red-300' : 'bg-red-100 border-red-400 text-red-700'}`}
+                  >
+                    {error}
+                  </motion.div>
+                )}
+
+                {/* Submit Button */}
+                <motion.button
+                  type="submit"
+                  disabled={forgotLoading}
+                  whileHover={{ scale: forgotLoading ? 1 : 1.02 }}
+                  whileTap={{ scale: forgotLoading ? 1 : 0.98 }}
+                  className={`w-full py-3 rounded-xl font-semibold text-white shadow-lg transition-all ${
+                    forgotLoading
+                      ? 'bg-gray-500 cursor-not-allowed'
+                      : `bg-gradient-to-r ${accentGradientClass} hover:from-indigo-500 hover:to-purple-500 shadow-indigo-500/30`
+                  }`}
+                >
+                  {forgotLoading ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                        className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full"
+                      />
+                      Sending temporary password...
+                    </div>
+                  ) : (
+                    'Send Temporary Password'
+                  )}
+                </motion.button>
+
+                {/* Back to Login */}
+                <div className="text-center">
+                  <button
+                    type="button"
+                    onClick={handleBackToLogin}
+                    className={`text-sm ${isDark ? 'text-indigo-400 hover:text-indigo-300' : 'text-indigo-600 hover:text-indigo-700'} transition-colors`}
+                  >
+                    ← Back to login
+                  </button>
+                </div>
+              </form>
+            ) : (
+              /* Normal Login Form */
+              <form onSubmit={handleLogin} className="space-y-6">
+              {/* Email Address */}
               <div>
                 <label className={`text-sm font-medium mb-2 block ${textColorClass}`}>
-                  Username
+                  Email Address
                 </label>
                 <div className="relative">
                   <User className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 ${isDark ? 'text-gray-400' : 'text-gray-500'}`} />
                   <input
-                    type="text"
+                    type="email"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     className={`w-full pl-12 pr-4 py-3 rounded-xl focus:outline-none focus:border-indigo-500/50 transition-all ${inputBgClass} ${inputPlaceholderClass} ${inputFocusClass}`}
-                    placeholder="Enter username"
+                    placeholder="Enter your email address"
                     required
                   />
                 </div>
@@ -344,6 +523,7 @@ export default function LoginPage() {
                 </label>
                 <button
                   type="button"
+                  onClick={handleForgotPasswordClick}
                   className="text-indigo-400 hover:text-indigo-300 text-sm transition-colors"
                 >
                   Forgot password?
@@ -387,8 +567,7 @@ export default function LoginPage() {
                 )}
               </motion.button>
             </form>
-
-            {/* Footer */}
+            )}
             <div className={`mt-8 pt-6 border-t text-center ${isDark ? 'border-white/10' : 'border-gray-200'}`}>
               <p className={`text-sm ${mutedTextColorClass}`}>
                 Don't you have an account?{' '}

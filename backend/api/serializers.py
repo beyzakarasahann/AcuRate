@@ -5,12 +5,14 @@ Converts Django models to/from JSON for REST API endpoints
 
 from rest_framework import serializers
 from django.contrib.auth import authenticate
+from django.db.models import Q
 import secrets
 import string
 from .models import (
     User, Department, ProgramOutcome, Course, CoursePO, 
     Enrollment, Assessment, StudentGrade, StudentPOAchievement,
-    ContactRequest, LearningOutcome, StudentLOAchievement
+    ContactRequest, LearningOutcome, StudentLOAchievement,
+    AssessmentLO, LOPO
 )
 
 
@@ -289,13 +291,30 @@ class LoginSerializer(serializers.Serializer):
         if not username_or_email or not password:
             raise serializers.ValidationError("Username/email and password are required")
         
-        # Try to authenticate - first try as username, then as email
-        user = authenticate(username=username_or_email, password=password)
+        user = None
         
-        # If username authentication failed, try email
+        # Try to find user by username (case-insensitive) or email (case-insensitive)
+        try:
+            # First try to find by username (case-insensitive)
+            user_obj = User.objects.filter(
+                Q(username__iexact=username_or_email) | 
+                Q(email__iexact=username_or_email)
+            ).first()
+            
+            if user_obj:
+                # Authenticate with the actual username from database
+                user = authenticate(username=user_obj.username, password=password)
+        except Exception:
+            user = None
+        
+        # Fallback: try direct authentication (in case of encoding issues)
+        if not user:
+            user = authenticate(username=username_or_email, password=password)
+        
+        # If still not authenticated, try email lookup
         if not user:
             try:
-                user_obj = User.objects.get(email=username_or_email)
+                user_obj = User.objects.get(email__iexact=username_or_email)
                 user = authenticate(username=user_obj.username, password=password)
             except User.DoesNotExist:
                 user = None
@@ -746,4 +765,48 @@ class StudentLOAchievementSerializer(serializers.ModelSerializer):
             'last_calculated', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'last_calculated', 'created_at', 'updated_at']
+
+
+# =============================================================================
+# ASSESSMENT-LO MAPPING SERIALIZERS
+# =============================================================================
+
+class AssessmentLOSerializer(serializers.ModelSerializer):
+    """Serializer for Assessment-LO mapping"""
+    assessment_title = serializers.CharField(source='assessment.title', read_only=True)
+    assessment_type = serializers.CharField(source='assessment.assessment_type', read_only=True)
+    lo_code = serializers.CharField(source='learning_outcome.code', read_only=True)
+    lo_title = serializers.CharField(source='learning_outcome.title', read_only=True)
+    course_code = serializers.CharField(source='assessment.course.code', read_only=True)
+    
+    class Meta:
+        model = AssessmentLO
+        fields = [
+            'id', 'assessment', 'assessment_title', 'assessment_type',
+            'learning_outcome', 'lo_code', 'lo_title', 'course_code',
+            'weight', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+# =============================================================================
+# LO-PO MAPPING SERIALIZERS
+# =============================================================================
+
+class LOPOSerializer(serializers.ModelSerializer):
+    """Serializer for LO-PO mapping"""
+    lo_code = serializers.CharField(source='learning_outcome.code', read_only=True)
+    lo_title = serializers.CharField(source='learning_outcome.title', read_only=True)
+    po_code = serializers.CharField(source='program_outcome.code', read_only=True)
+    po_title = serializers.CharField(source='program_outcome.title', read_only=True)
+    course_code = serializers.CharField(source='learning_outcome.course.code', read_only=True)
+    
+    class Meta:
+        model = LOPO
+        fields = [
+            'id', 'learning_outcome', 'lo_code', 'lo_title',
+            'program_outcome', 'po_code', 'po_title', 'course_code',
+            'weight', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
 
