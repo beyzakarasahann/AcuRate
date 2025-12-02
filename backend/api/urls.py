@@ -8,7 +8,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 
 from .views import (
     # Auth views
-    login_view, logout_view, current_user_view, register_view, create_teacher_view,
+    login_view, logout_view, current_user_view, register_view, create_teacher_view, forgot_password_view,
     # Dashboard views
     student_dashboard, teacher_dashboard, institution_dashboard, super_admin_dashboard,
     # Super Admin views
@@ -24,7 +24,8 @@ from .views import (
     # ViewSets
     DepartmentViewSet, UserViewSet, ProgramOutcomeViewSet, LearningOutcomeViewSet, CourseViewSet,
     EnrollmentViewSet, AssessmentViewSet, StudentGradeViewSet,
-    StudentPOAchievementViewSet, StudentLOAchievementViewSet, ContactRequestViewSet
+    StudentPOAchievementViewSet, StudentLOAchievementViewSet, ContactRequestViewSet,
+    AssessmentLOViewSet, LOPOViewSet
 )
 from .views_file_upload import upload_profile_picture, upload_file
 from .views_bulk_operations import bulk_import_students, bulk_export_grades, bulk_import_grades
@@ -42,6 +43,8 @@ router.register(r'grades', StudentGradeViewSet, basename='grade')
 router.register(r'po-achievements', StudentPOAchievementViewSet, basename='poachievement')
 router.register(r'lo-achievements', StudentLOAchievementViewSet, basename='loachievement')
 router.register(r'contact-requests', ContactRequestViewSet, basename='contactrequest')
+router.register(r'assessment-los', AssessmentLOViewSet, basename='assessmentlo')
+router.register(r'lo-pos', LOPOViewSet, basename='lopo')
 
 app_name = 'api'
 
@@ -50,6 +53,7 @@ urlpatterns = [
     path('auth/login/', login_view, name='login'),
     path('auth/logout/', logout_view, name='logout'),
     path('auth/register/', register_view, name='register'),
+    path('auth/forgot-password/', forgot_password_view, name='forgot-password'),
     path('auth/me/', current_user_view, name='current-user'),
     path('auth/token/refresh/', TokenRefreshView.as_view(), name='token-refresh'),
     path('teachers/', create_teacher_view, name='create-teacher'),
