@@ -31,15 +31,31 @@ if os.environ.get("SENDGRID_SKIP_SSL_VERIFY", "").lower() == "true":
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-g#z9@_6j&#)fl!x#ymg^71a!n_jv_jpt1yh-_337xpf_n1wx0!')
-
 # SECURITY WARNING: don't run with debug turned on in production!
 # Default to True for development, set DJANGO_DEBUG=False in production
 DEBUG = os.environ.get('DJANGO_DEBUG', 'True').lower() == 'true'
 
+# SECURITY WARNING: keep the secret key used in production secret!
+# In production, SECRET_KEY must be set via environment variable
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
+if not SECRET_KEY:
+    if DEBUG:
+        # Only use default in development
+        SECRET_KEY = 'django-insecure-g#z9@_6j&#)fl!x#ymg^71a!n_jv_jpt1yh-_337xpf_n1wx0!'
+    else:
+        raise ValueError("SECRET_KEY environment variable must be set in production!")
+
 allowed_hosts = os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1')
 ALLOWED_HOSTS = [host.strip() for host in allowed_hosts.split(',') if host.strip()]
+
+# Production security check
+if not DEBUG and (not SECRET_KEY or SECRET_KEY.startswith('django-insecure-')):
+    import warnings
+    warnings.warn(
+        "⚠️  PRODUCTION WARNING: Using insecure SECRET_KEY in production! "
+        "Set DJANGO_SECRET_KEY environment variable with a secure key.",
+        UserWarning
+    )
 
 # Security settings for production
 if not DEBUG:
@@ -230,6 +246,43 @@ if SPECTACULAR_AVAILABLE:
             'rest_framework_simplejwt.authentication.JWTAuthentication',
         ],
     }
+
+# --- Caching Configuration ---
+# Use local memory cache for development, Redis for production
+CACHE_BACKEND = os.environ.get('CACHE_BACKEND', 'local')  # 'local' or 'redis'
+
+if CACHE_BACKEND == 'redis':
+    # Redis cache for production
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'LOCATION': os.environ.get('REDIS_URL', 'redis://127.0.0.1:6379/1'),
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            },
+            'KEY_PREFIX': 'acurate',
+            'TIMEOUT': 300,  # Default timeout: 5 minutes
+        }
+    }
+else:
+    # Local memory cache for development
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'acurate-cache',
+            'TIMEOUT': 300,  # Default timeout: 5 minutes
+            'OPTIONS': {
+                'MAX_ENTRIES': 1000,
+            }
+        }
+    }
+
+# Cache key prefixes
+CACHE_KEY_PREFIX = 'acurate'
+CACHE_TIMEOUT_SHORT = 60  # 1 minute - for frequently changing data
+CACHE_TIMEOUT_MEDIUM = 300  # 5 minutes - default
+CACHE_TIMEOUT_LONG = 3600  # 1 hour - for relatively static data
+CACHE_TIMEOUT_ANALYTICS = 600  # 10 minutes - for analytics/dashboard data
 
 # --- Rate Limiting ---
 RATELIMIT_ENABLE = not DEBUG  # Enable in production

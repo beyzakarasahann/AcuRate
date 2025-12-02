@@ -24,6 +24,7 @@ from .models import (
     AssessmentLO, LOPO
 )
 from .utils import log_activity, get_institution_for_user
+from .cache_utils import cache_response, invalidate_dashboard_cache
 from .serializers import (
     UserSerializer, UserDetailSerializer, UserCreateSerializer, LoginSerializer,
     TeacherCreateSerializer, InstitutionCreateSerializer,
@@ -247,7 +248,7 @@ def create_teacher_view(request):
     Body: { "email", "first_name", "last_name", "department" }
     """
     user = request.user
-    if user.role != User.Role.INSTITUTION and not user.is_staff:
+    if not hasattr(user, 'role') or (user.role != User.Role.INSTITUTION and not user.is_staff):
         return Response(
             {"detail": "Only institution admins can create teachers."},
             status=status.HTTP_403_FORBIDDEN,
@@ -258,7 +259,7 @@ def create_teacher_view(request):
         teacher = serializer.save()
         
         # Log teacher creation
-        institution = get_institution_for_user(request.user) or request.user if request.user.role == User.Role.INSTITUTION else None
+        institution = get_institution_for_user(request.user) or (request.user if hasattr(request.user, 'role') and request.user.role == User.Role.INSTITUTION else None)
         log_activity(
             action_type=ActivityLog.ActionType.USER_CREATED,
             user=request.user,
@@ -483,7 +484,7 @@ class UserViewSet(viewsets.ModelViewSet):
         instance = serializer.save()
         
         # Log user creation
-        institution = get_institution_for_user(request.user) or (request.user if request.user.role == User.Role.INSTITUTION else None)
+        institution = get_institution_for_user(request.user) or (request.user if hasattr(request.user, 'role') and request.user.role == User.Role.INSTITUTION else None)
         log_activity(
             action_type=ActivityLog.ActionType.USER_CREATED,
             user=request.user,
@@ -507,7 +508,7 @@ class UserViewSet(viewsets.ModelViewSet):
         self.perform_update(serializer)
         
         # Log user update
-        institution = get_institution_for_user(request.user) or (request.user if request.user.role == User.Role.INSTITUTION else None)
+        institution = get_institution_for_user(request.user) or (request.user if hasattr(request.user, 'role') and request.user.role == User.Role.INSTITUTION else None)
         log_activity(
             action_type=ActivityLog.ActionType.USER_UPDATED,
             user=request.user,
@@ -527,13 +528,13 @@ class UserViewSet(viewsets.ModelViewSet):
         user = request.user
         
         # Only INSTITUTION role or admin can delete users
-        if user.role != User.Role.INSTITUTION and not user.is_staff:
+        if not hasattr(user, 'role') or (user.role != User.Role.INSTITUTION and not user.is_staff):
             return Response({
                 'error': 'Only institution admins can delete users'
             }, status=status.HTTP_403_FORBIDDEN)
         
         # Log user deletion before deleting
-        institution = get_institution_for_user(user) or (user if user.role == User.Role.INSTITUTION else None)
+        institution = get_institution_for_user(user) or (user if hasattr(user, 'role') and user.role == User.Role.INSTITUTION else None)
         log_activity(
             action_type=ActivityLog.ActionType.USER_DELETED,
             user=user,
@@ -587,13 +588,13 @@ class DepartmentViewSet(viewsets.ModelViewSet):
         """Only allow INSTITUTION role to create/update/delete departments"""
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
             # Check if user is INSTITUTION or staff
-            if self.request.user.role != User.Role.INSTITUTION and not self.request.user.is_staff:
+            if not hasattr(self.request.user, 'role') or (self.request.user.role != User.Role.INSTITUTION and not self.request.user.is_staff):
                 return [IsAdminUser()]  # This will deny access
         return [IsAuthenticated()]
     
     def create(self, request, *args, **kwargs):
         """Only INSTITUTION can create departments"""
-        if request.user.role != User.Role.INSTITUTION and not request.user.is_staff:
+        if not hasattr(request.user, 'role') or (request.user.role != User.Role.INSTITUTION and not request.user.is_staff):
             return Response({
                 'error': 'Only institution administrators can create departments'
             }, status=status.HTTP_403_FORBIDDEN)
@@ -601,7 +602,7 @@ class DepartmentViewSet(viewsets.ModelViewSet):
     
     def update(self, request, *args, **kwargs):
         """Only INSTITUTION can update departments"""
-        if request.user.role != User.Role.INSTITUTION and not request.user.is_staff:
+        if not hasattr(request.user, 'role') or (request.user.role != User.Role.INSTITUTION and not request.user.is_staff):
             return Response({
                 'error': 'Only institution administrators can update departments'
             }, status=status.HTTP_403_FORBIDDEN)
@@ -609,7 +610,7 @@ class DepartmentViewSet(viewsets.ModelViewSet):
     
     def destroy(self, request, *args, **kwargs):
         """Only INSTITUTION can delete departments"""
-        if request.user.role != User.Role.INSTITUTION and not request.user.is_staff:
+        if not hasattr(request.user, 'role') or (request.user.role != User.Role.INSTITUTION and not request.user.is_staff):
             return Response({
                 'error': 'Only institution administrators can delete departments'
             }, status=status.HTTP_403_FORBIDDEN)
@@ -656,13 +657,13 @@ class ProgramOutcomeViewSet(viewsets.ModelViewSet):
         """Only allow INSTITUTION role to create/update/delete POs"""
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
             # Check if user is INSTITUTION or staff
-            if self.request.user.role != User.Role.INSTITUTION and not self.request.user.is_staff:
+            if not hasattr(self.request.user, 'role') or (self.request.user.role != User.Role.INSTITUTION and not self.request.user.is_staff):
                 return [IsAdminUser()]  # This will deny access
         return [IsAuthenticated()]
     
     def create(self, request, *args, **kwargs):
         """Only INSTITUTION can create POs"""
-        if request.user.role != User.Role.INSTITUTION and not request.user.is_staff:
+        if not hasattr(request.user, 'role') or (request.user.role != User.Role.INSTITUTION and not request.user.is_staff):
             return Response({
                 'error': 'Only institution administrators can create Program Outcomes'
             }, status=status.HTTP_403_FORBIDDEN)
@@ -670,7 +671,7 @@ class ProgramOutcomeViewSet(viewsets.ModelViewSet):
     
     def update(self, request, *args, **kwargs):
         """Only INSTITUTION can update POs"""
-        if request.user.role != User.Role.INSTITUTION and not request.user.is_staff:
+        if not hasattr(request.user, 'role') or (request.user.role != User.Role.INSTITUTION and not request.user.is_staff):
             return Response({
                 'error': 'Only institution administrators can update Program Outcomes'
             }, status=status.HTTP_403_FORBIDDEN)
@@ -678,7 +679,7 @@ class ProgramOutcomeViewSet(viewsets.ModelViewSet):
     
     def destroy(self, request, *args, **kwargs):
         """Only INSTITUTION can delete POs"""
-        if request.user.role != User.Role.INSTITUTION and not request.user.is_staff:
+        if not hasattr(request.user, 'role') or (request.user.role != User.Role.INSTITUTION and not request.user.is_staff):
             return Response({
                 'error': 'Only institution administrators can delete Program Outcomes'
             }, status=status.HTTP_403_FORBIDDEN)
@@ -733,7 +734,7 @@ class CourseViewSet(viewsets.ModelViewSet):
         queryset = Course.objects.select_related('teacher')
         
         # Filter by teacher
-        if user.role == User.Role.TEACHER:
+        if hasattr(user, 'role') and user.role == User.Role.TEACHER:
             queryset = queryset.filter(teacher=user)
         
         # Filter by department if specified
@@ -759,7 +760,7 @@ class CourseViewSet(viewsets.ModelViewSet):
         instance = serializer.save()
         
         # Log course creation
-        institution = get_institution_for_user(request.user) or (request.user if request.user.role == User.Role.INSTITUTION else get_institution_for_user(instance.teacher))
+        institution = get_institution_for_user(request.user) or (request.user if hasattr(request.user, 'role') and request.user.role == User.Role.INSTITUTION else get_institution_for_user(instance.teacher))
         log_activity(
             action_type=ActivityLog.ActionType.COURSE_CREATED,
             user=request.user,
@@ -783,7 +784,7 @@ class CourseViewSet(viewsets.ModelViewSet):
         self.perform_update(serializer)
         
         # Log course update
-        institution = get_institution_for_user(request.user) or (request.user if request.user.role == User.Role.INSTITUTION else get_institution_for_user(instance.teacher))
+        institution = get_institution_for_user(request.user) or (request.user if hasattr(request.user, 'role') and request.user.role == User.Role.INSTITUTION else get_institution_for_user(instance.teacher))
         log_activity(
             action_type=ActivityLog.ActionType.COURSE_UPDATED,
             user=request.user,
@@ -802,7 +803,7 @@ class CourseViewSet(viewsets.ModelViewSet):
         instance = self.get_object()
         
         # Log course deletion before deleting
-        institution = get_institution_for_user(request.user) or (request.user if request.user.role == User.Role.INSTITUTION else get_institution_for_user(instance.teacher))
+        institution = get_institution_for_user(request.user) or (request.user if hasattr(request.user, 'role') and request.user.role == User.Role.INSTITUTION else get_institution_for_user(instance.teacher))
         log_activity(
             action_type=ActivityLog.ActionType.COURSE_DELETED,
             user=request.user,
@@ -1180,11 +1181,13 @@ class StudentPOAchievementViewSet(viewsets.ReadOnlyModelViewSet):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+@cache_response(timeout=settings.CACHE_TIMEOUT_ANALYTICS, key_prefix='dashboard:student')
 def student_dashboard(request):
     """
     Student dashboard with all relevant data
     
     GET /api/dashboard/student/
+    Cached for 10 minutes
     """
     user = request.user
     
@@ -1290,11 +1293,13 @@ def student_dashboard(request):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+@cache_response(timeout=settings.CACHE_TIMEOUT_ANALYTICS, key_prefix='dashboard:teacher')
 def teacher_dashboard(request):
     """
     Teacher dashboard with course and student data
     
     GET /api/dashboard/teacher/
+    Cached for 10 minutes
     """
     user = request.user
     
@@ -1344,11 +1349,13 @@ def teacher_dashboard(request):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+@cache_response(timeout=settings.CACHE_TIMEOUT_ANALYTICS, key_prefix='dashboard:institution')
 def institution_dashboard(request):
     """
     Institution dashboard with overall statistics
     
     GET /api/dashboard/institution/
+    Cached for 10 minutes
     """
     user = request.user
     
@@ -3104,7 +3111,7 @@ class StudentLOAchievementViewSet(viewsets.ModelViewSet):
             return Response({'error': 'student_id parameter required'}, status=400)
         
         # Check permission
-        if request.user.role == User.Role.STUDENT and str(request.user.id) != student_id:
+        if hasattr(request.user, 'role') and request.user.role == User.Role.STUDENT and str(request.user.id) != student_id:
             raise PermissionDenied("You can only view your own LO achievements")
         
         achievements = self.get_queryset().filter(student_id=student_id)
@@ -3119,7 +3126,7 @@ class StudentLOAchievementViewSet(viewsets.ModelViewSet):
             return Response({'error': 'course_id parameter required'}, status=400)
         
         # Check if teacher has access to this course
-        if request.user.role == User.Role.TEACHER:
+        if hasattr(request.user, 'role') and request.user.role == User.Role.TEACHER:
             course = get_object_or_404(Course, id=course_id)
             if course.teacher != request.user:
                 raise PermissionDenied("You can only view LO achievements for your own courses")
