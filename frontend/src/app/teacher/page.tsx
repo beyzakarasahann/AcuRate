@@ -426,12 +426,6 @@ export default function TeacherHomePage() {
     .sort((a, b) => (a.avgGrade || 0) - (b.avgGrade || 0))
     .find(course => (course.avgGrade || 0) < 80);
 
-  const quickStats = [
-    { label: 'Pending Grading', value: pendingAssessments || 0, accent: 'text-orange-400' },
-    { label: 'Graded Today', value: gradedToday, accent: 'text-emerald-400' },
-    { label: 'Active Outcomes', value: poAchievements.length, accent: 'text-indigo-400' },
-    { label: 'Avg Grade', value: avgGrade > 0 ? `${Math.round(avgGrade)}%` : '-', accent: 'text-blue-400' },
-  ];
 
   return (
     <motion.div
@@ -787,23 +781,6 @@ export default function TeacherHomePage() {
                     </div>
                 </motion.div>
 
-                {/* Quick Stats */}
-                <motion.div
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.6 }}
-                    className={`backdrop-blur-xl ${themeClasses.card} p-6 shadow-2xl`}
-                >
-                    <h2 className={`text-xl font-bold ${whiteTextClass} mb-4`}>Quick Stats</h2>
-                    <div className="grid grid-cols-2 gap-3">
-                        {quickStats.map((stat) => (
-                            <div key={stat.label} className={`rounded-xl border ${isDark ? 'border-white/10 bg-white/5' : 'border-gray-200 bg-white/80'} p-3`}>
-                                <p className={`${secondaryTextClass} text-xs uppercase tracking-wide`}>{stat.label}</p>
-                                <p className={`text-xl font-semibold ${stat.accent}`}>{stat.value}</p>
-                            </div>
-                        ))}
-                    </div>
-                </motion.div>
             </div>
         </div>
     </motion.div>

@@ -33,8 +33,10 @@ export default function LearningOutcomePage() {
   });
   const [programOutcomes, setProgramOutcomes] = useState<ProgramOutcome[]>([]);
   const [loPOs, setLoPOs] = useState<LOPO[]>([]);
-  const [newLOPOs, setNewLOPOs] = useState<Array<{ program_outcome: number; weight: number }>>([]);
-  const [editingLOPOs, setEditingLOPOs] = useState<Record<number, Array<{ program_outcome: number; weight: number }>>>({});
+  // PO contribution percentages (0-100) for new LO
+  const [newPOPercentages, setNewPOPercentages] = useState<Record<number, number>>({});
+  // PO contribution percentages (0-100) for editing LO
+  const [editingPOPercentages, setEditingPOPercentages] = useState<Record<number, Record<number, number>>>({});
 
   const { 
     isDark, 
@@ -157,8 +159,27 @@ export default function LearningOutcomePage() {
         is_active: true
       });
 
+      // Create LO-PO mappings for percentages > 0
+      for (const [poId, percentage] of Object.entries(newPOPercentages)) {
+        const percentageNum = Number(percentage);
+        if (percentageNum > 0 && percentageNum <= 100) {
+          try {
+            // Convert percentage (0-100) to weight (0.1-10.0) for backend
+            const weight = percentageNum / 10; // 100% = 10.0 weight, 50% = 5.0 weight, etc.
+            await api.createLOPO({
+              learning_outcome: createdLO.id,
+              program_outcome: Number(poId),
+              weight: weight
+            });
+          } catch (err: any) {
+            console.error(`Error creating LO-PO mapping for PO ${poId}:`, err);
+          }
+        }
+      }
+
       setLearningOutcomes([...learningOutcomes, createdLO]);
       setNewLO({ code: '', title: '', description: '', target_percentage: 70 });
+      setNewPOPercentages({});
       setShowCreateLO(false);
       setSaveStatus('success');
       setTimeout(() => setSaveStatus(null), 3000);
@@ -176,6 +197,44 @@ export default function LearningOutcomePage() {
     try {
       const updatedLO = await api.updateLearningOutcome(loId, updates);
       setLearningOutcomes(learningOutcomes.map(lo => lo.id === loId ? updatedLO : lo));
+      
+      // Update LO-PO mappings if percentages exist
+      if (editingPOPercentages[loId]) {
+        // Get existing mappings
+        const existingMappings = loPOs.filter(lopo => lopo.learning_outcome === loId);
+        
+        // Delete all existing mappings first
+        for (const mapping of existingMappings) {
+          try {
+            await api.deleteLOPO(mapping.id);
+          } catch (err) {
+            console.error(`Error deleting LO-PO mapping ${mapping.id}:`, err);
+          }
+        }
+        
+        // Create new mappings for percentages > 0
+        for (const [poId, percentage] of Object.entries(editingPOPercentages[loId])) {
+          const percentageNum = Number(percentage);
+          if (percentageNum > 0 && percentageNum <= 100) {
+            try {
+              // Convert percentage (0-100) to weight (0.1-10.0) for backend
+              const weight = percentageNum / 10;
+              await api.createLOPO({
+                learning_outcome: loId,
+                program_outcome: Number(poId),
+                weight: weight
+              });
+            } catch (err: any) {
+              console.error(`Error creating LO-PO mapping for PO ${poId}:`, err);
+            }
+          }
+        }
+        
+        // Reload LO-PO mappings
+        const lopos = await api.getLOPOs({ learning_outcome: loId });
+        setLoPOs(prev => [...prev.filter(lopo => lopo.learning_outcome !== loId), ...lopos]);
+      }
+      
       setEditingLO(null);
       setSaveStatus('success');
       setTimeout(() => setSaveStatus(null), 3000);
@@ -184,6 +243,20 @@ export default function LearningOutcomePage() {
       setSaveStatus('error');
       alert(error?.error || 'Error updating Learning Outcome. Please try again.');
     }
+  };
+
+  // Load existing LO-PO mappings when editing starts
+  const handleStartEditing = (loId: number) => {
+    setEditingLO(loId);
+    // Load existing mappings and convert weight to percentage
+    const existingMappings = loPOs.filter(lopo => lopo.learning_outcome === loId);
+    const percentages: Record<number, number> = {};
+    for (const mapping of existingMappings) {
+      // Convert weight (0.1-10.0) to percentage (0-100)
+      const percentage = Number(mapping.weight) * 10;
+      percentages[mapping.program_outcome] = percentage;
+    }
+    setEditingPOPercentages(prev => ({ ...prev, [loId]: percentages }));
   };
 
   // Seçili ders bilgisi
@@ -353,11 +426,71 @@ export default function LearningOutcomePage() {
                                   className={`w-full p-2 rounded-lg border ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-indigo-500`}
                                 />
                               </div>
+                              {/* Program Outcomes Contribution Section */}
+                              {programOutcomes.length > 0 && (
+                                <div className="mt-4 pt-4 border-t border-gray-500/20">
+                                  <h4 className={`${whiteText} font-semibold mb-3 text-sm`}>Program Outcome Contributions</h4>
+                                  <div className={`overflow-x-auto ${isDark ? 'bg-white/5' : 'bg-gray-50'} rounded-lg p-3`}>
+                                    <table className="w-full text-sm">
+                                      <thead>
+                                        <tr className={`border-b ${isDark ? 'border-white/10' : 'border-gray-200'}`}>
+                                          <th className={`text-left py-2 px-3 ${mutedText} font-medium`}>PO Code</th>
+                                          <th className={`text-left py-2 px-3 ${mutedText} font-medium`}>Description</th>
+                                          <th className={`text-left py-2 px-3 ${mutedText} font-medium`}>% Contribution</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {programOutcomes.map((po) => {
+                                          const currentPercentage = editingPOPercentages[lo.id]?.[po.id] || 0;
+                                          return (
+                                            <tr key={po.id} className={`border-b ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
+                                              <td className={`py-2 px-3 ${whiteText} font-medium`}>{po.code}</td>
+                                              <td className={`py-2 px-3 ${mutedText} text-xs`}>{po.title}</td>
+                                              <td className="py-2 px-3">
+                                                <input
+                                                  type="number"
+                                                  min="0"
+                                                  max="100"
+                                                  step="0.1"
+                                                  value={currentPercentage || ''}
+                                                  onChange={(e) => {
+                                                    const value = Number(e.target.value) || 0;
+                                                    setEditingPOPercentages(prev => ({
+                                                      ...prev,
+                                                      [lo.id]: {
+                                                        ...prev[lo.id],
+                                                        [po.id]: value
+                                                      }
+                                                    }));
+                                                  }}
+                                                  placeholder="0"
+                                                  className={`w-20 p-1.5 rounded border text-sm ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-indigo-500`}
+                                                />
+                                              </td>
+                                            </tr>
+                                          );
+                                        })}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                  <p className={`${mutedText} text-xs mt-2`}>
+                                    Enter percentage (0-100) for each PO. Leave empty or 0 for no connection.
+                                  </p>
+                                </div>
+                              )}
                               <motion.button
                                 whileHover={{ scale: 1.05 }}
                                 whileTap={{ scale: 0.95 }}
-                                onClick={() => setEditingLO(null)}
-                                className={`px-4 py-2 rounded-lg ${isDark ? 'bg-green-500/20 text-green-300 hover:bg-green-500/30' : 'bg-green-100 text-green-700 hover:bg-green-200'} transition-all`}
+                                onClick={() => {
+                                  setEditingLO(null);
+                                  // Clear editing percentages when done
+                                  setEditingPOPercentages(prev => {
+                                    const updated = { ...prev };
+                                    delete updated[lo.id];
+                                    return updated;
+                                  });
+                                }}
+                                className={`px-4 py-2 rounded-lg ${isDark ? 'bg-green-500/20 text-green-300 hover:bg-green-500/30' : 'bg-green-100 text-green-700 hover:bg-green-200'} transition-all mt-4`}
                               >
                                 <CheckCircle2 className="w-4 h-4 inline mr-1" />
                                 Done Editing
@@ -379,7 +512,7 @@ export default function LearningOutcomePage() {
                                 <motion.button
                                   whileHover={{ scale: 1.05 }}
                                   whileTap={{ scale: 0.95 }}
-                                  onClick={() => setEditingLO(lo.id)}
+                                  onClick={() => handleStartEditing(lo.id)}
                                   className={`p-1 rounded ${isDark ? 'hover:bg-white/10' : 'hover:bg-gray-100'} transition-all`}
                                 >
                                   <Edit2 className={`w-4 h-4 ${mutedText}`} />
@@ -484,6 +617,7 @@ export default function LearningOutcomePage() {
                     onClick={() => {
                       setShowCreateLO(false);
                       setNewLO({ code: '', title: '', description: '', target_percentage: 70 });
+                      setNewPOPercentages({});
                     }}
                     className={`p-2 rounded-lg ${isDark ? 'hover:bg-white/10' : 'hover:bg-gray-100'} transition-all`}
                   >
@@ -551,85 +685,60 @@ export default function LearningOutcomePage() {
                     <p className={`${mutedText} text-xs mt-1`}>Default target percentage for this LO (0-100%)</p>
                   </div>
 
-                  {/* Program Outcomes Mapping */}
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className={`block text-sm font-medium ${mutedText}`}>
-                        Program Outcomes Contribution (Optional)
+                  {/* Program Outcomes Contribution */}
+                  {programOutcomes.length > 0 && (
+                    <div>
+                      <label className={`block text-sm font-medium ${mutedText} mb-2`}>
+                        Program Outcome Contributions (Optional)
                       </label>
-                      <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => {
-                          if (programOutcomes.length === 0) {
-                            alert('No program outcomes found for this department. Please create program outcomes first.');
-                            return;
-                          }
-                          setNewLOPOs([...newLOPOs, { program_outcome: programOutcomes[0].id, weight: 1.0 }]);
-                        }}
-                        className={`px-3 py-1.5 rounded-lg text-xs ${isDark ? 'bg-indigo-500/20 text-indigo-300 hover:bg-indigo-500/30' : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'} transition-all flex items-center gap-1`}
-                      >
-                        <Plus className="w-3 h-3" />
-                        Add PO
-                      </motion.button>
+                      <p className={`${mutedText} text-xs mb-3`}>
+                        Define how much this Learning Outcome contributes to each Program Outcome (percentage: 0-100)
+                      </p>
+                      <div className={`overflow-x-auto ${isDark ? 'bg-white/5' : 'bg-gray-50'} rounded-lg p-3`}>
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className={`border-b ${isDark ? 'border-white/10' : 'border-gray-200'}`}>
+                              <th className={`text-left py-2 px-3 ${mutedText} font-medium`}>PO Code</th>
+                              <th className={`text-left py-2 px-3 ${mutedText} font-medium`}>Description (Short)</th>
+                              <th className={`text-left py-2 px-3 ${mutedText} font-medium`}>% Contribution</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {programOutcomes.map((po) => {
+                              const currentPercentage = newPOPercentages[po.id] || '';
+                              return (
+                                <tr key={po.id} className={`border-b ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
+                                  <td className={`py-2 px-3 ${whiteText} font-medium`}>{po.code}</td>
+                                  <td className={`py-2 px-3 ${mutedText} text-xs`}>{po.title}</td>
+                                  <td className="py-2 px-3">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max="100"
+                                      step="0.1"
+                                      value={currentPercentage}
+                                      onChange={(e) => {
+                                        const value = e.target.value === '' ? '' : Number(e.target.value);
+                                        setNewPOPercentages(prev => ({
+                                          ...prev,
+                                          [po.id]: value === '' ? 0 : value
+                                        }));
+                                      }}
+                                      placeholder="0"
+                                      className={`w-20 p-1.5 rounded border text-sm ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-indigo-500`}
+                                    />
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                      <p className={`${mutedText} text-xs mt-2`}>
+                        Enter percentage (0-100) for each PO. Leave empty or 0 for no connection. No requirement for total to equal 100%.
+                      </p>
                     </div>
-                    <p className={`${mutedText} text-xs mb-3`}>
-                      Define how much this Learning Outcome contributes to each Program Outcome (weight: 0.1 - 10.0, default: 1.0 = 100%)
-                    </p>
-                    {newLOPOs.length === 0 ? (
-                      <div className={`p-4 rounded-lg ${isDark ? 'bg-white/5 border border-white/10' : 'bg-gray-50 border border-gray-200'} text-center`}>
-                        <p className={mutedText}>No Program Outcomes mapped yet. Click "Add PO" to add one.</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        {newLOPOs.map((mapping, index) => {
-                          const po = programOutcomes.find(p => p.id === mapping.program_outcome);
-                          return (
-                            <div key={index} className={`p-3 rounded-lg ${isDark ? 'bg-white/5 border border-white/10' : 'bg-white border border-gray-200'} flex items-center gap-3`}>
-                              <select
-                                value={mapping.program_outcome}
-                                onChange={(e) => {
-                                  const updated = [...newLOPOs];
-                                  updated[index].program_outcome = Number(e.target.value);
-                                  setNewLOPOs(updated);
-                                }}
-                                className={`flex-1 p-2 rounded-lg text-sm ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'} border focus:ring-2 focus:ring-indigo-500 outline-none`}
-                              >
-                                {programOutcomes.map(po => (
-                                  <option key={po.id} value={po.id}>{po.code} - {po.title}</option>
-                                ))}
-                              </select>
-                              <input
-                                type="number"
-                                min="0.1"
-                                max="10.0"
-                                step="0.1"
-                                value={mapping.weight}
-                                onChange={(e) => {
-                                  const updated = [...newLOPOs];
-                                  updated[index].weight = Number(e.target.value) || 1.0;
-                                  setNewLOPOs(updated);
-                                }}
-                                className="w-24 p-2 rounded-lg text-sm border focus:ring-2 focus:ring-indigo-500 outline-none"
-                                placeholder="Weight"
-                              />
-                              <span className={`text-xs ${mutedText}`}>×</span>
-                              <motion.button
-                                whileHover={{ scale: 1.1 }}
-                                whileTap={{ scale: 0.9 }}
-                                onClick={() => {
-                                  setNewLOPOs(newLOPOs.filter((_, i) => i !== index));
-                                }}
-                                className={`p-1.5 rounded ${isDark ? 'bg-red-500/20 text-red-300 hover:bg-red-500/30' : 'bg-red-100 text-red-600 hover:bg-red-200'} transition-all`}
-                              >
-                                <X className="w-4 h-4" />
-                              </motion.button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
+                  )}
                 </div>
 
                 {/* Action Buttons */}
@@ -640,6 +749,7 @@ export default function LearningOutcomePage() {
                     onClick={() => {
                       setShowCreateLO(false);
                       setNewLO({ code: '', title: '', description: '', target_percentage: 70 });
+                      setNewPOPercentages({});
                     }}
                     className={`px-6 py-2 rounded-xl ${isDark ? 'bg-white/5 hover:bg-white/10 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'} transition-all`}
                   >

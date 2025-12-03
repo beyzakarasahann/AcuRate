@@ -32,7 +32,7 @@ django.setup()
 from api.models import (
     User, ProgramOutcome, Course, CoursePO,
     Enrollment, Assessment, StudentGrade, StudentPOAchievement,
-    LearningOutcome, StudentLOAchievement
+    LearningOutcome, StudentLOAchievement, AssessmentLO, LOPO
 )
 
 
@@ -42,6 +42,8 @@ def clear_existing_data():
     StudentLOAchievement.objects.all().delete()
     StudentPOAchievement.objects.all().delete()
     StudentGrade.objects.all().delete()
+    AssessmentLO.objects.all().delete()
+    LOPO.objects.all().delete()
     Assessment.objects.all().delete()
     LearningOutcome.objects.all().delete()
     Enrollment.objects.all().delete()
@@ -700,6 +702,99 @@ def create_student_po_achievements(students, pos):
     return achievements
 
 
+def create_assessment_lo_mappings(assessments, learning_outcomes):
+    """Create Assessment-LO mappings"""
+    print("🔗 Creating Assessment-LO Mappings...")
+    
+    # Clear existing mappings
+    AssessmentLO.objects.all().delete()
+    
+    mappings = []
+    
+    # Map assessments to learning outcomes based on course
+    for assessment in assessments:
+        # Get LOs for this assessment's course
+        course_los = [lo for lo in learning_outcomes if lo.course == assessment.course]
+        
+        if not course_los:
+            continue
+        
+        # Create mappings with weights
+        # Each assessment maps to 1-3 LOs with varying weights
+        num_los = min(len(course_los), random.randint(1, 3))
+        selected_los = random.sample(course_los, num_los)
+        
+        # Distribute weights so they sum to reasonable values
+        # Generate random weights that sum to approximately 1.0
+        raw_weights = [random.uniform(0.2, 0.6) for _ in range(num_los)]
+        total_raw = sum(raw_weights)
+        weights = [Decimal(str(round(w / total_raw, 2))) for w in raw_weights]
+        
+        # Ensure they sum to exactly 1.0
+        weights_sum = sum(weights)
+        if weights_sum != Decimal('1.00'):
+            weights[-1] = Decimal('1.00') - (weights_sum - weights[-1])
+        
+        for i, lo in enumerate(selected_los):
+            mapping = AssessmentLO.objects.create(
+                assessment=assessment,
+                learning_outcome=lo,
+                weight=weights[i]
+            )
+            mappings.append(mapping)
+            print(f"  ✓ {assessment.course.code} {assessment.title} → {lo.code} (weight: {weights[i]})")
+    
+    print(f"✅ Created {len(mappings)} Assessment-LO Mappings\n")
+    return mappings
+
+
+def create_lo_po_mappings(learning_outcomes, pos):
+    """Create LO-PO mappings"""
+    print("🔗 Creating LO-PO Mappings...")
+    
+    # Clear existing mappings
+    LOPO.objects.all().delete()
+    
+    mappings = []
+    
+    # Map learning outcomes to program outcomes
+    for lo in learning_outcomes:
+        # Get POs related to this course (via CoursePO)
+        course_pos = CoursePO.objects.filter(course=lo.course).values_list('program_outcome', flat=True)
+        related_pos = [po for po in pos if po.id in course_pos]
+        
+        if not related_pos:
+            # If no CoursePO mappings, use all POs
+            related_pos = pos
+        
+        # Each LO maps to 1-3 POs with varying weights
+        num_pos = min(len(related_pos), random.randint(1, 3))
+        selected_pos = random.sample(related_pos, num_pos)
+        
+        # Distribute weights
+        # Generate random weights that sum to approximately 1.0
+        raw_weights = [random.uniform(0.2, 0.6) for _ in range(num_pos)]
+        total_raw = sum(raw_weights)
+        weights = [Decimal(str(round(w / total_raw, 2))) for w in raw_weights]
+        
+        # Ensure they sum to exactly 1.0
+        weights_sum = sum(weights)
+        if weights_sum != Decimal('1.00'):
+            weights[-1] = Decimal('1.00') - (weights_sum - weights[-1])
+        
+        for i, po in enumerate(selected_pos):
+            mapping = LOPO.objects.create(
+                learning_outcome=lo,
+                program_outcome=po,
+                weight=weights[i]
+            )
+            mappings.append(mapping)
+            print(f"  ✓ {lo.course.code} {lo.code} → {po.code} (weight: {weights[i]})")
+    
+    print(f"✅ Created {len(mappings)} LO-PO Mappings\n")
+    return mappings
+
+
 def print_summary(pos, teacher, students, courses, enrollments, assessments, grades, po_achievements, learning_outcomes=None, lo_achievements=None):
     """Print summary of created data"""
     print("\n" + "="*70)
@@ -716,6 +811,8 @@ def print_summary(pos, teacher, students, courses, enrollments, assessments, gra
     print(f"  • Course-PO Mappings: {CoursePO.objects.count()}")
     print(f"  • Enrollments: {len(enrollments)}")
     print(f"  • Assessments: {len(assessments)}")
+    print(f"  • Assessment-LO Mappings: {AssessmentLO.objects.count()}")
+    print(f"  • LO-PO Mappings: {LOPO.objects.count()}")
     print(f"  • Student Grades: {len(grades)}")
     print(f"  • PO Achievements: {len(po_achievements)}")
     if lo_achievements:
@@ -879,6 +976,8 @@ def main():
         learning_outcomes = create_learning_outcomes(courses)
         enrollments = create_enrollments(students, courses)
         assessments = create_assessments(courses, pos)
+        assessment_los = create_assessment_lo_mappings(assessments, learning_outcomes)
+        lo_pos = create_lo_po_mappings(learning_outcomes, pos)
         grades = create_student_grades(students, assessments)
         calculate_final_grades(students, courses)
         po_achievements = create_student_po_achievements(students, pos)

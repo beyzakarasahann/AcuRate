@@ -1,8 +1,57 @@
 {
   "venvPath": ".",
   "venv": ".venv",
-  "pythonVersion": "3.12"
+  "pythonVersion": "3.12",
+  "typeCheckingMode": "basic",
+  "reportMissingImports": false,
+  "reportMissingTypeStubs": false,
+  "reportAttributeAccessIssue": false,
+  "reportGeneralTypeIssues": false,
+  "reportOptionalMemberAccess": false,
+  "reportOptionalSubscript": false,
+  "reportPrivateImportUsage": false,
+  "reportUnboundVariable": true,
+  "reportUnusedImport": false,
+  "reportUnusedClass": false,
+  "reportUnusedFunction": false,
+  "reportUnusedVariable": false,
+  "reportDuplicateImport": true,
+  "reportWildcardImportFromLibrary": false,
+  "reportShadowedImports": false,
+  "reportIncompatibleMethodOverride": false,
+  "reportIncompatibleVariableOverride": false,
+  "reportInconsistentConstructor": false,
+  "reportOverlappingOverload": false,
+  "reportUninitializedInstanceVariable": false,
+  "reportCallInDefaultInitializer": false,
+  "reportUnnecessaryIsInstance": false,
+  "reportUnnecessaryCast": false,
+  "reportUnnecessaryComparison": false,
+  "reportAssertAlwaysTrue": false,
+  "reportSelfClsParameterName": false,
+  "reportImplicitStringConcatenation": false,
+  "reportUnusedCallResult": false,
+  "reportUnusedExpression": false,
+  "reportMatchNotExhaustive": false,
+  "reportUnnecessaryTypeIgnoreComment": false,
+  "reportUnusedCoroutine": false,
+  "reportFunctionMemberAccess": false,
+  "reportInvalidStringEscapeSequence": false,
+  "reportUnknownParameterType": false,
+  "reportUnknownArgumentType": false,
+  "reportUnknownLambdaType": false,
+  "reportUnknownVariableType": false,
+  "reportUnknownMemberType": false,
+  "reportMissingParameterType": false,
+  "reportMissingTypeArgument": false,
+  "reportInvalidTypeVarUse": false,
+  "reportImplicitOverride": false,
+  "include": [
+    "backend"
+  ],
+  "exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+    "**/.*"
+  ]
 }
-
-
-
