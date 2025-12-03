@@ -2,7 +2,7 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { FileText, Search, Save, Download, Upload, Filter, CheckCircle2, AlertCircle, User, BookOpen, Plus, X, Edit, TrendingUp, Info, Loader2, Trash2 } from 'lucide-react';
+import { FileText, Search, Save, Filter, CheckCircle2, AlertCircle, User, BookOpen, Plus, X, Edit, TrendingUp, Info, Loader2, Trash2 } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { api, type Course, type Assessment, type Enrollment, type StudentGrade, type LearningOutcome, type AssessmentLO } from '@/lib/api';
@@ -40,6 +40,8 @@ export default function TeacherGradesPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'success' | 'error' | null>(null);
   const [showCreateAssessment, setShowCreateAssessment] = useState(false);
+  const [showEditAssessment, setShowEditAssessment] = useState(false);
+  const [editingAssessment, setEditingAssessment] = useState<Assessment | null>(null);
   const [showEditGrades, setShowEditGrades] = useState(false);
   const [showFeedbackRanges, setShowFeedbackRanges] = useState(false);
   const [editingGrades, setEditingGrades] = useState<Record<number, { score: string }>>({});
@@ -603,6 +605,57 @@ export default function TeacherGradesPage() {
     }
   };
 
+  // Assessment düzenleme modalını aç
+  const handleEditAssessment = (assessment: Assessment) => {
+    setEditingAssessment(assessment);
+    setShowEditAssessment(true);
+  };
+
+  // Assessment güncelleme
+  const handleUpdateAssessment = async () => {
+    if (!editingAssessment || !selectedCourse) {
+      return;
+    }
+
+    if (!editingAssessment.title || !editingAssessment.assessment_type) {
+      alert('Please fill in all required fields (Title, Type).');
+      return;
+    }
+
+    // Weight kontrolü - mevcut assessment'ın weight'ini hariç tut
+    const otherAssessmentsWeight = availableAssessments
+      .filter(a => a.id !== editingAssessment.id)
+      .reduce((sum, a) => sum + Number(a.weight || 0), 0);
+    const currentWeight = Number(editingAssessment.weight || 0);
+    const newTotalWeight = otherAssessmentsWeight + currentWeight;
+
+    if (newTotalWeight > 100) {
+      const maxAllowed = 100 - otherAssessmentsWeight;
+      alert(`Total weight cannot exceed 100%. Maximum allowed weight for this assessment: ${maxAllowed.toFixed(1)}%`);
+      return;
+    }
+
+    try {
+      await api.updateAssessment(editingAssessment.id, {
+        title: editingAssessment.title,
+        assessment_type: editingAssessment.assessment_type,
+        weight: Number(editingAssessment.weight),
+        description: editingAssessment.description || undefined,
+      });
+
+      // Refresh assessments
+      await fetchAssessments(selectedCourse);
+      
+      setShowEditAssessment(false);
+      setEditingAssessment(null);
+      setSaveStatus('success');
+      setTimeout(() => setSaveStatus(null), 3000);
+    } catch (err: any) {
+      console.error('Failed to update assessment:', err);
+      alert(`Failed to update assessment: ${err.message || 'Please try again.'}`);
+    }
+  };
+
   // Weight değişikliğinde toplam kontrolü
   const handleWeightChange = (newWeight: number) => {
     const currentTotalWeight = availableAssessments.reduce((sum, a) => sum + a.weight, 0);
@@ -616,6 +669,25 @@ export default function TeacherGradesPage() {
     }
     
     setNewAssessment({ ...newAssessment, weight: Math.max(0, Math.min(100, newWeight)) });
+  };
+
+  // Editing assessment weight değişikliği
+  const handleEditingAssessmentWeightChange = (newWeight: number) => {
+    if (!editingAssessment) return;
+    
+    const otherAssessmentsWeight = availableAssessments
+      .filter(a => a.id !== editingAssessment.id)
+      .reduce((sum, a) => sum + Number(a.weight || 0), 0);
+    const newTotalWeight = otherAssessmentsWeight + newWeight;
+    
+    if (newTotalWeight > 100) {
+      const maxAllowed = 100 - otherAssessmentsWeight;
+      alert(`Total weight cannot exceed 100%. Maximum allowed weight for this assessment: ${maxAllowed.toFixed(1)}%`);
+      setEditingAssessment({ ...editingAssessment, weight: Math.max(0, maxAllowed) });
+      return;
+    }
+    
+    setEditingAssessment({ ...editingAssessment, weight: Math.max(0, Math.min(100, newWeight)) });
   };
 
   // Assessment type label'ını al
@@ -669,24 +741,6 @@ export default function TeacherGradesPage() {
           <FileText className="w-7 h-7 text-indigo-500" />
           Grade Management
         </h1>
-        <div className="flex gap-2">
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            className={`px-4 py-2 rounded-xl ${themeClasses.card} ${isDark ? 'hover:bg-white/10 text-white' : 'hover:bg-gray-100 text-gray-700'} flex items-center gap-2 transition-all`}
-          >
-            <Download className="w-4 h-4" />
-            Export
-          </motion.button>
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            className={`px-4 py-2 rounded-xl ${themeClasses.card} ${isDark ? 'hover:bg-white/10 text-white' : 'hover:bg-gray-100 text-gray-700'} flex items-center gap-2 transition-all`}
-          >
-            <Upload className="w-4 h-4" />
-            Import
-          </motion.button>
-        </div>
       </motion.div>
 
       {/* Ders ve Assessment Seçimi */}
@@ -767,18 +821,15 @@ export default function TeacherGradesPage() {
         {/* Assessment Detayları */}
         {currentAssessment && (
           <motion.div
+            data-assessment-details
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             className={`mt-4 p-4 rounded-xl ${isDark ? 'bg-indigo-500/10 border-indigo-500/30' : 'bg-indigo-50 border-indigo-200'} border`}
           >
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+            <div className="grid grid-cols-2 md:grid-cols-2 gap-4 text-sm">
               <div>
                 <span className={mutedText}>Type:</span>
                 <p className={whiteText}>{getAssessmentTypeLabel(currentAssessment.assessment_type)}</p>
-              </div>
-              <div>
-                <span className={mutedText}>Max Score:</span>
-                <p className={whiteText}>{currentAssessment.max_score}</p>
               </div>
               <div>
                 <span className={mutedText}>Weight:</span>
@@ -898,15 +949,13 @@ export default function TeacherGradesPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="w-full table-fixed">
                 <thead>
                   <tr className={`border-b ${isDark ? 'border-white/10' : 'border-gray-200'}`}>
-                    <th className={`text-left py-3 px-4 ${mutedText} font-medium text-sm`}>Assessment</th>
-                    <th className={`text-left py-3 px-4 ${mutedText} font-medium text-sm`}>Type</th>
-                    <th className={`text-left py-3 px-4 ${mutedText} font-medium text-sm`}>Weight (%)</th>
-                    <th className={`text-left py-3 px-4 ${mutedText} font-medium text-sm`}>Max Score</th>
-                    <th className={`text-left py-3 px-4 ${mutedText} font-medium text-sm`}>Avg Score</th>
-                    <th className={`text-left py-3 px-4 ${mutedText} font-medium text-sm`}>Action</th>
+                    <th className={`text-left py-3 px-4 ${mutedText} font-medium text-sm w-[40%]`}>Assessment</th>
+                    <th className={`text-left py-3 px-4 ${mutedText} font-medium text-sm w-[20%]`}>Type</th>
+                    <th className={`text-left py-3 px-4 ${mutedText} font-medium text-sm w-[25%]`}>Weight (%)</th>
+                    <th className={`text-left py-3 px-4 ${mutedText} font-medium text-sm w-[15%]`}>Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -928,7 +977,7 @@ export default function TeacherGradesPage() {
                             : isDark ? 'border-white/5 hover:bg-white/5' : 'border-gray-100 hover:bg-gray-50'
                         }`}
                       >
-                        <td className="py-4 px-4">
+                        <td className="py-4 px-4 w-[40%]">
                           <div className="flex items-center gap-2">
                             <FileText className={`w-4 h-4 ${isSelected ? 'text-indigo-500' : mutedText}`} />
                             <span className={`${whiteText} font-medium`}>{assessment.title}</span>
@@ -939,7 +988,7 @@ export default function TeacherGradesPage() {
                             )}
                           </div>
                         </td>
-                        <td className={`py-4 px-4`}>
+                        <td className={`py-4 px-4 w-[20%]`}>
                           <span className={`px-2 py-1 rounded text-xs font-medium ${
                             assessment.assessment_type === 'MIDTERM' || assessment.assessment_type === 'FINAL'
                               ? isDark ? 'bg-red-500/20 text-red-300' : 'bg-red-100 text-red-700'
@@ -950,7 +999,7 @@ export default function TeacherGradesPage() {
                             {getAssessmentTypeLabel(assessment.assessment_type)}
                           </span>
                         </td>
-                        <td className={`py-4 px-4`}>
+                        <td className={`py-4 px-4 w-[25%]`}>
                           <div className="flex items-center gap-2">
                             <span className={`${whiteText} font-semibold`}>{assessment.weight}%</span>
                             <div className={`flex-1 h-2 rounded-full ${isDark ? 'bg-white/10' : 'bg-gray-200'} max-w-20`}>
@@ -967,30 +1016,20 @@ export default function TeacherGradesPage() {
                             </div>
                           </div>
                         </td>
-                        <td className={`py-4 px-4 ${whiteText}`}>{assessment.max_score}</td>
-                        <td className={`py-4 px-4`}>
-                          {stats.graded > 0 ? (
-                            <div className="flex items-center gap-1">
-                              <TrendingUp className={`w-4 h-4 ${stats.average >= 80 ? 'text-green-500' : stats.average >= 70 ? 'text-blue-500' : 'text-orange-500'}`} />
-                              <span className={`${whiteText} font-medium`}>{stats.average.toFixed(1)}</span>
-                            </div>
-                          ) : (
-                            <span className={mutedText}>-</span>
-                          )}
-                        </td>
-                        <td className="py-4 px-4">
+                        <td className="py-4 px-4 w-[15%]">
                           <motion.button
                             whileHover={{ scale: 1.1 }}
                             whileTap={{ scale: 0.9 }}
                             onClick={(e) => {
                               e.stopPropagation();
-                              setSelectedAssessment(assessment.id);
+                              handleEditAssessment(assessment);
                             }}
-                            className={`p-2 rounded-lg ${
+                            className={`p-2 rounded-lg cursor-pointer ${
                               isSelected
                                 ? 'bg-indigo-600 text-white'
                                 : isDark ? 'bg-white/5 hover:bg-white/10 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
                             } transition-all`}
+                            title="Edit assessment"
                           >
                             <Edit className="w-4 h-4" />
                           </motion.button>
@@ -999,34 +1038,6 @@ export default function TeacherGradesPage() {
                     );
                   })}
                 </tbody>
-                <tfoot>
-                  <tr className={`${isDark ? 'bg-white/5' : 'bg-gray-50'} border-t-2 ${isDark ? 'border-white/10' : 'border-gray-200'}`}>
-                    <td colSpan={2} className={`py-3 px-4 ${whiteText} font-semibold`}>Total</td>
-                    <td className={`py-3 px-4`}>
-                      <span className={`${whiteText} font-bold text-lg ${totalWeight === 100 ? 'text-green-500' : totalWeight > 100 ? 'text-red-500' : 'text-orange-500'}`}>
-                        {totalWeight.toFixed(1)}%
-                      </span>
-                    </td>
-                    <td colSpan={3} className={`py-3 px-4`}>
-                      {totalWeight === 100 ? (
-                        <span className={`text-green-500 text-sm font-semibold flex items-center gap-1`}>
-                          <CheckCircle2 className="w-4 h-4" />
-                          ✓ Perfect distribution - Ready to grade
-                        </span>
-                      ) : totalWeight > 100 ? (
-                        <span className={`text-red-500 text-sm font-semibold flex items-center gap-1`}>
-                          <AlertCircle className="w-4 h-4" />
-                          ⚠ Exceeds 100% - Must be exactly 100%
-                        </span>
-                      ) : (
-                        <span className={`text-orange-500 text-sm font-semibold flex items-center gap-1`}>
-                          <AlertCircle className="w-4 h-4" />
-                          ⚠ Missing {(100 - totalWeight).toFixed(1)}% - Must total exactly 100%
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                </tfoot>
               </table>
             </div>
           )}
@@ -1181,58 +1192,6 @@ export default function TeacherGradesPage() {
             )}
           </div>
 
-          {/* Özet İstatistikler */}
-          {Object.keys(grades).length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={`mt-6 p-4 rounded-xl ${isDark ? 'bg-indigo-500/10 border-indigo-500/30' : 'bg-indigo-50 border-indigo-200'} border`}
-            >
-              <h3 className={`${whiteText} font-semibold mb-3`}>Summary</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                <div>
-                  <span className={mutedText}>Graded:</span>
-                  <p className={whiteText}>{Object.keys(grades).length} / {filteredStudents.length}</p>
-                </div>
-                <div>
-                  <span className={mutedText}>Average:</span>
-                  <p className={whiteText}>
-                    {(() => {
-                      const scores = Object.values(grades)
-                        .map(g => parseFloat(g.score))
-                        .filter(s => !isNaN(s) && s > 0);
-                      const avg = scores.length > 0
-                        ? scores.reduce((a, b) => a + b, 0) / scores.length
-                        : 0;
-                      return avg.toFixed(1);
-                    })()}
-                  </p>
-                </div>
-                <div>
-                  <span className={mutedText}>Highest:</span>
-                  <p className={whiteText}>
-                    {(() => {
-                      const scores = Object.values(grades)
-                        .map(g => parseFloat(g.score))
-                        .filter(s => !isNaN(s) && s > 0);
-                      return scores.length > 0 ? Math.max(...scores).toFixed(1) : '-';
-                    })()}
-                  </p>
-                </div>
-                <div>
-                  <span className={mutedText}>Lowest:</span>
-                  <p className={whiteText}>
-                    {(() => {
-                      const scores = Object.values(grades)
-                        .map(g => parseFloat(g.score))
-                        .filter(s => !isNaN(s) && s > 0);
-                      return scores.length > 0 ? Math.min(...scores).toFixed(1) : '-';
-                    })()}
-                  </p>
-                </div>
-              </div>
-            </motion.div>
-          )}
         </motion.div>
       )}
 
@@ -1261,6 +1220,183 @@ export default function TeacherGradesPage() {
           )}
         </motion.div>
       )}
+
+      {/* Assessment Düzenleme Modal */}
+      <AnimatePresence>
+        {showEditAssessment && editingAssessment && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => {
+                setShowEditAssessment(false);
+                setEditingAssessment(null);
+              }}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
+            />
+            
+            {/* Modal */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            >
+              <div 
+                onClick={(e) => e.stopPropagation()}
+                className={`backdrop-blur-xl ${themeClasses.card} p-6 shadow-2xl rounded-2xl border ${isDark ? 'border-white/10' : 'border-gray-200'} w-full max-w-2xl max-h-[90vh] overflow-y-auto`}
+              >
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className={`text-2xl font-bold ${whiteText} flex items-center gap-2`}>
+                    <Edit className="w-6 h-6 text-indigo-500" />
+                    Edit Assessment
+                  </h2>
+                  <motion.button
+                    whileHover={{ scale: 1.1, rotate: 90 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => {
+                      setShowEditAssessment(false);
+                      setEditingAssessment(null);
+                    }}
+                    className={`p-2 rounded-lg ${isDark ? 'hover:bg-white/10' : 'hover:bg-gray-100'} transition-all`}
+                  >
+                    <X className={`w-5 h-5 ${mutedText}`} />
+                  </motion.button>
+                </div>
+
+                <div className="space-y-4">
+                  {/* Assessment Title */}
+                  <div>
+                    <label className={`block text-sm font-medium ${mutedText} mb-1`}>
+                      Assessment Title <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={editingAssessment.title}
+                      onChange={(e) => setEditingAssessment({ ...editingAssessment, title: e.target.value })}
+                      placeholder="e.g., Midterm Exam 1, Final Project"
+                      className={`w-full p-3 rounded-lg ${isDark ? 'bg-white/5 border-white/10 text-white placeholder-gray-500' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'} border transition-colors focus:ring-2 focus:ring-indigo-500 outline-none`}
+                    />
+                  </div>
+
+                  {/* Assessment Type */}
+                  <div>
+                    <label className={`block text-sm font-medium ${mutedText} mb-1`}>
+                      Assessment Type <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={editingAssessment.assessment_type}
+                      onChange={(e) => setEditingAssessment({ ...editingAssessment, assessment_type: e.target.value as any })}
+                      className={`w-full p-3 rounded-lg ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'} border transition-colors focus:ring-2 focus:ring-indigo-500 outline-none`}
+                    >
+                      {assessmentTypes.map(type => (
+                        <option key={type.value} value={type.value}>
+                          {type.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Weight */}
+                  <div className="grid grid-cols-1 gap-4">
+                    <div>
+                      <label className={`block text-sm font-medium ${mutedText} mb-1`}>
+                        Weight (%) <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        value={editingAssessment.weight}
+                        onChange={(e) => handleEditingAssessmentWeightChange(Number(e.target.value) || 0)}
+                        className={`w-full p-3 rounded-lg ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'} border transition-colors focus:ring-2 focus:ring-indigo-500 outline-none`}
+                      />
+                      <div className={`mt-2 p-2 rounded-lg ${
+                        (() => {
+                          const otherAssessmentsWeight = availableAssessments
+                            .filter(a => a.id !== editingAssessment.id)
+                            .reduce((sum, a) => sum + Number(a.weight || 0), 0);
+                          const currentWeight = Number(editingAssessment.weight || 0);
+                          const newTotalWeight = otherAssessmentsWeight + currentWeight;
+                          return newTotalWeight > 100
+                            ? isDark ? 'bg-red-500/10 border-red-500/30' : 'bg-red-50 border-red-200'
+                            : isDark ? 'bg-blue-500/10 border-blue-500/30' : 'bg-blue-50 border-blue-200';
+                        })()
+                      } border`}>
+                        <p className={`${mutedText} text-xs flex items-start gap-1`}>
+                          <Info className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                          <span>
+                            <span className="font-semibold text-red-500">Important:</span> All assessment weights must total exactly <span className="font-semibold">100%</span>. 
+                            Current total: <span className={`font-semibold ${
+                              (() => {
+                                const otherAssessmentsWeight = availableAssessments
+                                  .filter(a => a.id !== editingAssessment.id)
+                                  .reduce((sum, a) => sum + Number(a.weight || 0), 0);
+                                const currentWeight = Number(editingAssessment.weight || 0);
+                                const newTotalWeight = otherAssessmentsWeight + currentWeight;
+                                return newTotalWeight > 100 ? 'text-red-500' : 'text-blue-500';
+                              })()
+                            }`}>
+                              {(() => {
+                                const otherAssessmentsWeight = availableAssessments
+                                  .filter(a => a.id !== editingAssessment.id)
+                                  .reduce((sum, a) => sum + Number(a.weight || 0), 0);
+                                const currentWeight = Number(editingAssessment.weight || 0);
+                                return (otherAssessmentsWeight + currentWeight).toFixed(1);
+                              })()}%
+                            </span>
+                          </span>
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Description */}
+                  <div>
+                    <label className={`block text-sm font-medium ${mutedText} mb-1`}>
+                      Description (Optional)
+                    </label>
+                    <textarea
+                      value={editingAssessment.description || ''}
+                      onChange={(e) => setEditingAssessment({ ...editingAssessment, description: e.target.value })}
+                      placeholder="Add a description for this assessment..."
+                      rows={3}
+                      className={`w-full p-3 rounded-lg ${isDark ? 'bg-white/5 border-white/10 text-white placeholder-gray-500' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'} border transition-colors focus:ring-2 focus:ring-indigo-500 outline-none resize-none`}
+                    />
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex items-center justify-end gap-3 mt-6 pt-6 border-t border-gray-500/10">
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => {
+                      setShowEditAssessment(false);
+                      setEditingAssessment(null);
+                    }}
+                    className={`px-6 py-2 rounded-xl ${isDark ? 'bg-white/5 hover:bg-white/10 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'} transition-all`}
+                  >
+                    Cancel
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={handleUpdateAssessment}
+                    className={`px-6 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white flex items-center gap-2 transition-all`}
+                  >
+                    <Save className="w-4 h-4" />
+                    Save Changes
+                  </motion.button>
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* Yeni Assessment Oluşturma Modal */}
       <AnimatePresence>
@@ -1341,38 +1477,8 @@ export default function TeacherGradesPage() {
                     </select>
                   </div>
 
-                  {/* Max Score ve Weight */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className={`block text-sm font-medium ${mutedText} mb-1`}>
-                        Maximum Score <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        step="1"
-                        value={newAssessment.maxScore}
-                        onChange={(e) => {
-                          const value = Number(e.target.value);
-                          // Allow empty input or values between 0-100
-                          if (e.target.value === '' || (value >= 0 && value <= 100)) {
-                            setNewAssessment({ ...newAssessment, maxScore: value || 0 });
-                          }
-                        }}
-                        onBlur={(e) => {
-                          // Ensure value is within bounds when user leaves the field
-                          const value = Number(e.target.value);
-                          if (isNaN(value) || value < 0) {
-                            setNewAssessment({ ...newAssessment, maxScore: 0 });
-                          } else if (value > 100) {
-                            setNewAssessment({ ...newAssessment, maxScore: 100 });
-                          }
-                        }}
-                        className={`w-full p-3 rounded-lg ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'} border transition-colors focus:ring-2 focus:ring-indigo-500 outline-none`}
-                      />
-                      <p className={`${mutedText} text-xs mt-1`}>Enter a value between 0 and 100</p>
-                    </div>
+                  {/* Weight */}
+                  <div className="grid grid-cols-1 gap-4">
                     <div>
                       <label className={`block text-sm font-medium ${mutedText} mb-1`}>
                         Weight (%) <span className="text-red-500">*</span>
@@ -1587,8 +1693,7 @@ export default function TeacherGradesPage() {
 
                 <div className="mb-4 p-4 rounded-xl bg-indigo-500/10 border border-indigo-500/30">
                   <p className={`${whiteText} text-sm`}>
-                    <strong>Assessment:</strong> {currentAssessment?.title} | 
-                    <strong> Max Score:</strong> {currentAssessment?.max_score || 100}
+                    <strong>Assessment:</strong> {currentAssessment?.title}
                   </p>
                 </div>
 
@@ -1774,19 +1879,6 @@ export default function TeacherGradesPage() {
                             max="100"
                             value={range.min_score}
                             onChange={(e) => handleUpdateFeedbackRange(index, 'min_score', Number(e.target.value) || 0)}
-                            className={`w-full p-2 rounded-lg border ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-purple-500`}
-                          />
-                        </div>
-                        <div>
-                          <label className={`block text-sm font-medium ${mutedText} mb-1`}>
-                            Max Score (%)
-                          </label>
-                          <input
-                            type="number"
-                            min="0"
-                            max="100"
-                            value={range.max_score}
-                            onChange={(e) => handleUpdateFeedbackRange(index, 'max_score', Number(e.target.value) || 100)}
                             className={`w-full p-2 rounded-lg border ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-purple-500`}
                           />
                         </div>

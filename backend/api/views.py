@@ -39,7 +39,6 @@ from .serializers import (
     StudentDashboardSerializer, TeacherDashboardSerializer, InstitutionDashboardSerializer,
     ContactRequestSerializer, ContactRequestCreateSerializer,
     AssessmentLOSerializer, LOPOSerializer,
-    TeacherCreateSerializer,
     generate_temp_password,
 )
 
@@ -191,9 +190,10 @@ def forgot_password_view(request):
     message = (
         greeting_line
         + "You requested to reset your AcuRate account password.\n\n"
+        + f"Username: {user.username}\n"
         + f"Email address: {user.email}\n"
         + f"Temporary password: {temp_password}\n\n"
-        + "Please log in using your EMAIL ADDRESS and this temporary password.\n"
+        + "Please log in using your EMAIL ADDRESS or USERNAME and this temporary password.\n"
         + "After logging in, change your password immediately from your profile settings.\n\n"
         + "If you did not request this, please contact your administrator."
     )
@@ -234,6 +234,122 @@ def forgot_password_view(request):
         {
             'success': True,
             'message': 'If an account with this username/email exists, a temporary password has been sent.'
+        }
+    )
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def forgot_username_view(request):
+    """
+    Forgot username endpoint - sends the username to the user's email.
+
+    POST /api/auth/forgot-username/
+    Body: {"email": "..."}
+    """
+    email = request.data.get('email')
+
+    if not email:
+        return Response(
+            {
+                'success': False,
+                'error': 'Email address is required'
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # Look up user by email (case-insensitive)
+    user = User.objects.filter(
+        email__iexact=email,
+        is_active=True,
+    ).first()
+
+    # For security, don't reveal whether the user exists.
+    if not user:
+        return Response(
+            {
+                'success': True,
+                'message': 'If an account with this email exists, your username has been sent.'
+            }
+        )
+
+    # Rate limiting: Check if username recovery was requested recently (within 3 minutes)
+    cache_key = f'username_recovery_{user.id}_{user.email}'
+    last_recovery_time = cache.get(cache_key)
+    
+    if last_recovery_time:
+        # Calculate remaining time in seconds
+        elapsed = (timezone.now() - last_recovery_time).total_seconds()
+        remaining_seconds = 180 - elapsed  # 3 minutes = 180 seconds
+        
+        if remaining_seconds > 0:
+            remaining_minutes = int(remaining_seconds // 60)
+            remaining_secs = int(remaining_seconds % 60)
+            if remaining_minutes > 0:
+                time_message = f"{remaining_minutes} minute{'s' if remaining_minutes > 1 else ''} and {remaining_secs} second{'s' if remaining_secs != 1 else ''}"
+            else:
+                time_message = f"{remaining_secs} second{'s' if remaining_secs != 1 else ''}"
+            
+            return Response(
+                {
+                    'success': False,
+                    'error': f'Please wait {time_message} before requesting another username recovery. This helps prevent spam.'
+                },
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+    # Build email
+    full_name = (user.get_full_name() or "").strip()
+    if full_name:
+        greeting_line = f"Hello {full_name},\n\n"
+    else:
+        greeting_line = "Hello,\n\n"
+
+    message = (
+        greeting_line
+        + "You requested to recover your AcuRate account username.\n\n"
+        + f"Username: {user.username}\n"
+        + f"Email address: {user.email}\n\n"
+        + "You can now log in using your username or email address.\n\n"
+        + "If you did not request this, please contact your administrator."
+    )
+
+    try:
+        send_mail(
+            subject="AcuRate - Username Recovery",
+            message=message,
+            from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
+            recipient_list=[user.email],
+            fail_silently=False,
+        )
+        
+        # Set cache to prevent spam (3 minutes = 180 seconds)
+        cache.set(cache_key, timezone.now(), 180)
+    except Exception as e:
+        return Response(
+            {
+                'success': False,
+                'error': f'Failed to send email: {e}'
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    # Log username recovery request
+    institution = get_institution_for_user(user)
+    log_activity(
+        action_type=ActivityLog.ActionType.OTHER,
+        user=user,
+        institution=institution,
+        department=user.department,
+        description=f"Username recovery requested and emailed to user {user.email}",
+        related_object_type='User',
+        related_object_id=user.id,
+    )
+
+    return Response(
+        {
+            'success': True,
+            'message': 'If an account with this email exists, your username has been sent.'
         }
     )
 
@@ -1033,7 +1149,7 @@ class StudentGradeViewSet(viewsets.ModelViewSet):
         
         return queryset
     
-    def create(self, request, *args, **kwargs):
+    def create(self, request, *args, **kwargs):  # type: ignore[override]
         """Override create to log activity"""
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -1055,7 +1171,7 @@ class StudentGradeViewSet(viewsets.ModelViewSet):
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
     
-    def update(self, request, *args, **kwargs):
+    def update(self, request, *args, **kwargs):  # type: ignore[override]
         """Override update to log activity"""
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
@@ -2557,13 +2673,13 @@ def analytics_departments(request):
         # Determine status
         if po_achievement:
             if po_achievement >= 80:
-                status = 'excellent'
+                dept_status = 'excellent'
             elif po_achievement >= 70:
-                status = 'good'
+                dept_status = 'good'
             else:
-                status = 'needs-attention'
+                dept_status = 'needs-attention'
         else:
-            status = 'needs-attention'
+            dept_status = 'needs-attention'
         
         departments.append({
             'name': dept,
@@ -2572,7 +2688,7 @@ def analytics_departments(request):
             'faculty': faculty_count,
             'avg_grade': avg_grade,
             'po_achievement': po_achievement,
-            'status': status
+            'status': dept_status
         })
     
     # Sort by student count descending
@@ -2660,13 +2776,13 @@ def analytics_po_trends(request):
         # Determine status
         if avg_achievement is not None:
             if avg_achievement >= target_percentage_float * 1.1:
-                status = 'excellent'
+                po_status = 'excellent'
             elif avg_achievement >= target_percentage_float:
-                status = 'achieved'
+                po_status = 'achieved'
             else:
-                status = 'not-achieved'
+                po_status = 'not-achieved'
         else:
-            status = 'not-achieved'
+            po_status = 'not-achieved'
         
         po_trends.append({
             'code': po.code,
@@ -2676,7 +2792,7 @@ def analytics_po_trends(request):
             'total_students': total_students,
             'students_achieved': students_achieved,
             'achievement_rate': achievement_rate,
-            'status': status
+            'status': po_status
         })
     
     return Response({

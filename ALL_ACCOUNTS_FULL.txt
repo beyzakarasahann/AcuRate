@@ -1,0 +1,227 @@
+
+====================================================================================================
+📋 TÜM HESAPLAR - GİRİŞ BİLGİLERİ
+====================================================================================================
+
+🔴 1. SUPER ADMIN HESAPLARI
+----------------------------------------------------------------------------------------------------
+   ❌ Super Admin hesabı bulunamadı
+
+🟠 2. INSTITUTION ADMIN HESAPLARI
+----------------------------------------------------------------------------------------------------
+   Username: institution
+   Email: institution@acurate.edu
+   Full Name: Institution Admin
+   Department: Administration
+   Login URL: http://localhost:3000/login
+   Password: institution123 (varsayılan) - Değiştirilmiş olabilir
+
+   📊 Toplam: 1 Institution Admin
+
+🟡 3. TEACHER (ÖĞRETMEN) HESAPLARI
+----------------------------------------------------------------------------------------------------
+   Username: ahmet.bulut
+   Email: ahmet.bulut@acurate.edu
+   Full Name: Ahmet Bulut
+   Department: Computer Science
+   Login URL: http://localhost:3000/login
+   Password: Geçici şifre veya teacher123 (Geçici şifre - Email'de gönderilmiş)
+
+   📊 Toplam: 1 Teacher
+
+🟢 4. STUDENT (ÖĞRENCİ) HESAPLARI
+----------------------------------------------------------------------------------------------------
+   Username: beyza.karasahan
+   Email: beyza.karasahan@student.acurate.edu
+   Full Name: Beyza Karasahan
+   Student ID: 2024002
+   Department: Computer Science
+   Login URL: http://localhost:3000/login
+   Password: student123 veya beyza123
+
+   Username: beyza2
+   Email: beyza2@student.acurate.edu
+   Full Name: Beyza Test
+   Student ID: 2024001
+   Department: Computer Science
+   Login URL: http://localhost:3000/login
+   Password: student123 veya beyza123
+
+   Username: student10
+   Email: student10@student.acurate.edu
+   Full Name: Hasan Şahin
+   Student ID: 2024010
+   Department: Computer Science
+   Login URL: http://localhost:3000/login
+   Password: student123 veya beyza123 (Geçici şifre - Email'de gönderilmiş)
+
+   Username: student11
+   Email: student11@student.acurate.edu
+   Full Name: Elif Öztürk
+   Student ID: 2024011
+   Department: Computer Science
+   Login URL: http://localhost:3000/login
+   Password: student123 veya beyza123 (Geçici şifre - Email'de gönderilmiş)
+
+   Username: student12
+   Email: student12@student.acurate.edu
+   Full Name: Hasan Özdemir
+   Student ID: 2024012
+   Department: Computer Science
+   Login URL: http://localhost:3000/login
+   Password: student123 veya beyza123 (Geçici şifre - Email'de gönderilmiş)
+
+   Username: student13
+   Email: student13@student.acurate.edu
+   Full Name: Zeynep Özdemir
+   Student ID: 2024013
+   Department: Computer Science
+   Login URL: http://localhost:3000/login
+   Password: student123 veya beyza123 (Geçici şifre - Email'de gönderilmiş)
+
+   Username: student14
+   Email: student14@student.acurate.edu
+   Full Name: Hasan Yıldız
+   Student ID: 2024014
+   Department: Computer Science
+   Login URL: http://localhost:3000/login
+   Password: student123 veya beyza123 (Geçici şifre - Email'de gönderilmiş)
+
+   Username: student15
+   Email: student15@student.acurate.edu
+   Full Name: Elif Aydın
+   Student ID: 2024015
+   Department: Computer Science
+   Login URL: http://localhost:3000/login
+   Password: student123 veya beyza123 (Geçici şifre - Email'de gönderilmiş)
+
+   Username: student16
+   Email: student16@student.acurate.edu
+   Full Name: Mustafa Yılmaz
+   Student ID: 2024016
+   Department: Computer Science
+   Login URL: http://localhost:3000/login
+   Password: student123 veya beyza123 (Geçici şifre - Email'de gönderilmiş)
+
+   Username: student17
+   Email: student17@student.acurate.edu
+   Full Name: Mehmet Özdemir
+   Student ID: 2024017
+   Department: Computer Science
+   Login URL: http://localhost:3000/login
+   Password: student123 veya beyza123 (Geçici şifre - Email'de gönderilmiş)
+
+   Username: student18
+   Email: student18@student.acurate.edu
+   Full Name: Mehmet Öztürk
+   Student ID: 2024018
+   Department: Computer Science
+   Login URL: http://localhost:3000/login
+   Password: student123 veya beyza123 (Geçici şifre - Email'de gönderilmiş)
+
+   Username: student19
+   Email: student19@student.acurate.edu
+   Full Name: Zeynep Yılmaz
+   Student ID: 2024019
+   Department: Computer Science
+   Login URL: http://localhost:3000/login
+   Password: student123 veya beyza123 (Geçici şifre - Email'de gönderilmiş)
+
+   Username: student20
+   Email: student20@student.acurate.edu
+   Full Name: Ayşe Şahin
+   Student ID: 2024020
+   Department: Computer Science
+   Login URL: http://localhost:3000/login
+   Password: student123 veya beyza123 (Geçici şifre - Email'de gönderilmiş)
+
+   Username: student21
+   Email: student21@student.acurate.edu
+   Full Name: Ali Çelik
+   Student ID: 2024021
+   Department: Computer Science
+   Login URL: http://localhost:3000/login
+   Password: student123 veya beyza123 (Geçici şifre - Email'de gönderilmiş)
+
+   Username: student22
+   Email: student22@student.acurate.edu
+   Full Name: Mustafa Demir
+   Student ID: 2024022
+   Department: Computer Science
+   Login URL: http://localhost:3000/login
+   Password: student123 veya beyza123 (Geçici şifre - Email'de gönderilmiş)
+
+   Username: student23
+   Email: student23@student.acurate.edu
+   Full Name: Merve Demir
+   Student ID: 2024023
+   Department: Computer Science
+   Login URL: http://localhost:3000/login
+   Password: student123 veya beyza123 (Geçici şifre - Email'de gönderilmiş)
+
+   Username: student24
+   Email: student24@student.acurate.edu
+   Full Name: Ahmet Öztürk
+   Student ID: 2024024
+   Department: Computer Science
+   Login URL: http://localhost:3000/login
+   Password: student123 veya beyza123 (Geçici şifre - Email'de gönderilmiş)
+
+   Username: student25
+   Email: student25@student.acurate.edu
+   Full Name: Ahmet Aydın
+   Student ID: 2024025
+   Department: Computer Science
+   Login URL: http://localhost:3000/login
+   Password: student123 veya beyza123 (Geçici şifre - Email'de gönderilmiş)
+
+   Username: student26
+   Email: student26@student.acurate.edu
+   Full Name: Mustafa Demir
+   Student ID: 2024026
+   Department: Computer Science
+   Login URL: http://localhost:3000/login
+   Password: student123 veya beyza123 (Geçici şifre - Email'de gönderilmiş)
+
+   Username: student27
+   Email: student27@student.acurate.edu
+   Full Name: Mustafa Çelik
+   Student ID: 2024027
+   Department: Computer Science
+   Login URL: http://localhost:3000/login
+   Password: student123 veya beyza123 (Geçici şifre - Email'de gönderilmiş)
+
+   ... ve 30 öğrenci daha
+   Tüm öğrencileri görmek için: python reset_student_password.py list
+
+   📊 Toplam: 50 Student
+
+====================================================================================================
+📊 ÖZET
+====================================================================================================
+   Super Admin: 0
+   Institution Admin: 1
+   Teacher: 1
+   Student: 50
+   Toplam Aktif Kullanıcı: 52
+====================================================================================================
+
+💡 DEMO HESAPLARI (Test İçin):
+----------------------------------------------------------------------------------------------------
+   👨‍🎓 Student: beyza2
+      Email: beyza2@student.acurate.edu
+      Password: beyza123
+      Login: http://localhost:3000/login
+
+   👨‍🏫 Teacher: ahmet.bulut
+      Email: ahmet.bulut@acurate.edu
+      Password: ahmet123
+      Login: http://localhost:3000/login
+
+   🏛️  Institution: institution
+      Email: institution@acurate.edu
+      Password: institution123
+      Login: http://localhost:3000/login
+
+====================================================================================================
+

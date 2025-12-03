@@ -816,6 +816,51 @@ class ApiClient {
     }
   }
 
+  async forgotUsername(data: { email: string }): Promise<{ success: boolean; message?: string; error?: string }> {
+    try {
+      const response = await this.request<{ success: boolean; message?: string; error?: string }>('/auth/forgot-username/', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+      return response;
+    } catch (error: any) {
+      // Handle error properly - extract message from error object
+      let errorMessage = 'Failed to process username recovery request. Please try again.';
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (error && typeof error === 'object') {
+        // Try to extract error message from object
+        if ('error' in error && typeof error.error === 'string') {
+          errorMessage = error.error;
+        } else if ('message' in error && typeof error.message === 'string') {
+          errorMessage = error.message;
+        } else if ('detail' in error && typeof error.detail === 'string') {
+          errorMessage = error.detail;
+        } else {
+          // If it's an object but we can't extract a message, stringify it
+          try {
+            const errorStr = JSON.stringify(error);
+            // Only use stringified version if it's not just "[object Object]"
+            if (errorStr && errorStr !== '{}' && !errorStr.includes('[object')) {
+              errorMessage = errorStr;
+            }
+          } catch {
+            // If stringify fails, use default message
+          }
+        }
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      
+      // Return error response in expected format
+      return {
+        success: false,
+        error: errorMessage
+      };
+    }
+  }
+
   async getUsers(params?: { role?: string; search?: string; department?: string }): Promise<User[]> {
     const query = new URLSearchParams();
     if (params?.role) {
@@ -1735,7 +1780,17 @@ class ApiClient {
     if (queryString) {
       endpoint += `?${queryString}`;
     }
-    return await this.request<AssessmentLO[]>(endpoint);
+    const response = await this.request<any>(endpoint);
+    // Handle paginated response (DRF returns { results: [...] })
+    if (response && typeof response === 'object' && 'results' in response && Array.isArray(response.results)) {
+      return response.results;
+    }
+    // If it's already an array, return as is
+    if (Array.isArray(response)) {
+      return response;
+    }
+    // Fallback: return empty array
+    return [];
   }
 
   async createAssessmentLO(data: Partial<AssessmentLO>): Promise<AssessmentLO> {
@@ -1769,7 +1824,17 @@ class ApiClient {
     if (queryString) {
       endpoint += `?${queryString}`;
     }
-    return await this.request<LOPO[]>(endpoint);
+    const response = await this.request<any>(endpoint);
+    // Handle paginated response (DRF returns { results: [...] })
+    if (response && typeof response === 'object' && 'results' in response && Array.isArray(response.results)) {
+      return response.results;
+    }
+    // If it's already an array, return as is
+    if (Array.isArray(response)) {
+      return response;
+    }
+    // Fallback: return empty array
+    return [];
   }
 
   async createLOPO(data: Partial<LOPO>): Promise<LOPO> {

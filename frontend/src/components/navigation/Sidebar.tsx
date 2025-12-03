@@ -4,7 +4,7 @@
 import { motion, AnimatePresence } from 'framer-motion'; 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation'; 
-import { ChevronLeft, Home, BookOpen, Award, BarChart, Settings, Sun, Moon, LogOut, ChevronDown, Loader2, TrendingUp, Network } from 'lucide-react'; 
+import { ChevronLeft, Home, BookOpen, Award, BarChart, Settings, Sun, Moon, LogOut, ChevronDown, Loader2, TrendingUp, GitBranch } from 'lucide-react'; 
 import { useState, useEffect } from 'react';
 import { useTheme } from 'next-themes'; 
 import { useThemeColors } from '../../hooks/useThemeColors'; 
@@ -13,10 +13,10 @@ import { api, TokenManager, type User } from '@/lib/api';
 const baseNavItems = [
     { name: 'Home', icon: Home, slug: 'home' },
     { name: 'Courses', icon: BookOpen, slug: 'courses' },
+    { name: 'Scores', icon: GitBranch, slug: 'scores' },
     { name: 'Outcomes', icon: Award, slug: 'outcomes' },
     { name: 'Analytics', icon: BarChart, slug: 'analytics' },
     { name: 'Course Analytics', icon: TrendingUp, slug: 'course-analytics' },
-    { name: 'Relationships', icon: Network, slug: 'relationships' },
     { name: 'Settings', icon: Settings, slug: 'settings' },
 ];
 

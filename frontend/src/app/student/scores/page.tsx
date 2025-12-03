@@ -76,19 +76,41 @@ export default function ScoresPage() {
   const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null);
   const [courseData, setCourseData] = useState<CourseScoreData | null>(null);
   const [isCourseDropdownOpen, setIsCourseDropdownOpen] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+  const [studentDepartment, setStudentDepartment] = useState<string | null>(null);
 
   const { isDark, themeClasses, mutedText, text } = useThemeColors();
 
   useEffect(() => {
     setMounted(true);
-    fetchEnrollments();
+    fetchCurrentUser();
   }, []);
 
   useEffect(() => {
-    if (selectedCourseId) {
+    if (currentUserId) {
+      fetchEnrollments();
+    }
+  }, [currentUserId]);
+
+  useEffect(() => {
+    if (selectedCourseId && currentUserId) {
       fetchCourseScoreData(selectedCourseId);
     }
-  }, [selectedCourseId]);
+  }, [selectedCourseId, currentUserId]);
+
+  const fetchCurrentUser = async () => {
+    try {
+      const user = await api.getCurrentUser();
+      setCurrentUserId(user.id);
+      // Store student department for filtering Program Outcomes
+      if (user.department) {
+        setStudentDepartment(user.department);
+      }
+    } catch (err: any) {
+      console.error('Failed to fetch current user:', err);
+      setError('Failed to load user information');
+    }
+  };
 
   const fetchEnrollments = async () => {
     try {
@@ -115,13 +137,31 @@ export default function ScoresPage() {
       // Fetch all required data with proper error handling
       let course, assessments, los, pos, grades, allAssessmentLOs, allLOPOs;
       
+      // Get current user ID for filtering grades
+      if (!currentUserId) {
+        const user = await api.getCurrentUser();
+        setCurrentUserId(user.id);
+      }
+      const studentId = currentUserId;
+      
       try {
+        // Get user info if we don't have department yet
+        let userDepartment = studentDepartment;
+        if (!userDepartment) {
+          const user = await api.getCurrentUser();
+          userDepartment = user.department || null;
+          setStudentDepartment(userDepartment);
+        }
+
         const results = await Promise.allSettled([
           api.getCourse(courseId),
           api.getAssessments({ course: courseId }),
           api.getLearningOutcomes({ course: courseId }),
-          api.getProgramOutcomes(),
-          api.getGrades(),
+          // Filter Program Outcomes by department if available
+          userDepartment 
+            ? api.getProgramOutcomes({ department: userDepartment })
+            : api.getProgramOutcomes(),
+          studentId ? api.getGrades({ student: studentId }) : api.getGrades(), // Only get current student's grades
           api.getAssessmentLOs(), // Fetch all, then filter by course assessments
           api.getLOPOs(), // Fetch all, then filter by course LOs
         ]);
@@ -179,19 +219,74 @@ export default function ScoresPage() {
         los = [];
       }
 
-      const assessmentIds = assessments.map(a => a.id);
-      const assessmentLOs = allAssessmentLOs.filter(al => assessmentIds.includes(al.assessment));
+      const assessmentIds = assessments.map(a => Number(a.id));
+      const assessmentLOs = allAssessmentLOs.filter(al => {
+        // Handle both object and number formats
+        const alAssessmentId = typeof al.assessment === 'object' && al.assessment !== null
+          ? Number(al.assessment.id || al.assessment)
+          : Number(al.assessment);
+        return assessmentIds.includes(alAssessmentId);
+      });
 
       // Filter LO-POs to only those related to this course's LOs
-      const loIds = los.map(lo => lo.id);
-      const loPOs = allLOPOs.filter(lp => loIds.includes(lp.learning_outcome));
+      const loIds = los.map(lo => Number(lo.id));
+      const loPOs = allLOPOs.filter(lp => {
+        // Handle both object and number formats
+        const lpLoId = typeof lp.learning_outcome === 'object' && lp.learning_outcome !== null
+          ? Number(lp.learning_outcome.id || lp.learning_outcome)
+          : Number(lp.learning_outcome);
+        return loIds.includes(lpLoId);
+      });
 
-      // Process data into CourseScoreData format
+      // Debug: Log mapping counts
+      console.log('📊 Mapping counts:', {
+        assessments: assessments.length,
+        los: los.length,
+        allAssessmentLOs: allAssessmentLOs.length,
+        filteredAssessmentLOs: assessmentLOs.length,
+        allLOPOs: allLOPOs.length,
+        filteredLOPOs: loPOs.length,
+      });
+
+      // Debug: Log actual mapping data
+      console.log('🔍 Assessment-LO Mappings:', assessmentLOs.map(al => ({
+        assessment: al.assessment,
+        lo: al.learning_outcome,
+        weight: al.weight,
+        weightType: typeof al.weight
+      })));
+
+      console.log('🔍 LO-PO Mappings:', loPOs.map(lp => ({
+        lo: lp.learning_outcome,
+        po: lp.program_outcome,
+        weight: lp.weight,
+        weightType: typeof lp.weight
+      })));
+
+      if (assessmentLOs.length === 0) {
+        console.warn('⚠️  No Assessment-LO mappings found for this course!');
+      }
+      if (loPOs.length === 0) {
+        console.warn('⚠️  No LO-PO mappings found for this course!');
+      }
+
+      // Filter Program Outcomes to only show those that are actually connected to this course's LOs
+      const connectedPOIds = new Set(loPOs.map(lp => lp.program_outcome));
+      const filteredPOs = pos.filter(po => connectedPOIds.has(po.id));
+      
+      console.log('📊 Filtering POs:', {
+        totalPOs: pos.length,
+        connectedPOIds: Array.from(connectedPOIds),
+        filteredPOs: filteredPOs.length,
+        filteredPOCodes: filteredPOs.map(po => po.code || po.id)
+      });
+
+      // Process data into CourseScoreData format (use filtered POs)
       const processedData = processCourseData(
         course,
         assessments,
         los,
-        pos,
+        filteredPOs.length > 0 ? filteredPOs : pos, // Use filtered POs if available, otherwise all POs
         grades,
         assessmentLOs,
         loPOs
@@ -221,31 +316,50 @@ export default function ScoresPage() {
       const hasAssessmentEdges = processedData.assessments.some(a => Object.keys(a.weights || {}).length > 0);
       const hasLOEdges = processedData.los.some(lo => Object.keys(lo.poWeights || {}).length > 0);
 
+      // Debug: Show which assessments and LOs have mappings
+      console.log('🔍 Edge check details:', {
+        assessmentsWithWeights: processedData.assessments.filter(a => Object.keys(a.weights || {}).length > 0).map(a => a.label),
+        assessmentsWithoutWeights: processedData.assessments.filter(a => Object.keys(a.weights || {}).length === 0).map(a => a.label),
+        losWithWeights: processedData.los.filter(lo => Object.keys(lo.poWeights || {}).length > 0).map(lo => lo.label),
+        losWithoutWeights: processedData.los.filter(lo => Object.keys(lo.poWeights || {}).length === 0).map(lo => lo.label),
+      });
+
       console.log('📊 Data check:', {
         hasAssessments,
         hasLOs,
         hasPOs,
         hasAssessmentEdges,
         hasLOEdges,
+        assessmentsCount: processedData.assessments.length,
+        losCount: processedData.los.length,
+        posCount: processedData.pos.length,
       });
 
-      // If no edges can be generated, use sample data
-      if (!hasLOEdges && !hasAssessmentEdges) {
-        console.warn('⚠️ No edges can be generated from real data. Using sample data.');
-        const sampleData = getSampleData();
-        setCourseData(sampleData);
-        generateGraph(sampleData);
+      // Always use real data, even if empty - don't use sample data
+      setCourseData(processedData);
+      generateGraph(processedData);
+      
+      // Show warning if no data
+      if (!hasAssessments && !hasLOs && !hasPOs) {
+        setError('No data available for this course. Please ensure assessments, learning outcomes, and program outcomes are configured.');
+      } else if (!hasAssessmentEdges && !hasLOEdges) {
+        const missingDetails = [];
+        if (!hasAssessmentEdges) {
+          missingDetails.push('assessments to learning outcomes');
+        }
+        if (!hasLOEdges) {
+          missingDetails.push('learning outcomes to program outcomes');
+        }
+        setError(`No relationships configured. Missing mappings: ${missingDetails.join(' and ')}. Please contact your instructor to configure these mappings.`);
       } else {
-        setCourseData(processedData);
-        generateGraph(processedData);
+        // Clear error if we have relationships
+        setError(null);
       }
     } catch (err: any) {
       console.error('Failed to fetch course data:', err);
       setError(err.message || 'Failed to load course data');
-      // Use sample data as fallback
-      const sampleData = getSampleData();
-      setCourseData(sampleData);
-      generateGraph(sampleData);
+      // Don't use sample data - show error instead
+      setCourseData(null);
     } finally {
       setLoading(false);
     }
@@ -260,65 +374,122 @@ export default function ScoresPage() {
     assessmentLOs: AssessmentLO[],
     loPOs: LOPO[]
   ): CourseScoreData => {
+    // Debug: Log all IDs for comparison
+    console.log('🔍 Processing data - IDs:', {
+      assessmentIds: assessments.map(a => ({ id: a.id, type: typeof a.id })),
+      loIds: los.map(lo => ({ id: lo.id, type: typeof lo.id })),
+      poIds: pos.map(po => ({ id: po.id, type: typeof po.id })),
+      assessmentLOIds: assessmentLOs.map(al => ({ 
+        assessment: al.assessment, 
+        lo: al.learning_outcome,
+        types: { assessment: typeof al.assessment, lo: typeof al.learning_outcome }
+      })),
+      loPOIds: loPOs.map(lp => ({
+        lo: lp.learning_outcome,
+        po: lp.program_outcome,
+        types: { lo: typeof lp.learning_outcome, po: typeof lp.program_outcome }
+      })),
+    });
+
     // Create assessment data with scores
     const assessmentData = assessments.map(assessment => {
-      const grade = grades.find(g => g.assessment === assessment.id);
-      const score = grade?.score || 0;
-      const maxScore = assessment.max_score;
+      const assessmentId = Number(assessment.id);
+      const grade = grades.find(g => Number(g.assessment) === assessmentId);
+      const score = Number(grade?.score || 0);
+      const maxScore = Number(assessment.max_score || 100);
       const percentage = maxScore > 0 ? (score / maxScore) * 100 : 0;
 
       // Get weights for this assessment -> LO
       const weights: Record<string, number> = {};
-      assessmentLOs
-        .filter(al => al.assessment === assessment.id)
-        .forEach(al => {
-          weights[`lo-${al.learning_outcome}`] = al.weight;
-        });
+      
+      const relevantAssessmentLOs = assessmentLOs.filter(al => {
+        const alAssessmentId = typeof al.assessment === 'object' ? al.assessment.id : Number(al.assessment);
+        return alAssessmentId === assessmentId;
+      });
+      
+      relevantAssessmentLOs.forEach(al => {
+        const loId = typeof al.learning_outcome === 'object' ? al.learning_outcome.id : Number(al.learning_outcome);
+        // Weight comes as string from API, parse it
+        const weightStr = String(al.weight || '0');
+        const weight = parseFloat(weightStr);
+        // Only add if weight is valid and > 0
+        if (!isNaN(weight) && weight > 0) {
+          weights[`lo-${loId}`] = weight;
+        }
+      });
+
+      if (Object.keys(weights).length === 0) {
+        console.warn(`⚠️  No LO mappings found for assessment: ${assessment.title} (ID: ${assessmentId})`);
+      }
 
       return {
         id: `assessment-${assessment.id}`,
         label: assessment.title,
-        score,
-        maxScore,
-        percentage,
+        score: Number(score),
+        maxScore: Number(maxScore),
+        percentage: Number(percentage),
         weights,
       };
     });
 
     // Create LO data with calculated scores
     const loData = los.map(lo => {
+      const loId = Number(lo.id);
+      
       // Calculate LO score from assessments
       let totalWeight = 0;
       let weightedSum = 0;
 
       assessmentLOs
-        .filter(al => al.learning_outcome === lo.id)
+        .filter(al => Number(al.learning_outcome) === loId)
         .forEach(al => {
-          const assessment = assessments.find(a => a.id === al.assessment);
-          const grade = grades.find(g => g.assessment === al.assessment);
+          const assessmentId = Number(al.assessment);
+          const assessment = assessments.find(a => Number(a.id) === assessmentId);
+          const grade = grades.find(g => Number(g.assessment) === assessmentId);
           if (assessment && grade) {
-            const percentage = assessment.max_score > 0 
-              ? (grade.score / assessment.max_score) * 100 
+            const weight = typeof al.weight === 'string' ? parseFloat(al.weight) : Number(al.weight);
+            const assessmentMaxScore = Number(assessment.max_score || 100);
+            const gradeScore = Number(grade.score || 0);
+            const percentage = assessmentMaxScore > 0 
+              ? (gradeScore / assessmentMaxScore) * 100 
               : 0;
-            weightedSum += percentage * al.weight;
-            totalWeight += al.weight;
+            weightedSum += percentage * weight;
+            totalWeight += weight;
           }
         });
 
       const loScore = totalWeight > 0 ? weightedSum / totalWeight : 0;
 
       // Get weights for this LO -> PO
+      // LOPO weight is 0.1-10.0 scale where 10.0 = 100%, so convert to 0-1 scale
       const poWeights: Record<string, number> = {};
-      loPOs
-        .filter(lp => lp.learning_outcome === lo.id)
-        .forEach(lp => {
-          poWeights[`po-${lp.program_outcome}`] = lp.weight;
-        });
+      const relevantLOPOs = loPOs.filter(lp => {
+        const lpLoId = typeof lp.learning_outcome === 'object' ? lp.learning_outcome.id : Number(lp.learning_outcome);
+        return lpLoId === loId;
+      });
+      
+      relevantLOPOs.forEach(lp => {
+        const poId = typeof lp.program_outcome === 'object' ? lp.program_outcome.id : Number(lp.program_outcome);
+        // Weight comes as string from API, parse it
+        const weightStr = String(lp.weight || '0');
+        const weight = parseFloat(weightStr);
+        // Only add if weight is valid and > 0
+        if (!isNaN(weight) && weight > 0) {
+          // Convert LOPO weight (0.1-10.0) to percentage (0-1 scale)
+          // 10.0 = 100% = 1.0, 6.0 = 60% = 0.6, 4.0 = 40% = 0.4, etc.
+          const normalizedWeight = weight / 10.0;
+          poWeights[`po-${poId}`] = normalizedWeight;
+        }
+      });
+
+      if (Object.keys(poWeights).length === 0) {
+        console.warn(`⚠️  No PO mappings found for LO: ${lo.code || lo.id} (ID: ${loId})`);
+      }
 
       return {
         id: `lo-${lo.id}`,
         label: lo.code || `LO${lo.id}`,
-        score: loScore,
+        score: Number(loScore || 0),
         poWeights,
       };
     });
@@ -330,15 +501,29 @@ export default function ScoresPage() {
       let weightedSum = 0;
 
       loPOs
-        .filter(lp => lp.program_outcome === po.id)
+        .filter(lp => {
+          const lpPoId = typeof lp.program_outcome === 'object' && lp.program_outcome !== null
+            ? Number(lp.program_outcome.id || lp.program_outcome)
+            : Number(lp.program_outcome);
+          return lpPoId === Number(po.id);
+        })
         .forEach(lp => {
-          const lo = los.find(l => l.id === lp.learning_outcome);
+          const lpLoId = typeof lp.learning_outcome === 'object' && lp.learning_outcome !== null
+            ? Number(lp.learning_outcome.id || lp.learning_outcome)
+            : Number(lp.learning_outcome);
+          const lo = los.find(l => Number(l.id) === lpLoId);
           if (lo) {
             // Get LO score (calculated above)
             const loItem = loData.find(l => l.id === `lo-${lo.id}`);
             if (loItem) {
-              weightedSum += loItem.score * lp.weight;
-              totalWeight += lp.weight;
+              const weightStr = String(lp.weight || '0');
+              const weight = parseFloat(weightStr);
+              if (!isNaN(weight) && weight > 0) {
+                // Convert LOPO weight (0.1-10.0) to normalized weight (0-1 scale)
+                const normalizedWeight = weight / 10.0;
+                weightedSum += loItem.score * normalizedWeight;
+                totalWeight += normalizedWeight;
+              }
             }
           }
         });
@@ -348,7 +533,7 @@ export default function ScoresPage() {
       return {
         id: `po-${po.id}`,
         label: po.code || `PO${po.id}`,
-        score: poScore,
+        score: Number(poScore || 0),
       };
     });
 
@@ -364,73 +549,6 @@ export default function ScoresPage() {
     };
   };
 
-  const getSampleData = (): CourseScoreData => {
-    return {
-      course: {
-        id: 1,
-        code: 'CSE302',
-        name: 'Database Systems',
-      },
-      assessments: [
-        { 
-          id: 'assessment-1', 
-          label: 'Midterm Exam', 
-          score: 85, 
-          maxScore: 100, 
-          percentage: 85, 
-          weights: { 
-            'lo-2': 0.5,  // LO2'ye %50 katkı
-            'lo-3': 0.3   // LO3'e %30 katkı
-          } 
-        },
-        { 
-          id: 'assessment-2', 
-          label: 'Final Exam', 
-          score: 90, 
-          maxScore: 100, 
-          percentage: 90, 
-          weights: { 
-            'lo-2': 0.3,  // LO2'ye %30 katkı
-            'lo-3': 0.4   // LO3'e %40 katkı
-          } 
-        },
-        { 
-          id: 'assessment-3', 
-          label: 'Project', 
-          score: 80, 
-          maxScore: 100, 
-          percentage: 80, 
-          weights: { 
-            'lo-3': 0.6   // LO3'e %60 katkı
-          } 
-        },
-      ],
-      los: [
-        { 
-          id: 'lo-2', 
-          label: 'LO2', 
-          score: 87.5, 
-          poWeights: { 
-            'po-1': 1.0,  // PO1'e %100 katkı
-            'po-2': 0.5   // PO2'ye %50 katkı
-          } 
-        },
-        { 
-          id: 'lo-3', 
-          label: 'LO3', 
-          score: 85.0, 
-          poWeights: { 
-            'po-1': 0.5,  // PO1'e %50 katkı
-            'po-2': 1.0   // PO2'ye %100 katkı
-          } 
-        },
-      ],
-      pos: [
-        { id: 'po-1', label: 'PO1', score: 86.25 },
-        { id: 'po-2', label: 'PO2', score: 85.0 },
-      ],
-    };
-  };
 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -516,6 +634,7 @@ export default function ScoresPage() {
     data.los.forEach(lo => {
       Object.keys(lo.poWeights || {}).forEach(poId => {
         const weight = lo.poWeights[poId];
+        // Weight is already normalized to 0-1 scale, so multiply by 100 for percentage
         if (weight && weight > 0) {
           edges.push({
             id: `${lo.id}-${poId}`,
@@ -550,7 +669,7 @@ export default function ScoresPage() {
           label: (
             <div className={`p-4 rounded-lg ${isDark ? 'bg-blue-500/20 border border-blue-400/30' : 'bg-blue-50 border border-blue-200'}`}>
               <p className="font-bold text-sm">{assessment.label}</p>
-              <p className="text-xs mt-1">{assessment.score.toFixed(1)} / {assessment.maxScore} ({assessment.percentage.toFixed(1)}%)</p>
+              <p className="text-xs mt-1">{Number(assessment.score || 0).toFixed(1)} / {Number(assessment.maxScore || 100).toFixed(0)} ({Number(assessment.percentage || 0).toFixed(1)}%)</p>
             </div>
           ),
         },
@@ -569,7 +688,7 @@ export default function ScoresPage() {
           label: (
             <div className={`p-4 rounded-lg ${isDark ? 'bg-purple-500/20 border border-purple-400/30' : 'bg-purple-50 border border-purple-200'}`}>
               <p className="font-bold text-sm">{lo.label}</p>
-              <p className="text-xs mt-1">{lo.score.toFixed(1)}%</p>
+              <p className="text-xs mt-1">{Number(lo.score || 0).toFixed(1)}%</p>
             </div>
           ),
         },
@@ -588,7 +707,7 @@ export default function ScoresPage() {
           label: (
             <div className={`p-4 rounded-lg ${isDark ? 'bg-green-500/20 border border-green-400/30' : 'bg-green-50 border border-green-200'}`}>
               <p className="font-bold text-sm">{po.label}</p>
-              <p className="text-xs mt-1">{po.score.toFixed(1)}%</p>
+              <p className="text-xs mt-1">{Number(po.score || 0).toFixed(1)}%</p>
             </div>
           ),
         },
@@ -620,8 +739,8 @@ export default function ScoresPage() {
         tooltipContent = {
           type: 'assessment',
           title: assessment.label,
-          score: `${assessment.score.toFixed(1)} / ${assessment.maxScore}`,
-          percentage: `${assessment.percentage.toFixed(1)}%`,
+          score: `${Number(assessment.score || 0).toFixed(1)} / ${Number(assessment.maxScore || 100).toFixed(0)}`,
+          percentage: `${Number(assessment.percentage || 0).toFixed(1)}%`,
           contributions: Object.entries(assessment.weights || {}).map(([loId, weight]) => ({
             target: courseData?.los.find(lo => lo.id === loId)?.label || loId,
             weight: `${(weight * 100).toFixed(0)}%`,
@@ -634,7 +753,7 @@ export default function ScoresPage() {
         tooltipContent = {
           type: 'lo',
           title: lo.label,
-          score: `${lo.score.toFixed(1)}%`,
+          score: `${Number(lo.score || 0).toFixed(1)}%`,
           contributions: Object.entries(lo.poWeights || {}).map(([poId, weight]) => ({
             target: courseData?.pos.find(po => po.id === poId)?.label || poId,
             weight: `${(weight * 100).toFixed(0)}%`,
@@ -647,7 +766,7 @@ export default function ScoresPage() {
         tooltipContent = {
           type: 'po',
           title: po.label,
-          score: `${po.score.toFixed(1)}%`,
+          score: `${Number(po.score || 0).toFixed(1)}%`,
         };
       }
     }
@@ -915,7 +1034,7 @@ export default function ScoresPage() {
               >
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">{po.label}</p>
                 <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                  {po.score.toFixed(0)}
+                  {Number(po.score || 0).toFixed(0)}
                 </p>
               </motion.div>
             ))}

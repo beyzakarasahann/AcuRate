@@ -8,7 +8,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 
 from .views import (
     # Auth views
-    login_view, logout_view, current_user_view, register_view, create_teacher_view, forgot_password_view,
+    login_view, logout_view, current_user_view, register_view, create_teacher_view, forgot_password_view, forgot_username_view,
     # Dashboard views
     student_dashboard, teacher_dashboard, institution_dashboard, super_admin_dashboard,
     # Super Admin views
@@ -54,6 +54,7 @@ urlpatterns = [
     path('auth/logout/', logout_view, name='logout'),
     path('auth/register/', register_view, name='register'),
     path('auth/forgot-password/', forgot_password_view, name='forgot-password'),
+    path('auth/forgot-username/', forgot_username_view, name='forgot-username'),
     path('auth/me/', current_user_view, name='current-user'),
     path('auth/token/refresh/', TokenRefreshView.as_view(), name='token-refresh'),
     path('teachers/', create_teacher_view, name='create-teacher'),
