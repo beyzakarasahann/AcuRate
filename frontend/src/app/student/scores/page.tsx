@@ -337,7 +337,6 @@ export default function ScoresPage() {
 
       // Always use real data, even if empty - don't use sample data
       setCourseData(processedData);
-      generateGraph(processedData);
       
       // Show warning if no data
       if (!hasAssessments && !hasLOs && !hasPOs) {
@@ -345,15 +344,16 @@ export default function ScoresPage() {
       } else if (!hasAssessmentEdges && !hasLOEdges) {
         const missingDetails = [];
         if (!hasAssessmentEdges) {
-          missingDetails.push('assessments to learning outcomes');
+          missingDetails.push('assessments → learning outcomes (Assessment → LO)');
         }
         if (!hasLOEdges) {
-          missingDetails.push('learning outcomes to program outcomes');
+          missingDetails.push('learning outcomes → program outcomes (LO → PO)');
         }
         setError(`No relationships configured. Missing mappings: ${missingDetails.join(' and ')}. Please contact your instructor to configure these mappings.`);
       } else {
-        // Clear error if we have relationships
+        // Clear error if we have relationships and generate graph
         setError(null);
+        generateGraph(processedData);
       }
     } catch (err: any) {
       console.error('Failed to fetch course data:', err);
@@ -403,18 +403,28 @@ export default function ScoresPage() {
       const weights: Record<string, number> = {};
       
       const relevantAssessmentLOs = assessmentLOs.filter(al => {
-        const alAssessmentId = typeof al.assessment === 'object' ? al.assessment.id : Number(al.assessment);
+        // Handle both object and number formats for assessment
+        const alAssessmentId = typeof al.assessment === 'object' && al.assessment !== null
+          ? Number(al.assessment.id || al.assessment)
+          : Number(al.assessment);
         return alAssessmentId === assessmentId;
       });
       
       relevantAssessmentLOs.forEach(al => {
-        const loId = typeof al.learning_outcome === 'object' ? al.learning_outcome.id : Number(al.learning_outcome);
-        // Weight comes as string from API, parse it
+        // Handle both object and number formats for learning_outcome
+        const loId = typeof al.learning_outcome === 'object' && al.learning_outcome !== null
+          ? Number(al.learning_outcome.id || al.learning_outcome)
+          : Number(al.learning_outcome);
+        // AssessmentLO weight is 0.1-10.0 scale where 1.0 = 100% contribution
+        // For display purposes, we show the weight as percentage
         const weightStr = String(al.weight || '0');
-        const weight = parseFloat(weightStr);
+        const rawWeight = parseFloat(weightStr);
         // Only add if weight is valid and > 0
-        if (!isNaN(weight) && weight > 0) {
-          weights[`lo-${loId}`] = weight;
+        if (!isNaN(rawWeight) && rawWeight > 0) {
+          // Store normalized weight (1.0 = 100% = 1.0, 0.5 = 50% = 0.5, etc.)
+          // This will be used for edge label display
+          const normalizedWeight = rawWeight / 1.0; // AssessmentLO uses 1.0 as 100%
+          weights[`lo-${loId}`] = normalizedWeight;
         }
       });
 
@@ -441,20 +451,40 @@ export default function ScoresPage() {
       let weightedSum = 0;
 
       assessmentLOs
-        .filter(al => Number(al.learning_outcome) === loId)
+        .filter(al => {
+          // Handle both object and number formats for learning_outcome
+          const alLoId = typeof al.learning_outcome === 'object' && al.learning_outcome !== null
+            ? Number(al.learning_outcome.id || al.learning_outcome)
+            : Number(al.learning_outcome);
+          return alLoId === loId;
+        })
         .forEach(al => {
-          const assessmentId = Number(al.assessment);
+          // Handle both object and number formats for assessment
+          const assessmentId = typeof al.assessment === 'object' && al.assessment !== null
+            ? Number(al.assessment.id || al.assessment)
+            : Number(al.assessment);
           const assessment = assessments.find(a => Number(a.id) === assessmentId);
-          const grade = grades.find(g => Number(g.assessment) === assessmentId);
+          const grade = grades.find(g => {
+            const gradeAssessmentId = typeof g.assessment === 'object' && g.assessment !== null
+              ? Number(g.assessment.id || g.assessment)
+              : Number(g.assessment);
+            return gradeAssessmentId === assessmentId;
+          });
           if (assessment && grade) {
-            const weight = typeof al.weight === 'string' ? parseFloat(al.weight) : Number(al.weight);
+            // AssessmentLO weight is 0.1-10.0 scale where 1.0 = 100% contribution
+            // Normalize to 0-1 scale for weighted average calculation
+            const rawWeight = typeof al.weight === 'string' ? parseFloat(al.weight) : Number(al.weight || 0);
+            const normalizedWeight = rawWeight / 1.0; // 1.0 = 100% = 1.0, 0.5 = 50% = 0.5, etc.
+            
             const assessmentMaxScore = Number(assessment.max_score || 100);
             const gradeScore = Number(grade.score || 0);
             const percentage = assessmentMaxScore > 0 
               ? (gradeScore / assessmentMaxScore) * 100 
               : 0;
-            weightedSum += percentage * weight;
-            totalWeight += weight;
+            
+            // Weighted average: sum(score * weight) / sum(weight)
+            weightedSum += percentage * normalizedWeight;
+            totalWeight += normalizedWeight;
           }
         });
 
@@ -559,47 +589,63 @@ export default function ScoresPage() {
   const [showTooltip, setShowTooltip] = useState(false);
   const [tooltipData, setTooltipData] = useState<any>(null);
 
-  // Dagre layout function
-  const getLayoutedElements = (nodes: Node[], edges: Edge[], direction: 'TB' | 'LR' = 'TB') => {
-    const g = new dagre.graphlib.Graph();
-    g.setDefaultEdgeLabel(() => ({}));
-    g.setGraph({ 
-      rankdir: direction,
-      nodesep: 80,
-      ranksep: 120,
-      marginx: 50,
-      marginy: 50,
-    });
+  // Custom layout function: Left (Assessment) → Center (LO) → Right (PO)
+  const getLayoutedElements = (nodes: Node[], edges: Edge[], data: CourseScoreData) => {
+    const nodeWidth = 220;
+    const nodeHeight = 100;
+    const horizontalSpacing = 400; // Distance between Assessment → LO → PO
+    const verticalSpacing = 140; // Distance between nodes on the same level
+    const startX = 100;
+    const startY = 50;
 
-    nodes.forEach((node) => {
-      g.setNode(node.id, { width: 256, height: 120 });
-    });
+    // Node'ları kategorilere ayır
+    const assessmentNodes = nodes.filter(n => n.id.startsWith('assessment-'));
+    const loNodes = nodes.filter(n => n.id.startsWith('lo-'));
+    const poNodes = nodes.filter(n => n.id.startsWith('po-'));
 
-    edges.forEach((edge) => {
-      g.setEdge(edge.source, edge.target);
-    });
-
-    dagre.layout(g);
-
-    const layoutedNodes = nodes.map((node) => {
-      const nodeWithPosition = g.node(node.id);
-      if (!nodeWithPosition) {
-        return {
-          ...node,
-          targetPosition: Position.Top,
-          sourcePosition: Position.Bottom,
-          position: { x: 0, y: 0 },
-        };
-      }
+    // Assessment node'larını sol tarafa yerleştir (dikey sıralama)
+    const layoutedNodes: Node[] = assessmentNodes.map((node, index) => {
+      const y = startY + index * verticalSpacing;
       return {
         ...node,
-        targetPosition: Position.Top,
-        sourcePosition: Position.Bottom,
-        position: {
-          x: nodeWithPosition.x - 128,
-          y: nodeWithPosition.y - 60,
+        position: { x: startX, y },
+        targetPosition: Position.Right,
+        sourcePosition: Position.Left,
+        data: {
+          ...node.data,
+          type: 'assessment',
         },
       };
+    });
+
+    // Place LO nodes in the center (vertical stacking)
+    loNodes.forEach((node, index) => {
+      const y = startY + index * verticalSpacing;
+      layoutedNodes.push({
+        ...node,
+        position: { x: startX + horizontalSpacing, y },
+        targetPosition: Position.Right,
+        sourcePosition: Position.Left,
+        data: {
+          ...node.data,
+          type: 'lo',
+        },
+      });
+    });
+
+    // Place PO nodes on the right side (vertical stacking)
+    poNodes.forEach((node, index) => {
+      const y = startY + index * verticalSpacing;
+      layoutedNodes.push({
+        ...node,
+        position: { x: startX + horizontalSpacing * 2, y },
+        targetPosition: Position.Right,
+        sourcePosition: Position.Left,
+        data: {
+          ...node.data,
+          type: 'po',
+        },
+      });
     });
 
     return { nodes: layoutedNodes, edges };
@@ -614,17 +660,25 @@ export default function ScoresPage() {
       Object.keys(assessment.weights || {}).forEach(loId => {
         const weight = assessment.weights[loId];
         if (weight && weight > 0) {
+          // AssessmentLO weight is normalized (1.0 = 100%)
+          // Convert to percentage for display (weight * 100)
+          const percentage = (weight * 100);
           edges.push({
             id: `${assessment.id}-${loId}`,
             source: assessment.id,
             target: loId,
-            label: `${(weight * 100).toFixed(0)}%`,
+            label: `${percentage.toFixed(0)}%`,
             type: 'custom',
-            markerEnd: { type: MarkerType.ArrowClosed },
-            style: {
-              stroke: isDark ? 'rgba(99, 102, 241, 0.5)' : 'rgba(99, 102, 241, 0.4)',
-              strokeWidth: 2,
+            markerEnd: { 
+              type: MarkerType.ArrowClosed,
+              width: 30,
+              height: 30,
             },
+            style: {
+              stroke: isDark ? 'rgba(99, 102, 241, 0.7)' : 'rgba(99, 102, 241, 0.7)',
+              strokeWidth: 3,
+            },
+            animated: true,
           });
         }
       });
@@ -636,17 +690,23 @@ export default function ScoresPage() {
         const weight = lo.poWeights[poId];
         // Weight is already normalized to 0-1 scale, so multiply by 100 for percentage
         if (weight && weight > 0) {
+          const percentage = (weight * 100);
           edges.push({
             id: `${lo.id}-${poId}`,
             source: lo.id,
             target: poId,
-            label: `${(weight * 100).toFixed(0)}%`,
+            label: `${percentage.toFixed(0)}%`,
             type: 'custom',
-            markerEnd: { type: MarkerType.ArrowClosed },
-            style: {
-              stroke: isDark ? 'rgba(139, 92, 246, 0.5)' : 'rgba(139, 92, 246, 0.4)',
-              strokeWidth: 2,
+            markerEnd: { 
+              type: MarkerType.ArrowClosed,
+              width: 30,
+              height: 30,
             },
+            style: {
+              stroke: isDark ? 'rgba(139, 92, 246, 0.7)' : 'rgba(139, 92, 246, 0.7)',
+              strokeWidth: 3,
+            },
+            animated: true,
           });
         }
       });
@@ -659,7 +719,7 @@ export default function ScoresPage() {
   const generateGraph = useCallback((data: CourseScoreData) => {
     const newNodes: Node[] = [];
     
-    // Assessment nodes
+    // Assessment nodes (Left side - Assessments)
     data.assessments.forEach(assessment => {
       newNodes.push({
         id: assessment.id,
@@ -667,18 +727,26 @@ export default function ScoresPage() {
         position: { x: 0, y: 0 },
         data: {
           label: (
-            <div className={`p-4 rounded-lg ${isDark ? 'bg-blue-500/20 border border-blue-400/30' : 'bg-blue-50 border border-blue-200'}`}>
-              <p className="font-bold text-sm">{assessment.label}</p>
-              <p className="text-xs mt-1">{Number(assessment.score || 0).toFixed(1)} / {Number(assessment.maxScore || 100).toFixed(0)} ({Number(assessment.percentage || 0).toFixed(1)}%)</p>
+            <div className={`p-3 rounded-lg shadow-md ${isDark ? 'bg-blue-500/20 border-2 border-blue-400/50' : 'bg-blue-50 border-2 border-blue-300'}`}>
+              <div className="flex items-center gap-2 mb-1">
+                <FileText className="w-4 h-4 text-blue-500" />
+                <p className="font-bold text-sm">{assessment.label}</p>
+              </div>
+              <p className="text-xs mt-1 text-gray-600 dark:text-gray-300">
+                <span className="font-semibold">{Number(assessment.score || 0).toFixed(1)}</span> / {Number(assessment.maxScore || 100).toFixed(0)}
+              </p>
+              <p className={`text-xs font-bold ${isDark ? 'text-blue-300' : 'text-blue-600'}`}>
+                {Number(assessment.percentage || 0).toFixed(1)}%
+              </p>
             </div>
           ),
         },
-        targetPosition: Position.Top,
-        sourcePosition: Position.Bottom,
+        targetPosition: Position.Right,
+        sourcePosition: Position.Left,
       });
     });
 
-    // LO nodes
+    // LO nodes (Center - Learning Outcomes)
     data.los.forEach(lo => {
       newNodes.push({
         id: lo.id,
@@ -686,18 +754,26 @@ export default function ScoresPage() {
         position: { x: 0, y: 0 },
         data: {
           label: (
-            <div className={`p-4 rounded-lg ${isDark ? 'bg-purple-500/20 border border-purple-400/30' : 'bg-purple-50 border border-purple-200'}`}>
-              <p className="font-bold text-sm">{lo.label}</p>
-              <p className="text-xs mt-1">{Number(lo.score || 0).toFixed(1)}%</p>
+            <div className={`p-3 rounded-lg shadow-md ${isDark ? 'bg-purple-500/20 border-2 border-purple-400/50' : 'bg-purple-50 border-2 border-purple-300'}`}>
+              <div className="flex items-center gap-2 mb-1">
+                <Target className="w-4 h-4 text-purple-500" />
+                <p className="font-bold text-sm">{lo.label}</p>
+              </div>
+              <p className={`text-lg font-bold ${isDark ? 'text-purple-300' : 'text-purple-600'}`}>
+                {Number(lo.score || 0).toFixed(1)}%
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Calculated LO Score
+              </p>
             </div>
           ),
         },
-        targetPosition: Position.Top,
-        sourcePosition: Position.Bottom,
+        targetPosition: Position.Right,
+        sourcePosition: Position.Left,
       });
     });
 
-    // PO nodes
+    // PO nodes (Right side - Program Outcomes)
     data.pos.forEach(po => {
       newNodes.push({
         id: po.id,
@@ -705,19 +781,27 @@ export default function ScoresPage() {
         position: { x: 0, y: 0 },
         data: {
           label: (
-            <div className={`p-4 rounded-lg ${isDark ? 'bg-green-500/20 border border-green-400/30' : 'bg-green-50 border border-green-200'}`}>
-              <p className="font-bold text-sm">{po.label}</p>
-              <p className="text-xs mt-1">{Number(po.score || 0).toFixed(1)}%</p>
+            <div className={`p-3 rounded-lg shadow-md ${isDark ? 'bg-green-500/20 border-2 border-green-400/50' : 'bg-green-50 border-2 border-green-300'}`}>
+              <div className="flex items-center gap-2 mb-1">
+                <Award className="w-4 h-4 text-green-500" />
+                <p className="font-bold text-sm">{po.label}</p>
+              </div>
+              <p className={`text-lg font-bold ${isDark ? 'text-green-300' : 'text-green-600'}`}>
+                {Number(po.score || 0).toFixed(1)}%
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Total PO Achievement
+              </p>
             </div>
           ),
         },
-        targetPosition: Position.Top,
-        sourcePosition: Position.Bottom,
+        targetPosition: Position.Right,
+        sourcePosition: Position.Left,
       });
     });
 
     const newEdges = generateEdges(data);
-    const layouted = getLayoutedElements(newNodes, newEdges, 'TB');
+    const layouted = getLayoutedElements(newNodes, newEdges, data);
     
     setNodes(layouted.nodes);
     setEdges(layouted.edges);
@@ -804,10 +888,10 @@ export default function ScoresPage() {
         className="mb-8"
       >
         <h1 className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400 mb-4">
-          Score Flow Visualization
+          Learning Flow Graph
         </h1>
         <p className={mutedText}>
-          Visualize how your scores flow from assessments → Learning Outcomes → Program Outcomes
+          Dynamic flow visualization: See how your assessment scores (midterm, final, project) flow from Assessments → Learning Outcomes (LO) → Program Outcomes (PO)
         </p>
       </motion.div>
 
@@ -866,7 +950,7 @@ export default function ScoresPage() {
                         {enrollment.course_code || 'N/A'} - {enrollment.course_name || 'Unknown'}
                       </p>
                       <p className={`text-sm ${mutedText}`}>
-                        {enrollment.is_active ? 'In Progress' : 'Completed'}
+                        {enrollment.is_active ? 'Active' : 'Completed'}
                       </p>
                     </button>
                   ))
@@ -956,7 +1040,7 @@ export default function ScoresPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.2 }}
-              className={`${themeClasses.card} rounded-xl shadow-xl p-4 h-[700px] relative`}
+              className={`${themeClasses.card} rounded-xl shadow-xl p-4 h-[800px] relative overflow-hidden`}
             >
               <ReactFlow
                 nodes={nodes}
