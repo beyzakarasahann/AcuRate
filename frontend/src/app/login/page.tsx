@@ -137,7 +137,7 @@ export default function LoginPage() {
 
     // E-posta girilmediyse uyar
     if (!forgotEmail.trim()) {
-      setError('Please enter your email address to receive a new temporary password.');
+      setError('Please enter your username or email address to receive a new temporary password.');
       return;
     }
 
@@ -374,7 +374,7 @@ export default function LoginPage() {
               </h2>
               <p className={`text-sm ${mutedTextColorClass}`}>
                 {showForgotPassword
-                  ? 'Enter your email address to receive a new temporary password'
+                  ? 'Enter your username or email to receive a new temporary password'
                   : 'Enter your credentials to access your dashboard'}
               </p>
             </div>
@@ -382,19 +382,19 @@ export default function LoginPage() {
             {showForgotPassword ? (
               /* Forgot Password Form */
               <form onSubmit={handleForgotPassword} className="space-y-6">
-                {/* Email Input */}
+                {/* Username or Email Input */}
                 <div>
                   <label className={`text-sm font-medium mb-2 block ${textColorClass}`}>
-                    Email Address
+                    Username or Email Address
                   </label>
                   <div className="relative">
                     <User className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 ${isDark ? 'text-gray-400' : 'text-gray-500'}`} />
                     <input
-                      type="email"
+                      type="text"
                       value={forgotEmail}
                       onChange={(e) => setForgotEmail(e.target.value)}
                       className={`w-full pl-12 pr-4 py-3 rounded-xl focus:outline-none focus:border-indigo-500/50 transition-all ${inputBgClass} ${inputPlaceholderClass} ${inputFocusClass}`}
-                      placeholder="Enter your email address"
+                      placeholder="Enter your username or email"
                       required
                       autoFocus
                     />
@@ -463,19 +463,19 @@ export default function LoginPage() {
             ) : (
               /* Normal Login Form */
               <form onSubmit={handleLogin} className="space-y-6">
-              {/* Email Address */}
+              {/* Username or Email Address */}
               <div>
                 <label className={`text-sm font-medium mb-2 block ${textColorClass}`}>
-                  Email Address
+                  Username or Email Address
                 </label>
                 <div className="relative">
                   <User className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 ${isDark ? 'text-gray-400' : 'text-gray-500'}`} />
                   <input
-                    type="email"
+                    type="text"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     className={`w-full pl-12 pr-4 py-3 rounded-xl focus:outline-none focus:border-indigo-500/50 transition-all ${inputBgClass} ${inputPlaceholderClass} ${inputFocusClass}`}
-                    placeholder="Enter your email address"
+                    placeholder="Enter your username or email"
                     required
                   />
                 </div>
