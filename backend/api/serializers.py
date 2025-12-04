@@ -773,21 +773,51 @@ class StudentLOAchievementSerializer(serializers.ModelSerializer):
 # =============================================================================
 
 class AssessmentLOSerializer(serializers.ModelSerializer):
-    """Serializer for Assessment-LO mapping"""
+    """Serializer for Assessment-LO mapping
+    
+    Supports both field naming conventions:
+    - Backend standard: assessment, learning_outcome
+    - Frontend alternative: assessmentId, learningOutcomeId, courseId
+    """
+    # Standard fields
     assessment_title = serializers.CharField(source='assessment.title', read_only=True)
     assessment_type = serializers.CharField(source='assessment.assessment_type', read_only=True)
     lo_code = serializers.CharField(source='learning_outcome.code', read_only=True)
     lo_title = serializers.CharField(source='learning_outcome.title', read_only=True)
     course_code = serializers.CharField(source='assessment.course.code', read_only=True)
     
+    # Alternative field names for frontend compatibility
+    assessmentId = serializers.IntegerField(source='assessment.id', read_only=True)
+    learningOutcomeId = serializers.IntegerField(source='learning_outcome.id', read_only=True)
+    courseId = serializers.IntegerField(source='assessment.course.id', read_only=True)
+    
     class Meta:
         model = AssessmentLO
         fields = [
-            'id', 'assessment', 'assessment_title', 'assessment_type',
-            'learning_outcome', 'lo_code', 'lo_title', 'course_code',
-            'weight', 'created_at', 'updated_at'
+            'id', 'assessment', 'learning_outcome', 'weight',
+            # Standard read-only fields
+            'assessment_title', 'assessment_type', 'lo_code', 'lo_title', 'course_code',
+            # Alternative field names
+            'assessmentId', 'learningOutcomeId', 'courseId',
+            'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+    
+    def to_internal_value(self, data):
+        """Convert frontend field names to backend field names"""
+        # Create a copy to avoid modifying the original
+        data = dict(data)
+        
+        # Convert frontend field names to backend field names if present
+        if 'assessmentId' in data and 'assessment' not in data:
+            data['assessment'] = data.pop('assessmentId')
+        if 'learningOutcomeId' in data and 'learning_outcome' not in data:
+            data['learning_outcome'] = data.pop('learningOutcomeId')
+        
+        # courseId is only used for validation, not stored directly
+        # It can be validated in perform_create in the view
+        
+        return super().to_internal_value(data)
 
 
 # =============================================================================
@@ -795,19 +825,46 @@ class AssessmentLOSerializer(serializers.ModelSerializer):
 # =============================================================================
 
 class LOPOSerializer(serializers.ModelSerializer):
-    """Serializer for LO-PO mapping"""
+    """Serializer for LO-PO mapping
+    
+    Supports both field naming conventions:
+    - Backend standard: learning_outcome, program_outcome
+    - Frontend alternative: learningOutcomeId, programOutcomeId, courseId
+    """
+    # Standard fields
     lo_code = serializers.CharField(source='learning_outcome.code', read_only=True)
     lo_title = serializers.CharField(source='learning_outcome.title', read_only=True)
     po_code = serializers.CharField(source='program_outcome.code', read_only=True)
     po_title = serializers.CharField(source='program_outcome.title', read_only=True)
     course_code = serializers.CharField(source='learning_outcome.course.code', read_only=True)
     
+    # Alternative field names for frontend compatibility
+    learningOutcomeId = serializers.IntegerField(source='learning_outcome.id', read_only=True)
+    programOutcomeId = serializers.IntegerField(source='program_outcome.id', read_only=True)
+    courseId = serializers.IntegerField(source='learning_outcome.course.id', read_only=True)
+    
     class Meta:
         model = LOPO
         fields = [
-            'id', 'learning_outcome', 'lo_code', 'lo_title',
-            'program_outcome', 'po_code', 'po_title', 'course_code',
-            'weight', 'created_at', 'updated_at'
+            'id', 'learning_outcome', 'program_outcome', 'weight',
+            # Standard read-only fields
+            'lo_code', 'lo_title', 'po_code', 'po_title', 'course_code',
+            # Alternative field names
+            'learningOutcomeId', 'programOutcomeId', 'courseId',
+            'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+    
+    def to_internal_value(self, data):
+        """Convert frontend field names to backend field names"""
+        # Create a copy to avoid modifying the original
+        data = dict(data)
+        
+        # Convert frontend field names to backend field names if present
+        if 'learningOutcomeId' in data and 'learning_outcome' not in data:
+            data['learning_outcome'] = data.pop('learningOutcomeId')
+        if 'programOutcomeId' in data and 'program_outcome' not in data:
+            data['program_outcome'] = data.pop('programOutcomeId')
+        
+        return super().to_internal_value(data)
 

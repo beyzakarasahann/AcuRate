@@ -3,7 +3,19 @@
  * Centralized API communication with authentication support
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+// Get API base URL from environment variable
+// Ensure it ends with /api but no trailing slash
+const getApiBaseUrl = (): string => {
+  const envUrl = process.env.NEXT_PUBLIC_API_URL;
+  if (envUrl) {
+    // Remove trailing slash if present
+    return envUrl.endsWith('/') ? envUrl.slice(0, -1) : envUrl;
+  }
+  // Default fallback
+  return 'http://localhost:8000/api';
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 // Types
 export interface User {
@@ -355,12 +367,19 @@ class ApiClient {
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
-    const url = `${this.baseUrl}${endpoint}`;
+    // Ensure endpoint starts with / if not already
+    const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const url = `${this.baseUrl}${normalizedEndpoint}`;
     const token = TokenManager.getAccessToken();
     const method = options.method || 'GET';
     
+    // Debug logging for development
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[API Client] ${method} ${url}`);
+    }
+    
     // Store endpoint for error handling
-    const requestEndpoint = endpoint;
+    const requestEndpoint = normalizedEndpoint;
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -1123,10 +1142,24 @@ class ApiClient {
 
   // Learning Outcomes
   async getLearningOutcomes(params?: { course?: number }): Promise<LearningOutcome[]> {
-    const queryParams = new URLSearchParams(params as any).toString();
-    const endpoint = `/learning-outcomes/${queryParams ? `?${queryParams}` : ''}`;
-    const response = await this.request<LearningOutcome[]>(endpoint);
-    return Array.isArray(response) ? response : [];
+    const queryParams = new URLSearchParams();
+    if (params?.course) queryParams.append('course', params.course.toString());
+    
+    const queryString = queryParams.toString();
+    const endpoint = `/learning-outcomes/${queryString ? `?${queryString}` : ''}`;
+    const response = await this.request<any>(endpoint);
+    
+    // Handle paginated response (DRF returns { results: [...] })
+    if (response && typeof response === 'object' && 'results' in response && Array.isArray(response.results)) {
+      return response.results;
+    }
+    // If it's already an array, return as is
+    if (Array.isArray(response)) {
+      return response;
+    }
+    // Fallback: return empty array
+    console.warn('⚠️ API: Unexpected response format from getLearningOutcomes:', response);
+    return [];
   }
 
   async getLearningOutcome(id: number): Promise<LearningOutcome> {
@@ -1267,9 +1300,24 @@ class ApiClient {
 
   // Assessments
   async getAssessments(params?: { course?: number }): Promise<Assessment[]> {
-    const queryParams = new URLSearchParams(params as any).toString();
-    const endpoint = `/assessments/${queryParams ? `?${queryParams}` : ''}`;
-    return await this.request<Assessment[]>(endpoint);
+    const queryParams = new URLSearchParams();
+    if (params?.course) queryParams.append('course', params.course.toString());
+    
+    const queryString = queryParams.toString();
+    const endpoint = `/assessments/${queryString ? `?${queryString}` : ''}`;
+    const response = await this.request<any>(endpoint);
+    
+    // Handle paginated response (DRF returns { results: [...] })
+    if (response && typeof response === 'object' && 'results' in response && Array.isArray(response.results)) {
+      return response.results;
+    }
+    // If it's already an array, return as is
+    if (Array.isArray(response)) {
+      return response;
+    }
+    // Fallback: return empty array
+    console.warn('⚠️ API: Unexpected response format from getAssessments:', response);
+    return [];
   }
 
   async getAssessment(id: number): Promise<Assessment> {
@@ -1770,10 +1818,12 @@ class ApiClient {
   }
 
   // Assessment-LO Mappings
-  async getAssessmentLOs(params?: { assessment?: number; learning_outcome?: number }): Promise<AssessmentLO[]> {
+  async getAssessmentLOs(params?: { assessment?: number; learning_outcome?: number; courseId?: number; course?: number }): Promise<AssessmentLO[]> {
     const queryParams = new URLSearchParams();
     if (params?.assessment) queryParams.append('assessment', params.assessment.toString());
     if (params?.learning_outcome) queryParams.append('learning_outcome', params.learning_outcome.toString());
+    if (params?.courseId) queryParams.append('courseId', params.courseId.toString());
+    if (params?.course) queryParams.append('courseId', params.course.toString());
     
     const queryString = queryParams.toString();
     let endpoint = '/assessment-los/';
@@ -1814,10 +1864,12 @@ class ApiClient {
   }
 
   // LO-PO Mappings
-  async getLOPOs(params?: { learning_outcome?: number; program_outcome?: number }): Promise<LOPO[]> {
+  async getLOPOs(params?: { learning_outcome?: number; program_outcome?: number; courseId?: number; course?: number }): Promise<LOPO[]> {
     const queryParams = new URLSearchParams();
     if (params?.learning_outcome) queryParams.append('learning_outcome', params.learning_outcome.toString());
     if (params?.program_outcome) queryParams.append('program_outcome', params.program_outcome.toString());
+    if (params?.courseId) queryParams.append('courseId', params.courseId.toString());
+    if (params?.course) queryParams.append('courseId', params.course.toString());
     
     const queryString = queryParams.toString();
     let endpoint = '/lo-pos/';

@@ -3,6 +3,11 @@ import { NextRequest, NextResponse } from 'next/server';
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // Allow access to login page without authentication
+  if (pathname === '/login' || pathname.startsWith('/login')) {
+    return NextResponse.next();
+  }
+
   // Get auth token and role from cookies
   const authToken = request.cookies.get('auth_token')?.value;
   const userRole = request.cookies.get('user_role')?.value;

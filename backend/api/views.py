@@ -3294,6 +3294,11 @@ class AssessmentLOViewSet(viewsets.ModelViewSet):
     """
     ViewSet for Assessment-LO mapping CRUD operations
     Teachers can manage which assessments contribute to which LOs and their weights
+    
+    Query Parameters:
+    - courseId: Filter by course ID
+    - assessment: Filter by assessment ID
+    - learning_outcome: Filter by learning outcome ID
     """
     queryset = AssessmentLO.objects.all()
     serializer_class = AssessmentLOSerializer
@@ -3304,10 +3309,35 @@ class AssessmentLOViewSet(viewsets.ModelViewSet):
     ordering = ['-created_at']
     
     def get_queryset(self):
-        """Filter by teacher's courses"""
+        """Filter by teacher's courses and optional query parameters"""
         user = self.request.user
         queryset = AssessmentLO.objects.all()
         
+        # Filter by course if courseId parameter is provided
+        course_id = self.request.query_params.get('courseId') or self.request.query_params.get('course')
+        if course_id:
+            try:
+                queryset = queryset.filter(assessment__course_id=int(course_id))
+            except (ValueError, TypeError):
+                pass  # Invalid courseId, ignore it
+        
+        # Filter by assessment if provided
+        assessment_id = self.request.query_params.get('assessment')
+        if assessment_id:
+            try:
+                queryset = queryset.filter(assessment_id=int(assessment_id))
+            except (ValueError, TypeError):
+                pass
+        
+        # Filter by learning outcome if provided
+        learning_outcome_id = self.request.query_params.get('learning_outcome')
+        if learning_outcome_id:
+            try:
+                queryset = queryset.filter(learning_outcome_id=int(learning_outcome_id))
+            except (ValueError, TypeError):
+                pass
+        
+        # Apply role-based filtering
         if user.role == User.Role.TEACHER:
             # Only show AssessmentLOs for assessments in teacher's courses
             queryset = queryset.filter(assessment__course__teacher=user)
@@ -3323,14 +3353,32 @@ class AssessmentLOViewSet(viewsets.ModelViewSet):
         return queryset.distinct()
     
     def perform_create(self, serializer):
-        """Only allow teachers to create AssessmentLO mappings for their courses"""
+        """Only allow teachers to create AssessmentLO mappings for their courses
+        
+        Validates that:
+        - User is a teacher
+        - Assessment belongs to teacher's course
+        - Optional courseId matches assessment's course (for frontend validation)
+        """
         user = self.request.user
         if user.role != User.Role.TEACHER:
             raise PermissionDenied("Only teachers can create Assessment-LO mappings")
         
         assessment = serializer.validated_data['assessment']
+        
+        # Validate that assessment belongs to teacher's course
         if assessment.course.teacher != user:
             raise PermissionDenied("You can only create mappings for assessments in your courses")
+        
+        # Optional: Validate courseId if provided in request data
+        request_data = self.request.data
+        if 'courseId' in request_data or 'course_id' in request_data:
+            course_id = request_data.get('courseId') or request_data.get('course_id')
+            try:
+                if int(course_id) != assessment.course.id:
+                    raise PermissionDenied("courseId does not match the assessment's course")
+            except (ValueError, TypeError):
+                pass  # Invalid courseId format, ignore it
         
         serializer.save()
 
@@ -3339,6 +3387,11 @@ class LOPOViewSet(viewsets.ModelViewSet):
     """
     ViewSet for LO-PO mapping CRUD operations
     Teachers can manage which LOs contribute to which POs and their weights
+    
+    Query Parameters:
+    - courseId: Filter by course ID
+    - learning_outcome: Filter by learning outcome ID
+    - program_outcome: Filter by program outcome ID
     """
     queryset = LOPO.objects.all()
     serializer_class = LOPOSerializer
@@ -3349,10 +3402,35 @@ class LOPOViewSet(viewsets.ModelViewSet):
     ordering = ['-created_at']
     
     def get_queryset(self):
-        """Filter by teacher's courses"""
+        """Filter by teacher's courses and optional query parameters"""
         user = self.request.user
         queryset = LOPO.objects.all()
         
+        # Filter by course if courseId parameter is provided
+        course_id = self.request.query_params.get('courseId') or self.request.query_params.get('course')
+        if course_id:
+            try:
+                queryset = queryset.filter(learning_outcome__course_id=int(course_id))
+            except (ValueError, TypeError):
+                pass  # Invalid courseId, ignore it
+        
+        # Filter by learning outcome if provided
+        learning_outcome_id = self.request.query_params.get('learning_outcome')
+        if learning_outcome_id:
+            try:
+                queryset = queryset.filter(learning_outcome_id=int(learning_outcome_id))
+            except (ValueError, TypeError):
+                pass
+        
+        # Filter by program outcome if provided
+        program_outcome_id = self.request.query_params.get('program_outcome')
+        if program_outcome_id:
+            try:
+                queryset = queryset.filter(program_outcome_id=int(program_outcome_id))
+            except (ValueError, TypeError):
+                pass
+        
+        # Apply role-based filtering
         if user.role == User.Role.TEACHER:
             # Only show LOPOs for LOs in teacher's courses
             queryset = queryset.filter(learning_outcome__course__teacher=user)
@@ -3368,13 +3446,31 @@ class LOPOViewSet(viewsets.ModelViewSet):
         return queryset.distinct()
     
     def perform_create(self, serializer):
-        """Only allow teachers to create LOPO mappings for their courses"""
+        """Only allow teachers to create LOPO mappings for their courses
+        
+        Validates that:
+        - User is a teacher
+        - Learning outcome belongs to teacher's course
+        - Optional courseId matches LO's course (for frontend validation)
+        """
         user = self.request.user
         if user.role != User.Role.TEACHER:
             raise PermissionDenied("Only teachers can create LO-PO mappings")
         
         learning_outcome = serializer.validated_data['learning_outcome']
+        
+        # Validate that learning outcome belongs to teacher's course
         if learning_outcome.course.teacher != user:
             raise PermissionDenied("You can only create mappings for LOs in your courses")
+        
+        # Optional: Validate courseId if provided in request data
+        request_data = self.request.data
+        if 'courseId' in request_data or 'course_id' in request_data:
+            course_id = request_data.get('courseId') or request_data.get('course_id')
+            try:
+                if int(course_id) != learning_outcome.course.id:
+                    raise PermissionDenied("courseId does not match the learning outcome's course")
+            except (ValueError, TypeError):
+                pass  # Invalid courseId format, ignore it
         
         serializer.save()
