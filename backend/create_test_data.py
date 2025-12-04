@@ -724,16 +724,9 @@ def create_assessment_lo_mappings(assessments, learning_outcomes):
         num_los = min(len(course_los), random.randint(1, 3))
         selected_los = random.sample(course_los, num_los)
         
-        # Distribute weights so they sum to reasonable values
-        # Generate random weights that sum to approximately 1.0
-        raw_weights = [random.uniform(0.2, 0.6) for _ in range(num_los)]
-        total_raw = sum(raw_weights)
-        weights = [Decimal(str(round(w / total_raw, 2))) for w in raw_weights]
-        
-        # Ensure they sum to exactly 1.0
-        weights_sum = sum(weights)
-        if weights_sum != Decimal('1.00'):
-            weights[-1] = Decimal('1.00') - (weights_sum - weights[-1])
+        # Distribute weights (AssessmentLO weight is 0.1-10.0 scale where 1.0 = 100%)
+        # Generate random weights between 0.5 and 2.0 (50% to 200% contribution)
+        weights = [Decimal(str(round(random.uniform(0.5, 2.0), 2))) for _ in range(num_los)]
         
         for i, lo in enumerate(selected_los):
             mapping = AssessmentLO.objects.create(
@@ -771,16 +764,9 @@ def create_lo_po_mappings(learning_outcomes, pos):
         num_pos = min(len(related_pos), random.randint(1, 3))
         selected_pos = random.sample(related_pos, num_pos)
         
-        # Distribute weights
-        # Generate random weights that sum to approximately 1.0
-        raw_weights = [random.uniform(0.2, 0.6) for _ in range(num_pos)]
-        total_raw = sum(raw_weights)
-        weights = [Decimal(str(round(w / total_raw, 2))) for w in raw_weights]
-        
-        # Ensure they sum to exactly 1.0
-        weights_sum = sum(weights)
-        if weights_sum != Decimal('1.00'):
-            weights[-1] = Decimal('1.00') - (weights_sum - weights[-1])
+        # Distribute weights (LOPO weight is 0.1-10.0 scale where 10.0 = 100%)
+        # Generate random weights between 2.0 and 8.0 (20% to 80% contribution per PO)
+        weights = [Decimal(str(round(random.uniform(2.0, 8.0), 2))) for _ in range(num_pos)]
         
         for i, po in enumerate(selected_pos):
             mapping = LOPO.objects.create(
