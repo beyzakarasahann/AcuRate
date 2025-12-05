@@ -2,7 +2,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { BookOpen, TrendingUp, CheckCircle2, XCircle, ChevronDown, FileText, ArrowRight, AlertTriangle, Clock, Loader2 } from 'lucide-react';
+import { BookOpen, AlertTriangle, Loader2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useThemeColors } from '@/hooks/useThemeColors'; 
 import Link from 'next/link';
@@ -19,15 +19,6 @@ const item = {
     show: { opacity: 1, y: 0 }
 };
 
-const getGradeStatus = (grade: string | number) => {
-    const gradeString = String(grade).toUpperCase();
-    
-    if (gradeString === '-') return { color: 'text-gray-500', icon: Clock };
-    if (gradeString.startsWith('A') || parseFloat(gradeString) >= 90) return { color: 'text-green-500', icon: CheckCircle2 };
-    if (gradeString.startsWith('B') || parseFloat(gradeString) >= 80) return { color: 'text-blue-500', icon: TrendingUp };
-    if (gradeString.startsWith('C') || parseFloat(gradeString) >= 70) return { color: 'text-orange-500', icon: AlertTriangle };
-    return { color: 'text-red-500', icon: XCircle };
-};
 
 
 // Course data interface
@@ -313,32 +304,8 @@ export default function CoursesPage() {
       >
         <h1 className={`text-3xl font-bold ${whiteText} flex items-center gap-3`}>
           <BookOpen className="w-7 h-7 text-indigo-500" />
-          My Courses & Grades
+          My Courses
         </h1>
-        <div className="flex gap-4 items-center">
-            {/* Filtreleme Dropdown */}
-            <div className="relative">
-                <select
-                    value={filter}
-                    onChange={(e) => setFilter(e.target.value)}
-                    className={`appearance-none ${themeClasses.card.replace('shadow-2xl', '').replace('rounded-2xl', 'rounded-xl')} ${whiteText} border ${isDark ? 'border-white/10' : 'border-gray-300'} py-2 pl-4 pr-10 text-sm focus:ring-2 focus:ring-indigo-500 outline-none`}
-                >
-                    <option value="all">All Statuses</option>
-                    <option value="in progress">In Progress</option>
-                    <option value="completed">Completed</option>
-                </select>
-                <ChevronDown className={`absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 ${mutedText} pointer-events-none`} />
-            </div>
-
-            <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className={`px-4 py-2 rounded-xl text-white flex items-center gap-2 transition-all bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-500/30`}
-            >
-                <FileText className="w-4 h-4" />
-                View Transcript
-            </motion.button>
-        </div>
       </motion.div>
 
       {/* Dersler Tablosu veya Empty State */}
@@ -353,7 +320,7 @@ export default function CoursesPage() {
           <thead className={isDark ? 'bg-white/5' : 'bg-gray-50'}>
             <tr>
               {/* Dinamik sıralama başlıkları */}
-              {['Course', 'Semester', 'Instructor', 'Final Grade', 'Current Grade', 'PO Ach.', 'Status'].map(header => (
+              {['Course', 'Instructor'].map(header => (
                 <th
                   key={header}
                   onClick={() => handleSort(header)}
@@ -362,15 +329,12 @@ export default function CoursesPage() {
                   {header} {getSortIndicator(header)}
                 </th>
               ))}
-              <th className={`px-6 py-3 text-right text-xs font-medium ${mutedText} uppercase tracking-wider`}>Feedback</th>
             </tr>
           </thead>
           <motion.tbody
             className={`divide-y ${isDark ? 'divide-white/10' : 'divide-gray-200'}`}
           >
             {sortedCourses.map((course, index) => {
-              const { color: gradeColor, icon: GradeIcon } = getGradeStatus(course.finalGrade !== '-' ? course.finalGrade : course.currentGrade);
-              const poBarColor = course.poAchievement >= 85 ? 'bg-green-500' : course.poAchievement >= 75 ? 'bg-blue-500' : 'bg-orange-500';
 
               return (
                 <motion.tr
@@ -382,65 +346,7 @@ export default function CoursesPage() {
                   <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${whiteText}`}>
                     {course.name} <span className={mutedText}>({course.id})</span>
                   </td>
-                  <td className={`px-6 py-4 whitespace-nowrap text-sm ${mutedText}`}>{course.semester}</td>
                   <td className={`px-6 py-4 whitespace-nowrap text-sm ${mutedText}`}>{course.instructor}</td>
-                  
-                  {/* Final Grade */}
-                  <td className={`px-6 py-4 whitespace-nowrap text-sm ${whiteText}`}>
-                    <span className="flex items-center gap-2">
-                        <GradeIcon className={`w-4 h-4 ${gradeColor}`} />
-                        {course.finalGrade !== '-' ? course.finalGrade : `${Math.round(course.currentGrade)}%`}
-                    </span>
-                  </td>
-                  
-                  {/* Current Grade */}
-                  <td className={`px-6 py-4 whitespace-nowrap text-sm font-semibold ${whiteText}`}>
-                    {course.currentGrade}%
-                  </td>
-                  
-                  {/* PO Achievement Barı */}
-                  <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    <div className="flex items-center">
-                        <span className={`w-12 text-xs font-semibold ${whiteText}`}>{course.poAchievement}%</span>
-                        <div className={`flex-1 h-2 rounded-full overflow-hidden ${isDark ? 'bg-white/10' : 'bg-gray-200'} ml-3`}>
-                            <motion.div
-                                initial={{ width: 0 }}
-                                animate={{ width: `${course.poAchievement}%` }}
-                                transition={{ duration: 0.8, delay: index * 0.1 }}
-                                className={`h-full rounded-full ${poBarColor}`}
-                            />
-                        </div>
-                    </div>
-                  </td>
-
-                  {/* Status Badge */}
-                  <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        course.status === 'Completed' ? 'bg-green-500/20 text-green-700 dark:text-green-300' :
-                        course.status === 'In Progress' ? 'bg-blue-500/20 text-blue-700 dark:text-blue-300' :
-                        'bg-yellow-500/20 text-yellow-700 dark:text-yellow-300' 
-                    }`}>
-                      {course.status}
-                    </span>
-                  </td>
-                  
-                  {/* Details Button/Feedback */}
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <Link
-                        // Yönlendirme: /student/courses/[courseId]
-                        href={`/student/courses/${course.id}`} 
-                        passHref
-                        className="inline-flex items-center"
-                    >
-                        <motion.button 
-                            whileHover={{ x: 3 }}
-                            className="text-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-300 transition-colors flex items-center gap-1 justify-end"
-                            title={course.feedback} 
-                        >
-                            View Feedback <ArrowRight className="w-4 h-4" />
-                        </motion.button>
-                    </Link>
-                  </td>
                 </motion.tr>
               );
             })}

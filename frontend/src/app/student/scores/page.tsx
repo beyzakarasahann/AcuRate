@@ -623,8 +623,7 @@ export default function ScoresPage() {
       return {
         ...node,
         position: { x: startX, y },
-        targetPosition: Position.Right,
-        sourcePosition: Position.Left,
+        sourcePosition: Position.Right,
         data: {
           ...node.data,
           type: 'assessment',
@@ -638,8 +637,8 @@ export default function ScoresPage() {
       layoutedNodes.push({
         ...node,
         position: { x: startX + horizontalSpacing, y },
-        targetPosition: Position.Right,
-        sourcePosition: Position.Left,
+        targetPosition: Position.Left,
+        sourcePosition: Position.Right,
         data: {
           ...node.data,
           type: 'lo',
@@ -653,8 +652,7 @@ export default function ScoresPage() {
       layoutedNodes.push({
         ...node,
         position: { x: startX + horizontalSpacing * 2, y },
-        targetPosition: Position.Right,
-        sourcePosition: Position.Left,
+        targetPosition: Position.Left,
         data: {
           ...node.data,
           type: 'po',
@@ -741,7 +739,7 @@ export default function ScoresPage() {
         position: { x: 0, y: 0 },
         data: {
           label: (
-            <div className={`p-3 rounded-lg shadow-md ${isDark ? 'bg-blue-500/20 border-2 border-blue-400/50' : 'bg-blue-50 border-2 border-blue-300'}`}>
+            <div className={`p-3 rounded-lg shadow-md ${isDark ? 'bg-blue-500/20' : 'bg-blue-50'}`}>
               <div className="flex items-center gap-2 mb-1">
                 <FileText className="w-4 h-4 text-blue-500" />
                 <p className="font-bold text-sm">{assessment.label}</p>
@@ -755,8 +753,7 @@ export default function ScoresPage() {
             </div>
           ),
         },
-        targetPosition: Position.Right,
-        sourcePosition: Position.Left,
+        sourcePosition: Position.Right,
       });
     });
 
@@ -766,9 +763,13 @@ export default function ScoresPage() {
         id: lo.id,
         type: 'default',
         position: { x: 0, y: 0 },
+        style: {
+          border: 'none',
+          background: 'transparent',
+        },
         data: {
           label: (
-            <div className={`p-3 rounded-lg shadow-md ${isDark ? 'bg-purple-500/20 border-2 border-purple-400/50' : 'bg-purple-50 border-2 border-purple-300'}`}>
+            <div className={`p-3 rounded-lg shadow-md ${isDark ? 'bg-purple-500/20' : 'bg-purple-50'}`}>
               <div className="flex items-center gap-2 mb-1">
                 <Target className="w-4 h-4 text-purple-500" />
                 <p className="font-bold text-sm">{lo.label}</p>
@@ -782,8 +783,8 @@ export default function ScoresPage() {
             </div>
           ),
         },
-        targetPosition: Position.Right,
-        sourcePosition: Position.Left,
+        targetPosition: Position.Left,
+        sourcePosition: Position.Right,
       });
     });
 
@@ -793,9 +794,13 @@ export default function ScoresPage() {
         id: po.id,
         type: 'default',
         position: { x: 0, y: 0 },
+        style: {
+          border: 'none',
+          background: 'transparent',
+        },
         data: {
           label: (
-            <div className={`p-3 rounded-lg shadow-md ${isDark ? 'bg-green-500/20 border-2 border-green-400/50' : 'bg-green-50 border-2 border-green-300'}`}>
+            <div className={`p-3 rounded-lg shadow-md ${isDark ? 'bg-green-500/20' : 'bg-green-50'}`}>
               <div className="flex items-center gap-2 mb-1">
                 <Award className="w-4 h-4 text-green-500" />
                 <p className="font-bold text-sm">{po.label}</p>
@@ -809,8 +814,7 @@ export default function ScoresPage() {
             </div>
           ),
         },
-        targetPosition: Position.Right,
-        sourcePosition: Position.Left,
+        targetPosition: Position.Left,
       });
     });
 
