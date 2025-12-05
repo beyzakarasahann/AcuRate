@@ -470,8 +470,8 @@ class LOPO(models.Model):
         max_digits=5,
         decimal_places=2,
         default=1.00,
-        validators=[MinValueValidator(0.1), MaxValueValidator(10.0)],
-        help_text="Weight/contribution of this LO to the PO (default: 1.0, meaning 100%)"
+        validators=[MinValueValidator(0.01), MaxValueValidator(10.0)],
+        help_text="Weight/contribution of this LO to the PO (0.01-10.0 scale, where 1.0 = 10%, 10.0 = 100%)"
     )
     
     created_at = models.DateTimeField(auto_now_add=True)
@@ -693,8 +693,8 @@ class AssessmentLO(models.Model):
         max_digits=5,
         decimal_places=2,
         default=1.00,
-        validators=[MinValueValidator(0.1), MaxValueValidator(10.0)],
-        help_text="Weight/contribution of this assessment to the LO (default: 1.0)"
+        validators=[MinValueValidator(0.01), MaxValueValidator(10.0)],
+        help_text="Weight/contribution of this assessment to the LO (0.01-10.0 scale, where 1.0 = 10%, 10.0 = 100%)"
     )
     
     created_at = models.DateTimeField(auto_now_add=True)

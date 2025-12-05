@@ -55,11 +55,17 @@ interface CourseScoreData {
     label: string;
     score: number;
     poWeights: Record<string, number>; // PO ID -> weight
+    title?: string;
+    description?: string;
+    target?: number;
   }>;
   pos: Array<{
     id: string;
     label: string;
     score: number;
+    title?: string;
+    description?: string;
+    target?: number;
   }>;
 }
 
@@ -78,6 +84,8 @@ export default function ScoresPage() {
   const [isCourseDropdownOpen, setIsCourseDropdownOpen] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [studentDepartment, setStudentDepartment] = useState<string | null>(null);
+  const [hoveredPO, setHoveredPO] = useState<string | null>(null);
+  const [hoveredLO, setHoveredLO] = useState<string | null>(null);
 
   const { isDark, themeClasses, mutedText, text } = useThemeColors();
 
@@ -415,15 +423,15 @@ export default function ScoresPage() {
         const loId = typeof al.learning_outcome === 'object' && al.learning_outcome !== null
           ? Number(al.learning_outcome.id || al.learning_outcome)
           : Number(al.learning_outcome);
-        // AssessmentLO weight is 0.1-10.0 scale where 1.0 = 100% contribution
+        // AssessmentLO weight is 0.01-10.0 scale where 1.0 = 10%, 10.0 = 100%
         // For display purposes, we show the weight as percentage
         const weightStr = String(al.weight || '0');
         const rawWeight = parseFloat(weightStr);
         // Only add if weight is valid and > 0
         if (!isNaN(rawWeight) && rawWeight > 0) {
-          // Store normalized weight (1.0 = 100% = 1.0, 0.5 = 50% = 0.5, etc.)
+          // Store normalized weight (0-1 scale: 1.0 = 0.1, 10.0 = 1.0)
           // This will be used for edge label display
-          const normalizedWeight = rawWeight / 1.0; // AssessmentLO uses 1.0 as 100%
+          const normalizedWeight = rawWeight / 10.0; // Convert 0.01-10.0 scale to 0-1 scale
           weights[`lo-${loId}`] = normalizedWeight;
         }
       });
@@ -471,10 +479,10 @@ export default function ScoresPage() {
             return gradeAssessmentId === assessmentId;
           });
           if (assessment && grade) {
-            // AssessmentLO weight is 0.1-10.0 scale where 1.0 = 100% contribution
+            // AssessmentLO weight is 0.01-10.0 scale where 1.0 = 10%, 10.0 = 100%
             // Normalize to 0-1 scale for weighted average calculation
             const rawWeight = typeof al.weight === 'string' ? parseFloat(al.weight) : Number(al.weight || 0);
-            const normalizedWeight = rawWeight / 1.0; // 1.0 = 100% = 1.0, 0.5 = 50% = 0.5, etc.
+            const normalizedWeight = rawWeight / 10.0; // Convert 0.01-10.0 scale to 0-1 scale
             
             const assessmentMaxScore = Number(assessment.max_score || 100);
             const gradeScore = Number(grade.score || 0);
@@ -491,7 +499,7 @@ export default function ScoresPage() {
       const loScore = totalWeight > 0 ? weightedSum / totalWeight : 0;
 
       // Get weights for this LO -> PO
-      // LOPO weight is 0.1-10.0 scale where 10.0 = 100%, so convert to 0-1 scale
+      // LOPO weight is 0.01-10.0 scale where 1.0 = 10%, 10.0 = 100%, so convert to 0-1 scale
       const poWeights: Record<string, number> = {};
       const relevantLOPOs = loPOs.filter(lp => {
         const lpLoId = typeof lp.learning_outcome === 'object' ? lp.learning_outcome.id : Number(lp.learning_outcome);
@@ -505,8 +513,8 @@ export default function ScoresPage() {
         const weight = parseFloat(weightStr);
         // Only add if weight is valid and > 0
         if (!isNaN(weight) && weight > 0) {
-          // Convert LOPO weight (0.1-10.0) to percentage (0-1 scale)
-          // 10.0 = 100% = 1.0, 6.0 = 60% = 0.6, 4.0 = 40% = 0.4, etc.
+          // Convert LOPO weight (0.01-10.0) to percentage (0-1 scale)
+          // 10.0 = 100% = 1.0, 1.0 = 10% = 0.1, 0.5 = 5% = 0.05, etc.
           const normalizedWeight = weight / 10.0;
           poWeights[`po-${poId}`] = normalizedWeight;
         }
@@ -521,6 +529,9 @@ export default function ScoresPage() {
         label: lo.code || `LO${lo.id}`,
         score: Number(loScore || 0),
         poWeights,
+        title: lo.title || '',
+        description: lo.description || '',
+        target: Number(lo.target_percentage) || 70,
       };
     });
 
@@ -564,6 +575,9 @@ export default function ScoresPage() {
         id: `po-${po.id}`,
         label: po.code || `PO${po.id}`,
         score: Number(poScore || 0),
+        title: po.title || '',
+        description: po.description || '',
+        target: Number(po.target_percentage) || 70,
       };
     });
 
@@ -660,7 +674,7 @@ export default function ScoresPage() {
       Object.keys(assessment.weights || {}).forEach(loId => {
         const weight = assessment.weights[loId];
         if (weight && weight > 0) {
-          // AssessmentLO weight is normalized (1.0 = 100%)
+          // AssessmentLO weight is normalized to 0-1 scale
           // Convert to percentage for display (weight * 100)
           const percentage = (weight * 100);
           edges.push({
@@ -1094,7 +1108,208 @@ export default function ScoresPage() {
         </div>
       )}
 
-      {/* Summary Section */}
+      {/* Learning Outcomes Summary Section */}
+      {!loading && courseData && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className={`${themeClasses.card} rounded-xl shadow-xl p-6 mt-6`}
+        >
+          <h2 className={`text-2xl font-bold ${text} mb-6 flex items-center gap-2`}>
+            <Target className="w-6 h-6 text-purple-500" />
+            Learning Outcomes Summary
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {courseData.los.map((lo, index) => {
+              const score = Number(lo.score || 0);
+              const scoreRounded = Math.round(score);
+              
+              // Determine color based on score - Purple theme for LO
+              const getScoreColor = (score: number) => {
+                if (score >= 90) return isDark ? 'text-purple-400' : 'text-purple-600';
+                if (score >= 70) return isDark ? 'text-indigo-400' : 'text-indigo-600';
+                return isDark ? 'text-orange-400' : 'text-orange-600';
+              };
+              
+              const getProgressColor = (score: number) => {
+                if (score >= 90) return 'bg-gradient-to-r from-purple-500 to-purple-600';
+                if (score >= 70) return 'bg-gradient-to-r from-indigo-500 to-indigo-600';
+                return 'bg-gradient-to-r from-orange-500 to-orange-600';
+              };
+              
+              const getBgColor = (score: number) => {
+                if (score >= 90) return isDark ? 'bg-purple-500/10 border-purple-400/30' : 'bg-purple-50/50 border-purple-200';
+                if (score >= 70) return isDark ? 'bg-indigo-500/10 border-indigo-400/30' : 'bg-indigo-50/50 border-indigo-200';
+                return isDark ? 'bg-orange-500/10 border-orange-400/30' : 'bg-orange-50/50 border-orange-200';
+              };
+              
+              // Get LO title from courseData
+              const loTitle = lo.title || '';
+              const loDescription = lo.description || '';
+              const loTarget = lo.target || 70;
+              const isHovered = hoveredLO === lo.id;
+              const targetMet = score >= loTarget;
+              const difference = score - loTarget;
+              
+              return (
+                <div
+                  key={lo.id}
+                  className="relative"
+                  onMouseEnter={() => setHoveredLO(lo.id)}
+                  onMouseLeave={() => setHoveredLO(null)}
+                >
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.1 * index }}
+                    className={`p-5 rounded-xl border shadow-lg hover:shadow-xl transition-all cursor-pointer ${getBgColor(score)}`}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <div className={`px-3 py-1 rounded-lg font-bold text-sm ${
+                          isDark ? 'bg-purple-500/20 text-purple-300' : 'bg-purple-100 text-purple-700'
+                        }`}>
+                          {lo.label}
+                        </div>
+                      </div>
+                      <div className={`text-3xl font-extrabold ${getScoreColor(score)}`}>
+                        {scoreRounded}
+                      </div>
+                    </div>
+                    
+                    {loTitle && (
+                      <p className={`text-sm ${mutedText} mb-3 line-clamp-2`}>
+                        {loTitle}
+                      </p>
+                    )}
+                    
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className={mutedText}>Achievement</span>
+                        <span className={`font-semibold ${getScoreColor(score)}`}>
+                          {scoreRounded}%
+                        </span>
+                      </div>
+                      <div className={`w-full ${isDark ? 'bg-gray-700' : 'bg-gray-200'} rounded-full h-2.5 overflow-hidden`}>
+                        <motion.div
+                          initial={{ width: 0 }}
+                          animate={{ width: `${Math.min(score, 100)}%` }}
+                          transition={{ duration: 0.8, delay: 0.2 * index }}
+                          className={`h-2.5 rounded-full ${getProgressColor(score)}`}
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="mt-3 pt-3 border-t border-gray-300/20">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className={mutedText}>Status</span>
+                        <span className={`font-semibold ${
+                          score >= 90 ? (isDark ? 'text-purple-400' : 'text-purple-600') :
+                          score >= 70 ? (isDark ? 'text-indigo-400' : 'text-indigo-600') :
+                          (isDark ? 'text-orange-400' : 'text-orange-600')
+                        }`}>
+                          {score >= 90 ? 'Excellent' : score >= 70 ? 'Good' : 'Needs Improvement'}
+                        </span>
+                      </div>
+                    </div>
+                  </motion.div>
+                  
+                  {/* Hover Tooltip */}
+                  <AnimatePresence>
+                    {isHovered && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                        transition={{ duration: 0.2 }}
+                        className={`absolute z-50 w-80 p-4 rounded-xl shadow-2xl border ${
+                          isDark 
+                            ? 'bg-gray-800 border-gray-700' 
+                            : 'bg-white border-gray-200'
+                        } top-full left-1/2 -translate-x-1/2 mt-2`}
+                        style={{ pointerEvents: 'none' }}
+                      >
+                        {/* Arrow */}
+                        <div className={`absolute -top-2 left-1/2 -translate-x-1/2 w-4 h-4 rotate-45 ${
+                          isDark ? 'bg-gray-800 border-l border-t border-gray-700' : 'bg-white border-l border-t border-gray-200'
+                        }`} />
+                        
+                        <div className="relative">
+                          <div className="flex items-center justify-between mb-3 pb-3 border-b border-gray-300/20">
+                            <div className={`px-3 py-1 rounded-lg font-bold text-sm ${
+                              isDark ? 'bg-purple-500/20 text-purple-300' : 'bg-purple-100 text-purple-700'
+                            }`}>
+                              {lo.label}
+                            </div>
+                            <div className={`text-2xl font-extrabold ${getScoreColor(score)}`}>
+                              {scoreRounded}%
+                            </div>
+                          </div>
+                          
+                          {loTitle && (
+                            <h3 className={`font-semibold ${text} mb-2`}>
+                              {loTitle}
+                            </h3>
+                          )}
+                          
+                          {loDescription && (
+                            <p className={`text-sm ${mutedText} mb-4 line-clamp-3`}>
+                              {loDescription}
+                            </p>
+                          )}
+                          
+                          <div className="space-y-3 pt-3 border-t border-gray-300/20">
+                            <div className="flex items-center justify-between text-sm">
+                              <span className={mutedText}>Target Achievement</span>
+                              <span className={`font-semibold ${text}`}>
+                                {loTarget}%
+                              </span>
+                            </div>
+                            
+                            <div className="flex items-center justify-between text-sm">
+                              <span className={mutedText}>Current Achievement</span>
+                              <span className={`font-semibold ${getScoreColor(score)}`}>
+                                {scoreRounded}%
+                              </span>
+                            </div>
+                            
+                            <div className="flex items-center justify-between text-sm">
+                              <span className={mutedText}>Difference</span>
+                              <span className={`font-semibold ${
+                                targetMet 
+                                  ? (isDark ? 'text-green-400' : 'text-green-600')
+                                  : (isDark ? 'text-red-400' : 'text-red-600')
+                              }`}>
+                                {targetMet ? '+' : ''}{difference.toFixed(1)}%
+                              </span>
+                            </div>
+                            
+                            <div className="pt-2">
+                              <div className="flex items-center justify-between text-xs mb-1">
+                                <span className={mutedText}>Progress</span>
+                                <span className={mutedText}>{scoreRounded}% / {loTarget}%</span>
+                              </div>
+                              <div className={`w-full ${isDark ? 'bg-gray-700' : 'bg-gray-200'} rounded-full h-2 overflow-hidden`}>
+                                <div
+                                  className={`h-2 rounded-full ${getProgressColor(score)}`}
+                                  style={{ width: `${Math.min((score / loTarget) * 100, 100)}%` }}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              );
+            })}
+          </div>
+        </motion.div>
+      )}
+
+      {/* Program Outcomes Summary Section */}
       {!loading && courseData && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -1102,26 +1317,195 @@ export default function ScoresPage() {
           transition={{ delay: 0.3 }}
           className={`${themeClasses.card} rounded-xl shadow-xl p-6 mt-6`}
         >
-          <h2 className={`text-2xl font-bold ${text} mb-4 flex items-center gap-2`}>
-            <TrendingUp className="w-6 h-6 text-indigo-500" />
+          <h2 className={`text-2xl font-bold ${text} mb-6 flex items-center gap-2`}>
+            <Award className="w-6 h-6 text-indigo-500" />
             Program Outcomes Summary
           </h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-            {courseData.pos.map((po) => (
-              <motion.div
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {courseData.pos.map((po, index) => {
+              const score = Number(po.score || 0);
+              const scoreRounded = Math.round(score);
+              
+              // Determine color based on score - Indigo theme for PO
+              const getScoreColor = (score: number) => {
+                if (score >= 90) return isDark ? 'text-indigo-400' : 'text-indigo-600';
+                if (score >= 70) return isDark ? 'text-blue-400' : 'text-blue-600';
+                return isDark ? 'text-orange-400' : 'text-orange-600';
+              };
+              
+              const getProgressColor = (score: number) => {
+                if (score >= 90) return 'bg-gradient-to-r from-indigo-500 to-indigo-600';
+                if (score >= 70) return 'bg-gradient-to-r from-blue-500 to-blue-600';
+                return 'bg-gradient-to-r from-orange-500 to-orange-600';
+              };
+              
+              const getBgColor = (score: number) => {
+                if (score >= 90) return isDark ? 'bg-indigo-500/10 border-indigo-400/30' : 'bg-indigo-50/50 border-indigo-200';
+                if (score >= 70) return isDark ? 'bg-blue-500/10 border-blue-400/30' : 'bg-blue-50/50 border-blue-200';
+                return isDark ? 'bg-orange-500/10 border-orange-400/30' : 'bg-orange-50/50 border-orange-200';
+              };
+              
+              // Get PO title from courseData
+              const poTitle = po.title || '';
+              const poDescription = po.description || '';
+              const poTarget = po.target || 70;
+              const isHovered = hoveredPO === po.id;
+              const targetMet = score >= poTarget;
+              const difference = score - poTarget;
+              
+              return (
+                <div
                 key={po.id}
-                initial={{ scale: 0.9 }}
-                animate={{ scale: 1 }}
-                className={`p-4 rounded-lg ${
-                  isDark ? 'bg-blue-500/10 border border-blue-400/30' : 'bg-blue-50 border border-blue-200'
-                }`}
-              >
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">{po.label}</p>
-                <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                  {Number(po.score || 0).toFixed(0)}
-                </p>
+                  className="relative"
+                  onMouseEnter={() => setHoveredPO(po.id)}
+                  onMouseLeave={() => setHoveredPO(null)}
+                >
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.1 * index }}
+                    className={`p-5 rounded-xl border shadow-lg hover:shadow-xl transition-all cursor-pointer ${getBgColor(score)}`}
+                  >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className={`px-3 py-1 rounded-lg font-bold text-sm ${
+                        isDark ? 'bg-indigo-500/20 text-indigo-300' : 'bg-indigo-100 text-indigo-700'
+                      }`}>
+                        {po.label}
+                      </div>
+                    </div>
+                    <div className={`text-3xl font-extrabold ${getScoreColor(score)}`}>
+                      {scoreRounded}
+                    </div>
+                  </div>
+                  
+                  {poTitle && (
+                    <p className={`text-sm ${mutedText} mb-3 line-clamp-2`}>
+                      {poTitle}
+                    </p>
+                  )}
+                  
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className={mutedText}>Achievement</span>
+                      <span className={`font-semibold ${getScoreColor(score)}`}>
+                        {scoreRounded}%
+                      </span>
+                    </div>
+                    <div className={`w-full ${isDark ? 'bg-gray-700' : 'bg-gray-200'} rounded-full h-2.5 overflow-hidden`}>
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${Math.min(score, 100)}%` }}
+                        transition={{ duration: 0.8, delay: 0.2 * index }}
+                        className={`h-2.5 rounded-full ${getProgressColor(score)}`}
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="mt-3 pt-3 border-t border-gray-300/20">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className={mutedText}>Status</span>
+                      <span className={`font-semibold ${
+                        score >= 90 ? (isDark ? 'text-indigo-400' : 'text-indigo-600') :
+                        score >= 70 ? (isDark ? 'text-blue-400' : 'text-blue-600') :
+                        (isDark ? 'text-orange-400' : 'text-orange-600')
+                      }`}>
+                        {score >= 90 ? 'Excellent' : score >= 70 ? 'Good' : 'Needs Improvement'}
+                      </span>
+                    </div>
+                  </div>
               </motion.div>
-            ))}
+                
+                {/* Hover Tooltip */}
+                <AnimatePresence>
+                  {isHovered && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                      transition={{ duration: 0.2 }}
+                      className={`absolute z-50 w-80 p-4 rounded-xl shadow-2xl border ${
+                        isDark 
+                          ? 'bg-gray-800 border-gray-700' 
+                          : 'bg-white border-gray-200'
+                      } top-full left-1/2 -translate-x-1/2 mt-2`}
+                      style={{ pointerEvents: 'none' }}
+                    >
+                      {/* Arrow */}
+                      <div className={`absolute -top-2 left-1/2 -translate-x-1/2 w-4 h-4 rotate-45 ${
+                        isDark ? 'bg-gray-800 border-l border-t border-gray-700' : 'bg-white border-l border-t border-gray-200'
+                      }`} />
+                      
+                      <div className="relative">
+                        <div className="flex items-center justify-between mb-3 pb-3 border-b border-gray-300/20">
+                          <div className={`px-3 py-1 rounded-lg font-bold text-sm ${
+                            isDark ? 'bg-indigo-500/20 text-indigo-300' : 'bg-indigo-100 text-indigo-700'
+                          }`}>
+                            {po.label}
+                          </div>
+                          <div className={`text-2xl font-extrabold ${getScoreColor(score)}`}>
+                            {scoreRounded}%
+                          </div>
+                        </div>
+                        
+                        {poTitle && (
+                          <h3 className={`font-semibold ${text} mb-2`}>
+                            {poTitle}
+                          </h3>
+                        )}
+                        
+                        {poDescription && (
+                          <p className={`text-sm ${mutedText} mb-4 line-clamp-3`}>
+                            {poDescription}
+                          </p>
+                        )}
+                        
+                        <div className="space-y-3 pt-3 border-t border-gray-300/20">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className={mutedText}>Target Achievement</span>
+                            <span className={`font-semibold ${text}`}>
+                              {poTarget}%
+                            </span>
+                          </div>
+                          
+                          <div className="flex items-center justify-between text-sm">
+                            <span className={mutedText}>Current Achievement</span>
+                            <span className={`font-semibold ${getScoreColor(score)}`}>
+                              {scoreRounded}%
+                            </span>
+                          </div>
+                          
+                          <div className="flex items-center justify-between text-sm">
+                            <span className={mutedText}>Difference</span>
+                            <span className={`font-semibold ${
+                              targetMet 
+                                ? (isDark ? 'text-indigo-400' : 'text-indigo-600')
+                                : (isDark ? 'text-orange-400' : 'text-orange-600')
+                            }`}>
+                              {targetMet ? '+' : ''}{difference.toFixed(1)}%
+                            </span>
+                          </div>
+                          
+                          <div className="pt-2">
+                            <div className="flex items-center justify-between text-xs mb-1">
+                              <span className={mutedText}>Progress</span>
+                              <span className={mutedText}>{scoreRounded}% / {poTarget}%</span>
+                            </div>
+                            <div className={`w-full ${isDark ? 'bg-gray-700' : 'bg-gray-200'} rounded-full h-2 overflow-hidden`}>
+                              <div
+                                className={`h-2 rounded-full ${getProgressColor(score)}`}
+                                style={{ width: `${Math.min((score / poTarget) * 100, 100)}%` }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+              );
+            })}
           </div>
         </motion.div>
       )}

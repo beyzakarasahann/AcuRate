@@ -38,7 +38,7 @@ export default function MappingsPage() {
   const [newAssessmentLO, setNewAssessmentLO] = useState({
     assessment: 0,
     learning_outcome: 0,
-    weight: 1.0 // Default weight (1.0 = 100%)
+    percentage: 10 // Default percentage (10%)
   });
   
   // LO-PO Mapping data
@@ -49,7 +49,7 @@ export default function MappingsPage() {
   const [newLOPO, setNewLOPO] = useState({
     learning_outcome: 0,
     program_outcome: 0,
-    weight: 5.0 // Default weight (5.0 = 50% on 0.1-10.0 scale)
+    percentage: 50 // Default percentage (50%)
   });
   
   // UI state
@@ -211,8 +211,8 @@ export default function MappingsPage() {
       return;
     }
     
-    if (!newAssessmentLO.weight || newAssessmentLO.weight < 0.1 || newAssessmentLO.weight > 10.0) {
-      alert('Weight must be between 0.1 and 10.0.');
+    if (!newAssessmentLO.percentage || newAssessmentLO.percentage < 1 || newAssessmentLO.percentage > 100) {
+      alert('Contribution must be between 1 and 100.');
       return;
     }
     
@@ -220,16 +220,18 @@ export default function MappingsPage() {
     setSaveStatus(null);
     
     try {
-      console.log('Creating Assessment-LO mapping:', newAssessmentLO);
+      // Convert percentage to weight: weight = (percentage / 100) * 10.0
+      const weight = (newAssessmentLO.percentage / 100) * 10.0;
+      console.log('Creating Assessment-LO mapping:', { ...newAssessmentLO, weight });
       const result = await api.createAssessmentLO({
         assessment: newAssessmentLO.assessment,
         learning_outcome: newAssessmentLO.learning_outcome,
-        weight: newAssessmentLO.weight
+        weight: weight
       });
       console.log('Created successfully:', result);
       
       await loadAssessmentLOs();
-      setNewAssessmentLO({ assessment: 0, learning_outcome: 0, weight: 1.0 });
+      setNewAssessmentLO({ assessment: 0, learning_outcome: 0, percentage: 10 });
       setShowCreateAssessmentLO(false);
       setSaveStatus('success');
       setTimeout(() => setSaveStatus(null), 3000);
@@ -287,8 +289,8 @@ export default function MappingsPage() {
   };
   
   const handleUpdateAssessmentLO = async (id: number, weight: number) => {
-    if (weight <= 0 || weight > 10.0) {
-      alert('Weight must be between 0.1 and 10.0');
+    if (weight < 0.01 || weight > 10.0) {
+      alert('Weight must be between 0.01 and 10.0');
       return;
     }
     
@@ -340,8 +342,8 @@ export default function MappingsPage() {
       return;
     }
     
-    if (!newLOPO.weight || newLOPO.weight < 0.1 || newLOPO.weight > 10.0) {
-      alert('Weight must be between 0.1 and 10.0.');
+    if (!newLOPO.percentage || newLOPO.percentage < 1 || newLOPO.percentage > 100) {
+      alert('Contribution must be between 1 and 100.');
       return;
     }
     
@@ -349,16 +351,18 @@ export default function MappingsPage() {
     setSaveStatus(null);
     
     try {
-      console.log('Creating LO-PO mapping:', newLOPO);
+      // Convert percentage to weight: weight = (percentage / 100) * 10.0
+      const weight = (newLOPO.percentage / 100) * 10.0;
+      console.log('Creating LO-PO mapping:', { ...newLOPO, weight });
       const result = await api.createLOPO({
         learning_outcome: newLOPO.learning_outcome,
         program_outcome: newLOPO.program_outcome,
-        weight: newLOPO.weight
+        weight: weight
       });
       console.log('Created successfully:', result);
       
       await loadLOPOs();
-      setNewLOPO({ learning_outcome: 0, program_outcome: 0, weight: 5.0 });
+      setNewLOPO({ learning_outcome: 0, program_outcome: 0, percentage: 50 });
       setShowCreateLOPO(false);
       setSaveStatus('success');
       setTimeout(() => setSaveStatus(null), 3000);
@@ -416,8 +420,8 @@ export default function MappingsPage() {
   };
   
   const handleUpdateLOPO = async (id: number, weight: number) => {
-    if (weight <= 0 || weight > 10.0) {
-      alert('Weight must be between 0.1 and 10.0');
+    if (weight < 0.01 || weight > 10.0) {
+      alert('Weight must be between 0.01 and 10.0');
       return;
     }
     
@@ -652,7 +656,7 @@ export default function MappingsPage() {
             <button
               onClick={() => {
                 setShowCreateAssessmentLO(true);
-                setNewAssessmentLO({ assessment: 0, learning_outcome: 0, weight: 1.0 });
+                setNewAssessmentLO({ assessment: 0, learning_outcome: 0, percentage: 10 });
               }}
               className="flex items-center gap-2 px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl transition-colors"
             >
@@ -669,15 +673,14 @@ export default function MappingsPage() {
                   <tr>
                     <th className={`px-6 py-4 text-left text-sm font-semibold ${text}`}>Assessment</th>
                     <th className={`px-6 py-4 text-left text-sm font-semibold ${text}`}>Learning Outcome</th>
-                    <th className={`px-6 py-4 text-left text-sm font-semibold ${text}`}>Weight</th>
-                    <th className={`px-6 py-4 text-left text-sm font-semibold ${text}`}>Contribution</th>
+                    <th className={`px-6 py-4 text-left text-sm font-semibold ${text}`}>Contribution (%)</th>
                     <th className={`px-6 py-4 text-center text-sm font-semibold ${text}`}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredAssessmentLOs.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className={`px-6 py-12 text-center ${mutedText}`}>
+                      <td colSpan={4} className={`px-6 py-12 text-center ${mutedText}`}>
                         {assessmentLOs.length === 0 ? (
                           <div>
                             <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
@@ -716,7 +719,7 @@ export default function MappingsPage() {
                       const lo = learningOutcomes.find(lo => lo.id === mappingLoId);
                       
                       const weight = typeof mapping.weight === 'string' ? parseFloat(mapping.weight) : Number(mapping.weight) || 0;
-                      const percentage = (weight / 10.0) * 100; // 10.0 = 100% (weight range is 0.1-10.0)
+                      const percentage = Math.round((weight / 10.0) * 100); // Convert weight (0.01-10.0) to percentage (1-100)
                       
                       return (
                         <tr key={mapping.id} className={`border-t ${isDark ? 'border-white/10' : 'border-gray-200'}`}>
@@ -736,20 +739,23 @@ export default function MappingsPage() {
                             {editingAssessmentLO?.id === mapping.id ? (
                               <input
                                 type="number"
-                                min="0.1"
-                                max="10.0"
-                                step="0.1"
-                                defaultValue={weight}
+                                min="1"
+                                max="100"
+                                step="1"
+                                defaultValue={percentage}
                                 onBlur={(e) => {
-                                  const newWeight = parseFloat(e.target.value);
-                                  if (!isNaN(newWeight) && newWeight > 0) {
+                                  const newPercentage = parseFloat(e.target.value);
+                                  if (!isNaN(newPercentage) && newPercentage >= 1 && newPercentage <= 100) {
+                                    // Convert percentage to weight: weight = (percentage / 100) * 10.0
+                                    const newWeight = (newPercentage / 100) * 10.0;
                                     handleUpdateAssessmentLO(mapping.id, newWeight);
                                   }
                                 }}
                                 onKeyDown={(e) => {
                                   if (e.key === 'Enter') {
-                                    const newWeight = parseFloat((e.target as HTMLInputElement).value);
-                                    if (!isNaN(newWeight) && newWeight > 0) {
+                                    const newPercentage = parseFloat((e.target as HTMLInputElement).value);
+                                    if (!isNaN(newPercentage) && newPercentage >= 1 && newPercentage <= 100) {
+                                      const newWeight = (newPercentage / 100) * 10.0;
                                       handleUpdateAssessmentLO(mapping.id, newWeight);
                                     }
                                   }
@@ -760,15 +766,12 @@ export default function MappingsPage() {
                                 autoFocus
                               />
                             ) : (
-                              <span className="font-semibold">{weight.toFixed(2)}</span>
+                              <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
+                                isDark ? 'bg-indigo-500/20 text-indigo-300' : 'bg-indigo-100 text-indigo-700'
+                              }`}>
+                                {percentage}%
+                              </span>
                             )}
-                          </td>
-                          <td className={`px-6 py-4 ${text}`}>
-                            <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                              isDark ? 'bg-indigo-500/20 text-indigo-300' : 'bg-indigo-100 text-indigo-700'
-                            }`}>
-                              {percentage.toFixed(0)}%
-                            </span>
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center justify-center gap-2">
@@ -877,20 +880,20 @@ export default function MappingsPage() {
                     
                     <div>
                       <label className={`${mutedText} text-sm font-medium mb-2 block`}>
-                        Weight (0.1 - 10.0, where 1.0 = 100%)
+                        Contribution (%)
                       </label>
                       <input
                         type="number"
-                        min="0.1"
-                        max="10.0"
-                        step="0.1"
-                        value={newAssessmentLO.weight}
+                        min="1"
+                        max="100"
+                        step="1"
+                        value={newAssessmentLO.percentage}
                         onChange={(e) => {
                           const value = parseFloat(e.target.value);
-                          if (!isNaN(value) && value >= 0.1 && value <= 10.0) {
-                            setNewAssessmentLO({ ...newAssessmentLO, weight: value });
+                          if (!isNaN(value) && value >= 1 && value <= 100) {
+                            setNewAssessmentLO({ ...newAssessmentLO, percentage: value });
                           } else if (e.target.value === '' || value === 0) {
-                            setNewAssessmentLO({ ...newAssessmentLO, weight: 1.0 });
+                            setNewAssessmentLO({ ...newAssessmentLO, percentage: 10 });
                           }
                         }}
                         className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
@@ -899,13 +902,13 @@ export default function MappingsPage() {
                         required
                       />
                       <p className={`${mutedText} text-xs mt-1`}>
-                        Current: {((newAssessmentLO.weight / 10.0) * 100).toFixed(0)}% contribution
+                        Enter a value between 1 and 100
                       </p>
-                      {newAssessmentLO.weight < 0.1 && (
-                        <p className="text-red-500 text-xs mt-1">Weight must be at least 0.1</p>
+                      {newAssessmentLO.percentage < 1 && (
+                        <p className="text-red-500 text-xs mt-1">Contribution must be at least 1%</p>
                       )}
-                      {newAssessmentLO.weight > 10.0 && (
-                        <p className="text-red-500 text-xs mt-1">Weight must be at most 10.0</p>
+                      {newAssessmentLO.percentage > 100 && (
+                        <p className="text-red-500 text-xs mt-1">Contribution must be at most 100%</p>
                       )}
                     </div>
                     
@@ -968,7 +971,7 @@ export default function MappingsPage() {
             <button
               onClick={() => {
                 setShowCreateLOPO(true);
-                setNewLOPO({ learning_outcome: 0, program_outcome: 0, weight: 5.0 });
+                setNewLOPO({ learning_outcome: 0, program_outcome: 0, percentage: 50 });
               }}
               className="flex items-center gap-2 px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl transition-colors"
             >
@@ -985,15 +988,14 @@ export default function MappingsPage() {
                   <tr>
                     <th className={`px-6 py-4 text-left text-sm font-semibold ${text}`}>Learning Outcome</th>
                     <th className={`px-6 py-4 text-left text-sm font-semibold ${text}`}>Program Outcome</th>
-                    <th className={`px-6 py-4 text-left text-sm font-semibold ${text}`}>Weight</th>
-                    <th className={`px-6 py-4 text-left text-sm font-semibold ${text}`}>Contribution</th>
+                    <th className={`px-6 py-4 text-left text-sm font-semibold ${text}`}>Contribution (%)</th>
                     <th className={`px-6 py-4 text-center text-sm font-semibold ${text}`}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredLOPOs.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className={`px-6 py-12 text-center ${mutedText}`}>
+                      <td colSpan={4} className={`px-6 py-12 text-center ${mutedText}`}>
                         {loPOs.length === 0 ? (
                           <div>
                             <Link2 className="w-12 h-12 mx-auto mb-4 opacity-50" />
@@ -1016,7 +1018,7 @@ export default function MappingsPage() {
                         return po.id === mappingPoId;
                       });
                       const weight = typeof mapping.weight === 'string' ? parseFloat(mapping.weight) : Number(mapping.weight);
-                      const percentage = (weight / 10.0) * 100; // 10.0 = 100%
+                      const percentage = Math.round((weight / 10.0) * 100); // Convert weight (0.01-10.0) to percentage (1-100)
                       
                       return (
                         <tr key={mapping.id} className={`border-t ${isDark ? 'border-white/10' : 'border-gray-200'}`}>
@@ -1036,20 +1038,23 @@ export default function MappingsPage() {
                             {editingLOPO?.id === mapping.id ? (
                               <input
                                 type="number"
-                                min="0.1"
-                                max="10.0"
-                                step="0.1"
-                                defaultValue={weight}
+                                min="1"
+                                max="100"
+                                step="1"
+                                defaultValue={percentage}
                                 onBlur={(e) => {
-                                  const newWeight = parseFloat(e.target.value);
-                                  if (!isNaN(newWeight) && newWeight > 0) {
+                                  const newPercentage = parseFloat(e.target.value);
+                                  if (!isNaN(newPercentage) && newPercentage >= 1 && newPercentage <= 100) {
+                                    // Convert percentage to weight: weight = (percentage / 100) * 10.0
+                                    const newWeight = (newPercentage / 100) * 10.0;
                                     handleUpdateLOPO(mapping.id, newWeight);
                                   }
                                 }}
                                 onKeyDown={(e) => {
                                   if (e.key === 'Enter') {
-                                    const newWeight = parseFloat((e.target as HTMLInputElement).value);
-                                    if (!isNaN(newWeight) && newWeight > 0) {
+                                    const newPercentage = parseFloat((e.target as HTMLInputElement).value);
+                                    if (!isNaN(newPercentage) && newPercentage >= 1 && newPercentage <= 100) {
+                                      const newWeight = (newPercentage / 100) * 10.0;
                                       handleUpdateLOPO(mapping.id, newWeight);
                                     }
                                   }
@@ -1060,15 +1065,12 @@ export default function MappingsPage() {
                                 autoFocus
                               />
                             ) : (
-                              <span className="font-semibold">{weight.toFixed(2)}</span>
+                              <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
+                                isDark ? 'bg-purple-500/20 text-purple-300' : 'bg-purple-100 text-purple-700'
+                              }`}>
+                                {percentage}%
+                              </span>
                             )}
-                          </td>
-                          <td className={`px-6 py-4 ${text}`}>
-                            <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                              isDark ? 'bg-purple-500/20 text-purple-300' : 'bg-purple-100 text-purple-700'
-                            }`}>
-                              {percentage.toFixed(0)}%
-                            </span>
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center justify-center gap-2">
@@ -1177,20 +1179,20 @@ export default function MappingsPage() {
                     
                     <div>
                       <label className={`${mutedText} text-sm font-medium mb-2 block`}>
-                        Weight (0.1 - 10.0, where 10.0 = 100%)
+                        Contribution (%)
                       </label>
                       <input
                         type="number"
-                        min="0.1"
-                        max="10.0"
-                        step="0.1"
-                        value={newLOPO.weight}
+                        min="1"
+                        max="100"
+                        step="1"
+                        value={newLOPO.percentage}
                         onChange={(e) => {
                           const value = parseFloat(e.target.value);
-                          if (!isNaN(value) && value >= 0.1 && value <= 10.0) {
-                            setNewLOPO({ ...newLOPO, weight: value });
+                          if (!isNaN(value) && value >= 1 && value <= 100) {
+                            setNewLOPO({ ...newLOPO, percentage: value });
                           } else if (e.target.value === '' || value === 0) {
-                            setNewLOPO({ ...newLOPO, weight: 5.0 });
+                            setNewLOPO({ ...newLOPO, percentage: 50 });
                           }
                         }}
                         className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
@@ -1199,13 +1201,13 @@ export default function MappingsPage() {
                         required
                       />
                       <p className={`${mutedText} text-xs mt-1`}>
-                        Current: {((newLOPO.weight / 10.0) * 100).toFixed(0)}% contribution
+                        Enter a value between 1 and 100
                       </p>
-                      {newLOPO.weight < 0.1 && (
-                        <p className="text-red-500 text-xs mt-1">Weight must be at least 0.1</p>
+                      {newLOPO.percentage < 1 && (
+                        <p className="text-red-500 text-xs mt-1">Contribution must be at least 1%</p>
                       )}
-                      {newLOPO.weight > 10.0 && (
-                        <p className="text-red-500 text-xs mt-1">Weight must be at most 10.0</p>
+                      {newLOPO.percentage > 100 && (
+                        <p className="text-red-500 text-xs mt-1">Contribution must be at most 100%</p>
                       )}
                     </div>
                     
