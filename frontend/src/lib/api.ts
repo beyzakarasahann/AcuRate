@@ -207,11 +207,35 @@ export interface StudentPOAchievement {
   program_outcome: number;
   po_code?: string;
   po_title?: string;
-  achievement_percentage: number;
+  achievement_percentage?: number; // From serializer (maps to current_percentage)
+  current_percentage?: number; // Direct field from model
   target_percentage: number;
   is_achieved?: boolean;
   completed_assessments: number;
   total_assessments: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface StudentLOAchievement {
+  id: number;
+  student: number;
+  student_name?: string;
+  student_id?: string;
+  learning_outcome: number;
+  lo_code?: string;
+  lo_title?: string;
+  lo_description?: string;
+  course?: number;
+  course_code?: string;
+  course_name?: string;
+  current_percentage: number;
+  target_percentage: number;
+  is_target_met?: boolean;
+  completed_assessments: number;
+  total_assessments: number;
+  completion_rate?: number;
+  last_calculated?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -1291,11 +1315,48 @@ class ApiClient {
 
   // PO Achievements
   async getPOAchievements(params?: { student?: number; program_outcome?: number }): Promise<StudentPOAchievement[]> {
-    const queryParams = new URLSearchParams(params as any).toString();
-    const endpoint = `/po-achievements/${queryParams ? `?${queryParams}` : ''}`;
-    const response = await this.request<StudentPOAchievement[]>(endpoint);
-    // Ensure response is an array (ViewSet returns array directly)
-    return Array.isArray(response) ? response : [];
+    const queryParams = new URLSearchParams();
+    if (params?.student) queryParams.append('student', params.student.toString());
+    if (params?.program_outcome) queryParams.append('program_outcome', params.program_outcome.toString());
+    
+    const queryString = queryParams.toString();
+    const endpoint = `/po-achievements/${queryString ? `?${queryString}` : ''}`;
+    const response = await this.request<any>(endpoint);
+    
+    // Handle paginated response (DRF returns { results: [...] })
+    if (response && typeof response === 'object' && 'results' in response && Array.isArray(response.results)) {
+      return response.results;
+    }
+    // If it's already an array, return as is
+    if (Array.isArray(response)) {
+      return response;
+    }
+    // Fallback: return empty array
+    console.warn('⚠️ API: Unexpected response format from getPOAchievements:', response);
+    return [];
+  }
+
+  // LO Achievements
+  async getLOAchievements(params?: { student?: number; learning_outcome?: number; course?: number }): Promise<StudentLOAchievement[]> {
+    const queryParams = new URLSearchParams();
+    if (params?.student) queryParams.append('student', params.student.toString());
+    if (params?.learning_outcome) queryParams.append('learning_outcome', params.learning_outcome.toString());
+    if (params?.course) queryParams.append('course', params.course.toString());
+    
+    const queryString = queryParams.toString();
+    const endpoint = `/lo-achievements/${queryString ? `?${queryString}` : ''}`;
+    const response = await this.request<any>(endpoint);
+    
+    // Handle paginated response (DRF returns { results: [...] })
+    if (response && typeof response === 'object' && 'results' in response && Array.isArray(response.results)) {
+      return response.results;
+    }
+    // If it's already an array, return as is
+    if (Array.isArray(response)) {
+      return response;
+    }
+    // Fallback: return empty array
+    return [];
   }
 
   // Assessments

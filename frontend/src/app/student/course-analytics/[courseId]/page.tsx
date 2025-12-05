@@ -18,12 +18,10 @@ import {
     BarElement, 
     Title, 
     Tooltip, 
-    Legend,
-    PointElement,
-    LineElement
+    Legend
 } from 'chart.js';
-import { Bar, Line } from 'react-chartjs-2';
-import { api, type Course } from '@/lib/api';
+import { Bar } from 'react-chartjs-2';
+import { api, type Course, type Assessment, type StudentGrade } from '@/lib/api';
 
 // Register Chart.js components
 ChartJS.register(
@@ -32,9 +30,7 @@ ChartJS.register(
     BarElement,
     Title,
     Tooltip,
-    Legend,
-    PointElement,
-    LineElement
+    Legend
 );
 
 // --- YARDIMCI FONKSİYONLAR ve Sabitler ---
@@ -56,7 +52,6 @@ interface CourseAnalyticsData {
     highestScore: number;
     lowestScore: number;
     userScore: number | null;
-    userPercentile: number | null;
     scoreDistribution: number[];
     boxplotData: {
         min: number;
@@ -65,11 +60,6 @@ interface CourseAnalyticsData {
         q3: number;
         max: number;
     };
-    assessmentComparison: Array<{
-        assessment: string;
-        classAverage: number;
-        userScore: number | null;
-    }>;
 }
 
 interface FilterOptions {
@@ -91,6 +81,8 @@ export default function CourseDetailAnalyticsPage() {
     const [error, setError] = useState<string | null>(null);
     const [course, setCourse] = useState<Course | null>(null);
     const [analytics, setAnalytics] = useState<CourseAnalyticsData | null>(null);
+    const [assessments, setAssessments] = useState<Assessment[]>([]);
+    const [grades, setGrades] = useState<StudentGrade[]>([]);
     const [filters, setFilters] = useState<FilterOptions>({
         instructor: 'all',
         section: 'all',
@@ -114,10 +106,16 @@ export default function CourseDetailAnalyticsPage() {
             setLoading(true);
             setError(null);
 
-            // Fetch course analytics detail from backend
-            const response = await api.getCourseAnalyticsDetail(courseId);
+            // Fetch all data in parallel
+            const [analyticsResponse, assessmentsData, gradesData] = await Promise.allSettled([
+                api.getCourseAnalyticsDetail(courseId),
+                api.getAssessments({ course: courseId }),
+                api.getGrades()
+            ]);
 
-            if (response.success) {
+            // Handle analytics response
+            if (analyticsResponse.status === 'fulfilled' && analyticsResponse.value.success) {
+                const response = analyticsResponse.value;
                 setCourse({
                     id: response.course.id,
                     code: response.course.code,
@@ -139,19 +137,31 @@ export default function CourseDetailAnalyticsPage() {
                     highestScore: response.analytics.highest_score,
                     lowestScore: response.analytics.lowest_score,
                     userScore: response.analytics.user_score,
-                    userPercentile: response.analytics.user_percentile,
                     scoreDistribution: response.analytics.score_distribution,
-                    boxplotData: response.analytics.boxplot_data,
-                    assessmentComparison: response.analytics.assessment_comparison.map(a => ({
-                        assessment: a.assessment,
-                        classAverage: a.class_average,
-                        userScore: a.user_score
-                    }))
+                    boxplotData: response.analytics.boxplot_data
                 };
 
                 setAnalytics(analyticsData);
             } else {
                 setError('Failed to load course analytics');
+            }
+
+            // Handle assessments
+            let assessmentsArray: Assessment[] = [];
+            if (assessmentsData.status === 'fulfilled') {
+                assessmentsArray = Array.isArray(assessmentsData.value) ? assessmentsData.value : [];
+                setAssessments(assessmentsArray);
+            }
+
+            // Handle grades
+            if (gradesData.status === 'fulfilled') {
+                const gradesArray = Array.isArray(gradesData.value) ? gradesData.value : [];
+                // Filter grades for this course - match by assessment IDs from this course
+                const courseAssessmentIds = new Set(assessmentsArray.map(a => a.id));
+                const courseGrades = gradesArray.filter(grade => 
+                    courseAssessmentIds.has(grade.assessment)
+                );
+                setGrades(courseGrades);
             }
         } catch (err: any) {
             console.error('Failed to fetch course analytics:', err);
@@ -246,25 +256,6 @@ export default function CourseDetailAnalyticsPage() {
         }]
     } : null;
 
-    const assessmentComparisonData = analytics ? {
-        labels: analytics.assessmentComparison.map(a => a.assessment),
-        datasets: [
-            {
-                label: 'Class Average',
-                data: analytics.assessmentComparison.map(a => a.classAverage),
-                backgroundColor: isDark ? 'rgba(99, 102, 241, 0.6)' : 'rgba(99, 102, 241, 0.4)',
-                borderColor: isDark ? 'rgb(99, 102, 241)' : 'rgb(79, 70, 229)',
-                borderWidth: 1
-            },
-            {
-                label: 'Your Score',
-                data: analytics.assessmentComparison.map(a => a.userScore || 0),
-                backgroundColor: isDark ? 'rgba(16, 185, 129, 0.6)' : 'rgba(16, 185, 129, 0.4)',
-                borderColor: isDark ? 'rgb(16, 185, 129)' : 'rgb(5, 150, 105)',
-                borderWidth: 1
-            }
-        ]
-    } : null;
 
     return (
         <div className={`container mx-auto py-0 space-y-10`}>
@@ -364,18 +355,6 @@ export default function CourseDetailAnalyticsPage() {
 
                     <motion.div variants={item} className={`${themeClasses.card} p-6 shadow-xl rounded-xl border ${isDark ? 'border-white/10' : 'border-gray-200'} relative`}>
                         <div className="absolute top-4 left-4 opacity-40">
-                            <Target className="w-5 h-5 text-indigo-500" />
-                        </div>
-                        <div className="text-center mt-2">
-                            <p className={`text-sm ${mutedText} mb-2`}>Class Median</p>
-                            <p className={`text-3xl font-semibold ${whiteText}`}>
-                                {analytics?.classMedian ? analytics.classMedian.toFixed(1) : '-'}
-                            </p>
-                        </div>
-                    </motion.div>
-
-                    <motion.div variants={item} className={`${themeClasses.card} p-6 shadow-xl rounded-xl border ${isDark ? 'border-white/10' : 'border-gray-200'} relative`}>
-                        <div className="absolute top-4 left-4 opacity-40">
                             <Users className="w-5 h-5 text-indigo-500" />
                         </div>
                         <div className="text-center mt-2">
@@ -425,23 +404,87 @@ export default function CourseDetailAnalyticsPage() {
                         </div>
                     </motion.div>
 
-                    <motion.div variants={item} className={`${themeClasses.card} p-6 shadow-xl rounded-xl border ${isDark ? 'border-white/10' : 'border-gray-200'} relative`}>
-                        <div className="absolute top-4 left-4 opacity-40">
-                            <Target className="w-5 h-5 text-indigo-500" />
-                        </div>
-                        <div className="text-center mt-2">
-                            <p className={`text-sm ${mutedText} mb-2`}>Your Percentile</p>
-                            <p className={`text-2xl font-semibold ${whiteText}`}>
-                                {analytics?.userPercentile !== null ? `${analytics.userPercentile}%` : '-'}
-                            </p>
-                        </div>
-                    </motion.div>
                 </div>
             </motion.div>
 
             {/* (C) Insights / Charts Section - Full-width Sections */}
             <div className="space-y-10">
-                {/* Section 1: Score Distribution */}
+                {/* Section 1: All Grades Table */}
+                <motion.div
+                    variants={item}
+                    initial="hidden"
+                    animate="show"
+                    className={`${isDark ? 'bg-white/5' : 'bg-white/80'} backdrop-blur-lg rounded-2xl border ${isDark ? 'border-white/10' : 'border-gray-200'} p-6`}
+                >
+                    <div className="mb-6">
+                        <h3 className={`text-lg font-semibold ${whiteText} mb-2`}>All Your Grades</h3>
+                        <p className={`text-sm ${mutedText}`}>
+                            Detailed breakdown of all your assessments and grades for this course
+                        </p>
+                    </div>
+                    {assessments.length > 0 ? (
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-700/20">
+                                <thead className={isDark ? 'bg-white/5' : 'bg-gray-50'}>
+                                    <tr>
+                                        <th className={`px-6 py-3 text-left text-xs font-medium ${mutedText} uppercase tracking-wider`}>
+                                            Assessment
+                                        </th>
+                                        <th className={`px-6 py-3 text-left text-xs font-medium ${mutedText} uppercase tracking-wider`}>
+                                            Type
+                                        </th>
+                                        <th className={`px-6 py-3 text-left text-xs font-medium ${mutedText} uppercase tracking-wider`}>
+                                            Your Score
+                                        </th>
+                                        <th className={`px-6 py-3 text-left text-xs font-medium ${mutedText} uppercase tracking-wider`}>
+                                            Max Score
+                                        </th>
+                                        <th className={`px-6 py-3 text-left text-xs font-medium ${mutedText} uppercase tracking-wider`}>
+                                            Weight
+                                        </th>
+                                        <th className={`px-6 py-3 text-left text-xs font-medium ${mutedText} uppercase tracking-wider`}>
+                                            Feedback
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody className={`divide-y ${isDark ? 'divide-white/10' : 'divide-gray-200'}`}>
+                                    {assessments.map((assessment) => {
+                                        const grade = grades.find(g => g.assessment === assessment.id);
+                                        
+                                        return (
+                                            <tr key={assessment.id} className="hover:bg-white/5 transition-colors">
+                                                <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${whiteText}`}>
+                                                    {assessment.title}
+                                                </td>
+                                                <td className={`px-6 py-4 whitespace-nowrap text-sm ${mutedText}`}>
+                                                    {assessment.type_display || assessment.assessment_type || '-'}
+                                                </td>
+                                                <td className={`px-6 py-4 whitespace-nowrap text-sm ${whiteText}`}>
+                                                    {grade ? grade.score : '-'}
+                                                </td>
+                                                <td className={`px-6 py-4 whitespace-nowrap text-sm ${mutedText}`}>
+                                                    {assessment.max_score}
+                                                </td>
+                                                <td className={`px-6 py-4 whitespace-nowrap text-sm ${mutedText}`}>
+                                                    {assessment.weight}%
+                                                </td>
+                                                <td className={`px-6 py-4 text-sm ${mutedText} max-w-xs truncate`}>
+                                                    {grade?.feedback || '-'}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    ) : (
+                        <div className="py-12 text-center">
+                            <p className={mutedText}>No assessments available for this course</p>
+                        </div>
+                    )}
+                </motion.div>
+
+                {/* Section 2: Score Distribution */}
                 <motion.div
                     variants={item}
                     initial="hidden"
@@ -461,30 +504,6 @@ export default function CourseDetailAnalyticsPage() {
                     ) : (
                         <div className="h-80 flex items-center justify-center">
                             <p className={mutedText}>No distribution data available</p>
-                        </div>
-                    )}
-                </motion.div>
-
-                {/* Section 2: Assessment Comparison */}
-                <motion.div
-                    variants={item}
-                    initial="hidden"
-                    animate="show"
-                    className={`${isDark ? 'bg-white/5' : 'bg-white/80'} backdrop-blur-lg rounded-2xl border ${isDark ? 'border-white/10' : 'border-gray-200'} p-6`}
-                >
-                    <div className="mb-6">
-                        <h3 className={`text-lg font-semibold ${whiteText} mb-2`}>Assessment Comparison</h3>
-                        <p className={`text-sm ${mutedText}`}>
-                            Your performance compared to class average across all assessments
-                        </p>
-                    </div>
-                    {assessmentComparisonData ? (
-                        <div className="h-80">
-                            <Bar data={assessmentComparisonData} options={chartOptions} />
-                        </div>
-                    ) : (
-                        <div className="h-80 flex items-center justify-center">
-                            <p className={mutedText}>No assessment data available</p>
                         </div>
                     )}
                 </motion.div>

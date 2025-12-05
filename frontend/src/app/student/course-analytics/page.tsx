@@ -28,7 +28,6 @@ interface CourseAnalyticsCard {
     semester: string;
     classAverage: number;
     userScore: number | null;
-    userPercentile: number | null;
     trend: 'up' | 'down' | 'neutral';
 }
 
@@ -64,7 +63,6 @@ export default function CourseAnalyticsPage() {
                     semester: course.semester,
                     classAverage: course.class_average,
                     userScore: course.user_score,
-                    userPercentile: course.user_percentile,
                     trend: course.trend
                 }));
 
@@ -192,12 +190,6 @@ export default function CourseAnalyticsPage() {
                                     <p className={`text-xs ${mutedText} mb-1`}>Your Score</p>
                                     <p className={`text-lg font-semibold ${whiteText}`}>
                                         {course.userScore !== null ? course.userScore.toFixed(1) : '-'}
-                                    </p>
-                                </div>
-                                <div>
-                                    <p className={`text-xs ${mutedText} mb-1`}>Percentile</p>
-                                    <p className={`text-lg font-semibold ${whiteText}`}>
-                                        {course.userPercentile !== null ? `${course.userPercentile}%` : '-'}
                                     </p>
                                 </div>
                                 <div>
