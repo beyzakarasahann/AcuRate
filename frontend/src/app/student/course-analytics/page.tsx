@@ -2,7 +2,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { TrendingUp, TrendingDown, Minus, BookOpen, User, Calendar, BarChart3, ArrowRight, Loader2, AlertTriangle } from 'lucide-react';
+import { BookOpen, User, Calendar, BarChart3, ArrowRight, Loader2, AlertTriangle } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import Link from 'next/link';
@@ -115,17 +115,6 @@ export default function CourseAnalyticsPage() {
         );
     }
 
-    const getTrendIcon = (trend: 'up' | 'down' | 'neutral') => {
-        switch (trend) {
-            case 'up':
-                return <TrendingUp className="w-4 h-4 text-green-500" />;
-            case 'down':
-                return <TrendingDown className="w-4 h-4 text-red-500" />;
-            default:
-                return <Minus className="w-4 h-4 text-gray-500" />;
-        }
-    };
-
     return (
         <div className={`container mx-auto py-0`}>
             {/* Başlık */}
@@ -167,7 +156,7 @@ export default function CourseAnalyticsPage() {
                             </div>
 
                             {/* Course Info */}
-                            <div className="space-y-2 mb-4">
+                            <div className="space-y-2">
                                 <div className="flex items-center gap-2 text-sm">
                                     <User className="w-4 h-4 text-indigo-500" />
                                     <span className={mutedText}>{course.instructor}</span>
@@ -175,28 +164,6 @@ export default function CourseAnalyticsPage() {
                                 <div className="flex items-center gap-2 text-sm">
                                     <Calendar className="w-4 h-4 text-indigo-500" />
                                     <span className={mutedText}>{course.semester}</span>
-                                </div>
-                            </div>
-
-                            {/* Analytics Stats */}
-                            <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-500/20">
-                                <div>
-                                    <p className={`text-xs ${mutedText} mb-1`}>Class Average</p>
-                                    <p className={`text-lg font-semibold ${whiteText}`}>
-                                        {course.classAverage > 0 ? course.classAverage.toFixed(1) : '-'}
-                                    </p>
-                                </div>
-                                <div>
-                                    <p className={`text-xs ${mutedText} mb-1`}>Your Score</p>
-                                    <p className={`text-lg font-semibold ${whiteText}`}>
-                                        {course.userScore !== null ? course.userScore.toFixed(1) : '-'}
-                                    </p>
-                                </div>
-                                <div>
-                                    <p className={`text-xs ${mutedText} mb-1`}>Trend</p>
-                                    <div className="flex items-center">
-                                        {getTrendIcon(course.trend)}
-                                    </div>
                                 </div>
                             </div>
                         </motion.div>

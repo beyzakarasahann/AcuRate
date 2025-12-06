@@ -603,11 +603,9 @@ class Assessment(models.Model):
         help_text="Maximum possible score"
     )
     
-    related_pos = models.ManyToManyField(
-        ProgramOutcome,
-        related_name='assessments',
-        help_text="Program outcomes this assessment evaluates"
-    )
+    # NOTE: related_pos field removed to enforce 3-level graph structure:
+    # Assessment → LO → PO (not Assessment → PO directly)
+    # Use related_los instead, which maps to POs through LOPO
     
     related_los = models.ManyToManyField(
         LearningOutcome,

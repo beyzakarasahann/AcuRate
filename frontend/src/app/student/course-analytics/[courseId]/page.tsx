@@ -3,8 +3,8 @@
 
 import { motion } from 'framer-motion';
 import { 
-    BarChart3, ArrowLeft, Users, TrendingUp, Award, Target, 
-    Filter, Loader2, AlertTriangle, BookOpen, User, Calendar, 
+    BarChart3, ArrowLeft, 
+    Loader2, AlertTriangle, BookOpen, User, Calendar, 
     Repeat, GraduationCap
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
@@ -62,12 +62,6 @@ interface CourseAnalyticsData {
     };
 }
 
-interface FilterOptions {
-    instructor: string;
-    section: string;
-    attempt: 'first' | 'retake' | 'all';
-    semester: string;
-}
 
 // --- ANA BİLEŞEN: COURSE DETAIL ANALYTICS PAGE ---
 
@@ -83,12 +77,6 @@ export default function CourseDetailAnalyticsPage() {
     const [analytics, setAnalytics] = useState<CourseAnalyticsData | null>(null);
     const [assessments, setAssessments] = useState<Assessment[]>([]);
     const [grades, setGrades] = useState<StudentGrade[]>([]);
-    const [filters, setFilters] = useState<FilterOptions>({
-        instructor: 'all',
-        section: 'all',
-        attempt: 'all',
-        semester: 'all'
-    });
 
     const { isDark, themeClasses, text, mutedText } = useThemeColors();
 
@@ -97,7 +85,7 @@ export default function CourseDetailAnalyticsPage() {
         if (courseId) {
             fetchCourseDetail();
         }
-    }, [courseId, filters]);
+    }, [courseId]);
 
     const fetchCourseDetail = async () => {
         if (!courseId) return;
@@ -116,6 +104,10 @@ export default function CourseDetailAnalyticsPage() {
             // Handle analytics response
             if (analyticsResponse.status === 'fulfilled' && analyticsResponse.value.success) {
                 const response = analyticsResponse.value;
+                console.log('📊 Course Analytics Response:', response);
+                console.log('📊 Highest Score:', response.analytics.highest_score);
+                console.log('📊 Lowest Score:', response.analytics.lowest_score);
+                
                 setCourse({
                     id: response.course.id,
                     code: response.course.code,
@@ -131,19 +123,30 @@ export default function CourseDetailAnalyticsPage() {
                 });
 
                 const analyticsData: CourseAnalyticsData = {
-                    classAverage: response.analytics.class_average,
-                    classMedian: response.analytics.class_median,
-                    classSize: response.analytics.class_size,
-                    highestScore: response.analytics.highest_score,
-                    lowestScore: response.analytics.lowest_score,
-                    userScore: response.analytics.user_score,
-                    scoreDistribution: response.analytics.score_distribution,
-                    boxplotData: response.analytics.boxplot_data
+                    classAverage: response.analytics.class_average || 0,
+                    classMedian: response.analytics.class_median || 0,
+                    classSize: response.analytics.class_size || 0,
+                    highestScore: response.analytics.highest_score ?? null,
+                    lowestScore: response.analytics.lowest_score ?? null,
+                    userScore: response.analytics.user_score ?? null,
+                    scoreDistribution: response.analytics.score_distribution || [],
+                    boxplotData: response.analytics.boxplot_data || {
+                        min: 0,
+                        q1: 0,
+                        median: 0,
+                        q3: 0,
+                        max: 0
+                    }
                 };
 
+                console.log('📊 Processed Analytics Data:', analyticsData);
                 setAnalytics(analyticsData);
             } else {
-                setError('Failed to load course analytics');
+                const errorMsg = analyticsResponse.status === 'rejected' 
+                    ? analyticsResponse.reason?.message || 'Failed to load course analytics'
+                    : 'Failed to load course analytics';
+                console.error('❌ Analytics Error:', analyticsResponse);
+                setError(errorMsg);
             }
 
             // Handle assessments
@@ -209,54 +212,6 @@ export default function CourseDetailAnalyticsPage() {
         );
     }
 
-    // Chart options matching existing theme
-    const chartOptions = {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: { 
-                labels: { 
-                    color: mutedText, 
-                    boxWidth: 10, 
-                    boxHeight: 10 
-                } 
-            },
-            tooltip: {
-                bodyColor: isDark ? '#FFF' : '#000',
-                titleColor: isDark ? '#FFF' : '#000',
-                backgroundColor: isDark ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.8)',
-            }
-        },
-        scales: {
-            y: {
-                beginAtZero: true,
-                grid: { 
-                    color: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)' 
-                },
-                ticks: { color: mutedText }
-            },
-            x: {
-                grid: { 
-                    color: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)' 
-                },
-                ticks: { color: mutedText }
-            }
-        }
-    };
-
-    // Prepare chart data
-    const scoreDistributionData = analytics ? {
-        labels: ['0-20', '21-40', '41-60', '61-80', '81-100'],
-        datasets: [{
-            label: 'Number of Students',
-            data: analytics.scoreDistribution,
-            backgroundColor: isDark ? 'rgba(99, 102, 241, 0.6)' : 'rgba(99, 102, 241, 0.4)',
-            borderColor: isDark ? 'rgb(99, 102, 241)' : 'rgb(79, 70, 229)',
-            borderWidth: 1
-        }]
-    } : null;
-
-
     return (
         <div className={`container mx-auto py-0 space-y-10`}>
             {/* (A) Header Section - Glass Panel Style */}
@@ -283,127 +238,6 @@ export default function CourseDetailAnalyticsPage() {
                             </p>
                         </div>
                     </div>
-                </div>
-
-                {/* Filters - Clean Dropdowns */}
-                <div className="flex items-center gap-4 flex-wrap pt-4 border-t border-gray-500/20">
-                    <div className="flex items-center gap-2">
-                        <Filter className="w-4 h-4 text-indigo-500 opacity-60" />
-                        <span className={`text-sm font-medium ${mutedText}`}>Filters:</span>
-                    </div>
-                    
-                    <select
-                        value={filters.instructor}
-                        onChange={(e) => setFilters({ ...filters, instructor: e.target.value })}
-                        className={`px-4 py-2 rounded-xl border ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'} text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50`}
-                    >
-                        <option value="all">All Instructors</option>
-                        <option value={course.teacher_name}>{course.teacher_name}</option>
-                    </select>
-
-                    <select
-                        value={filters.section}
-                        onChange={(e) => setFilters({ ...filters, section: e.target.value })}
-                        className={`px-4 py-2 rounded-xl border ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'} text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50`}
-                    >
-                        <option value="all">All Sections</option>
-                    </select>
-
-                    <select
-                        value={filters.attempt}
-                        onChange={(e) => setFilters({ ...filters, attempt: e.target.value as 'first' | 'retake' | 'all' })}
-                        className={`px-4 py-2 rounded-xl border ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'} text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50`}
-                    >
-                        <option value="all">All Attempts</option>
-                        <option value="first">First Attempt</option>
-                        <option value="retake">Retake</option>
-                    </select>
-
-                    <select
-                        value={filters.semester}
-                        onChange={(e) => setFilters({ ...filters, semester: e.target.value })}
-                        className={`px-4 py-2 rounded-xl border ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'} text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50`}
-                    >
-                        <option value="all">All Semesters</option>
-                        <option value={`${course.semester_display} ${course.academic_year}`}>
-                            {course.semester_display} {course.academic_year}
-                        </option>
-                    </select>
-                </div>
-            </motion.div>
-
-            {/* (B) Metric Cards Section - Two Rows */}
-            <motion.div
-                variants={container}
-                initial="hidden"
-                animate="show"
-                className="space-y-6"
-            >
-                {/* Row 1: Primary Metrics */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <motion.div variants={item} className={`${themeClasses.card} p-6 shadow-xl rounded-xl border ${isDark ? 'border-white/10' : 'border-gray-200'} relative`}>
-                        <div className="absolute top-4 left-4 opacity-40">
-                            <TrendingUp className="w-5 h-5 text-indigo-500" />
-                        </div>
-                        <div className="text-center mt-2">
-                            <p className={`text-sm ${mutedText} mb-2`}>Class Average</p>
-                            <p className={`text-3xl font-semibold ${whiteText}`}>
-                                {analytics?.classAverage ? analytics.classAverage.toFixed(1) : '-'}
-                            </p>
-                        </div>
-                    </motion.div>
-
-                    <motion.div variants={item} className={`${themeClasses.card} p-6 shadow-xl rounded-xl border ${isDark ? 'border-white/10' : 'border-gray-200'} relative`}>
-                        <div className="absolute top-4 left-4 opacity-40">
-                            <Users className="w-5 h-5 text-indigo-500" />
-                        </div>
-                        <div className="text-center mt-2">
-                            <p className={`text-sm ${mutedText} mb-2`}>Class Size</p>
-                            <p className={`text-3xl font-semibold ${whiteText}`}>
-                                {analytics?.classSize || '-'}
-                            </p>
-                        </div>
-                    </motion.div>
-
-                    <motion.div variants={item} className={`${themeClasses.card} p-6 shadow-xl rounded-xl border ${isDark ? 'border-white/10' : 'border-gray-200'} relative`}>
-                        <div className="absolute top-4 left-4 opacity-40">
-                            <Award className="w-5 h-5 text-indigo-500" />
-                        </div>
-                        <div className="text-center mt-2">
-                            <p className={`text-sm ${mutedText} mb-2`}>Your Score</p>
-                            <p className={`text-3xl font-semibold ${whiteText}`}>
-                                {analytics?.userScore ? analytics.userScore.toFixed(1) : '-'}
-                            </p>
-                        </div>
-                    </motion.div>
-                </div>
-
-                {/* Row 2: Secondary Metrics */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <motion.div variants={item} className={`${themeClasses.card} p-6 shadow-xl rounded-xl border ${isDark ? 'border-white/10' : 'border-gray-200'} relative`}>
-                        <div className="absolute top-4 left-4 opacity-40">
-                            <TrendingUp className="w-5 h-5 text-green-500" />
-                        </div>
-                        <div className="text-center mt-2">
-                            <p className={`text-sm ${mutedText} mb-2`}>Highest Score</p>
-                            <p className={`text-2xl font-semibold ${whiteText}`}>
-                                {analytics?.highestScore ? analytics.highestScore.toFixed(1) : '-'}
-                            </p>
-                        </div>
-                    </motion.div>
-
-                    <motion.div variants={item} className={`${themeClasses.card} p-6 shadow-xl rounded-xl border ${isDark ? 'border-white/10' : 'border-gray-200'} relative`}>
-                        <div className="absolute top-4 left-4 opacity-40">
-                            <TrendingUp className="w-5 h-5 text-red-500 rotate-180" />
-                        </div>
-                        <div className="text-center mt-2">
-                            <p className={`text-sm ${mutedText} mb-2`}>Lowest Score</p>
-                            <p className={`text-2xl font-semibold ${whiteText}`}>
-                                {analytics?.lowestScore ? analytics.lowestScore.toFixed(1) : '-'}
-                            </p>
-                        </div>
-                    </motion.div>
-
                 </div>
             </motion.div>
 
@@ -437,9 +271,6 @@ export default function CourseDetailAnalyticsPage() {
                                             Your Score
                                         </th>
                                         <th className={`px-6 py-3 text-left text-xs font-medium ${mutedText} uppercase tracking-wider`}>
-                                            Max Score
-                                        </th>
-                                        <th className={`px-6 py-3 text-left text-xs font-medium ${mutedText} uppercase tracking-wider`}>
                                             Weight
                                         </th>
                                         <th className={`px-6 py-3 text-left text-xs font-medium ${mutedText} uppercase tracking-wider`}>
@@ -463,9 +294,6 @@ export default function CourseDetailAnalyticsPage() {
                                                     {grade ? grade.score : '-'}
                                                 </td>
                                                 <td className={`px-6 py-4 whitespace-nowrap text-sm ${mutedText}`}>
-                                                    {assessment.max_score}
-                                                </td>
-                                                <td className={`px-6 py-4 whitespace-nowrap text-sm ${mutedText}`}>
                                                     {assessment.weight}%
                                                 </td>
                                                 <td className={`px-6 py-4 text-sm ${mutedText} max-w-xs truncate`}>
@@ -480,30 +308,6 @@ export default function CourseDetailAnalyticsPage() {
                     ) : (
                         <div className="py-12 text-center">
                             <p className={mutedText}>No assessments available for this course</p>
-                        </div>
-                    )}
-                </motion.div>
-
-                {/* Section 2: Score Distribution */}
-                <motion.div
-                    variants={item}
-                    initial="hidden"
-                    animate="show"
-                    className={`${isDark ? 'bg-white/5' : 'bg-white/80'} backdrop-blur-lg rounded-2xl border ${isDark ? 'border-white/10' : 'border-gray-200'} p-6`}
-                >
-                    <div className="mb-6">
-                        <h3 className={`text-lg font-semibold ${whiteText} mb-2`}>Score Distribution</h3>
-                        <p className={`text-sm ${mutedText}`}>
-                            Distribution of final scores across all students in the class
-                        </p>
-                    </div>
-                    {scoreDistributionData ? (
-                        <div className="h-80">
-                            <Bar data={scoreDistributionData} options={chartOptions} />
-                        </div>
-                    ) : (
-                        <div className="h-80 flex items-center justify-center">
-                            <p className={mutedText}>No distribution data available</p>
                         </div>
                     )}
                 </motion.div>

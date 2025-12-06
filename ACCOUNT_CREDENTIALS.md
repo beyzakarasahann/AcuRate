@@ -1,5 +1,15 @@
 # 📋 TÜM HESAP GİRİŞ BİLGİLERİ
 
+## ⚠️ ÖNEMLİ UYARI
+
+**Bu dosya hassas bilgiler içerir!**
+- ❌ Asla git'e commit edilmemelidir
+- ✅ `.gitignore`'a eklenmiştir
+- ✅ Sadece yerel olarak tutulmalıdır
+- ✅ Production'da kullanılmamalıdır
+
+---
+
 ## 🔴 1. SUPER ADMIN
 
 **Login URL:** `http://localhost:3000/super-admin-x7k9m2p4q1w8r3n6`
@@ -12,135 +22,102 @@ python reset_superadmin_password.py
 
 ---
 
-## 🟠 2. INSTITUTION ADMIN
+## 🏛️ 2. INSTITUTION (Kurum Admini)
 
-### Institution Admin
-- **Username:** `institution`
-- **Email:** `institution@acurate.edu`
+**Login URL:** `http://localhost:3000/login`
+
+### Kurum Admini
+- **Username:** `institution1`
+- **Email:** `institution1@acurate.com`
 - **Password:** `institution123`
-- **Login URL:** `http://localhost:3000/login`
 - **Role:** INSTITUTION
 
-**Şifre sıfırlama:**
-```bash
-cd backend
-python reset_admin_password.py reset institution yeni_sifre
-```
+**Not:** Kurum adminleri super admin tarafından oluşturulur ve geçici şifre ile email'e gönderilir.
 
 ---
 
-## 🟡 3. TEACHER (ÖĞRETMEN)
+## 👨‍🏫 3. TEACHER (Öğretmen)
 
-### Ahmet Bulut
-- **Username:** `ahmet.bulut`
-- **Email:** `ahmet.bulut@acurate.edu`
-- **Password:** `ahmet123`
-- **Login URL:** `http://localhost:3000/login`
-- **Department:** Computer Science
+**Login URL:** `http://localhost:3000/login`
+
+### Teacher 1
+- **Username:** `teacher1`
+- **Email:** `teacher1@acurate.com`
+- **Password:** `teacher123`
 - **Role:** TEACHER
+- **Department:** Computer Science
 
-**Şifre sıfırlama:**
-```bash
-cd backend
-python reset_admin_password.py reset ahmet.bulut yeni_sifre
-```
+### Teacher 2
+- **Username:** `teacher2`
+- **Email:** `teacher2@acurate.com`
+- **Password:** `teacher123`
+- **Role:** TEACHER
+- **Department:** Mathematics
+
+**Not:** Öğretmenler kurum admini tarafından oluşturulur ve geçici şifre ile email'e gönderilir.
 
 ---
 
-## 🟢 4. STUDENT (ÖĞRENCİ)
+## 👨‍🎓 4. STUDENT (Öğrenci)
 
-### Demo Öğrenciler (Önemli):
+**Login URL:** `http://localhost:3000/login`
 
-#### Beyza Test
-- **Username:** `beyza2`
-- **Email:** `beyza2@student.acurate.edu`
-- **Password:** `beyza123`
+### Öğrenci 1
+- **Username:** `student1`
+- **Email:** `student1@acurate.com`
+- **Password:** `student123`
+- **Role:** STUDENT
 - **Student ID:** `2024001`
-- **Login URL:** `http://localhost:3000/login`
+- **Department:** Computer Science
 
-#### Beyza Karasahan
-- **Username:** `beyza.karasahan`
-- **Email:** `beyza.karasahan@student.acurate.edu`
-- **Password:** `beyza123`
+### Öğrenci 2
+- **Username:** `student2`
+- **Email:** `student2@acurate.com`
+- **Password:** `student123`
+- **Role:** STUDENT
 - **Student ID:** `2024002`
-- **Login URL:** `http://localhost:3000/login`
+- **Department:** Mathematics
 
-### Diğer Öğrenciler
+### Beyza2 (Test Öğrencisi)
+- **Username:** `beyza2`
+- **Email:** `beyza2@acurate.com`
+- **Password:** `beyza123`
+- **Role:** STUDENT
+- **Student ID:** `2024BEYZA2`
+- **Department:** Computer Science
+- **Not:** Kapsamlı test verileri mevcut
 
-**Varsayılan şifre:** `student123`
+---
 
-**Toplam:** 50 öğrenci
+## 🔐 Şifre Sıfırlama
 
-**Tüm öğrencileri görmek için:**
+### Super Admin Şifresi
 ```bash
 cd backend
-python reset_student_password.py list
+python reset_superadmin_password.py
 ```
 
-**Öğrenci şifresi sıfırlama:**
+### Öğrenci Şifresi
 ```bash
 cd backend
-python reset_student_password.py reset <username> [yeni_sifre]
+python reset_student_password.py reset <username>
 ```
 
----
-
-## 📊 ÖZET
-
-| Rol | Sayı | Varsayılan Şifre |
-|-----|------|------------------|
-| Super Admin | 0 | Oluşturulmalı |
-| Institution Admin | 1 | `institution123` |
-| Teacher | 1 | `ahmet123` |
-| Student | 50 | `student123` veya `beyza123` |
-
----
-
-## 🔍 EMAIL ARAMA
-
-**beyza590beyza@gmail.com** email'i sistemde bulunamadı.
-
-Bu email ile kullanıcı aramak için:
+### Admin/Institution Şifresi
 ```bash
 cd backend
-python reset_admin_password.py search beyza590beyza@gmail.com
+python reset_admin_password.py reset <username>
 ```
 
-Eğer bu email ile bir kullanıcı yoksa, yeni bir kullanıcı oluşturmanız gerekebilir.
+---
+
+## 📝 Notlar
+
+- Tüm şifreler development ortamı içindir
+- Production'da mutlaka güçlü şifreler kullanılmalıdır
+- Bu dosya asla git'e commit edilmemelidir
+- Hassas bilgiler içerdiği için paylaşılmamalıdır
 
 ---
 
-## 🛠️ YARDIMCI SCRİPTLER
-
-1. **Tüm hesapları listele:**
-   ```bash
-   cd backend
-   python list_all_accounts.py
-   ```
-
-2. **Admin/Institution şifresi sıfırla:**
-   ```bash
-   cd backend
-   python reset_admin_password.py reset <email_veya_username> [yeni_sifre]
-   ```
-
-3. **Öğrenci şifresi sıfırla:**
-   ```bash
-   cd backend
-   python reset_student_password.py reset <username> [yeni_sifre]
-   ```
-
-4. **Super Admin şifresi sıfırla:**
-   ```bash
-   cd backend
-   python reset_superadmin_password.py
-   ```
-
----
-
-## 💡 NOTLAR
-
-- Şifreler varsayılan değerlerdir, değiştirilmiş olabilir
-- Geçici şifreler email ile gönderilir
-- Email ile arama yaparken kısmi eşleşme yapılır
-
+**Son Güncelleme:** Aralık 2024

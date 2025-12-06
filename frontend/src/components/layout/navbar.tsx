@@ -52,15 +52,24 @@ export default function Navbar() {
 
         {/* NAV LINKS */}
         <div className="hidden md:flex items-center gap-8 text-slate-600 dark:text-slate-300 font-medium text-sm">
-          {["about", "features", "contact"].map((id) => (
-            <Link
-              key={id}
-              href={`#${id}`}
-              className={`transition-colors ${hoverColorClass}`}
-            >
-              {id[0].toUpperCase() + id.slice(1)}
-            </Link>
-          ))}
+          <Link
+            href="/about"
+            className={`transition-colors ${hoverColorClass}`}
+          >
+            About
+          </Link>
+          <Link
+            href="/features"
+            className={`transition-colors ${hoverColorClass}`}
+          >
+            Features
+          </Link>
+          <Link
+            href="/contact"
+            className={`transition-colors ${hoverColorClass}`}
+          >
+            Contact
+          </Link>
         </div>
 
         {/* ACTIONS */}
@@ -79,7 +88,7 @@ export default function Navbar() {
           </button>
 
           {/* Login */}
-          <Link href="/auth/login">
+          <Link href="/login">
             <Button
               variant="ghost"
               size="sm"
@@ -90,7 +99,7 @@ export default function Navbar() {
           </Link>
 
           {/* Get Started */}
-          <Link href="/auth/signup">
+          <Link href="/contact">
             <Button
               size="sm"
               className={`bg-gradient-to-r ${accentGradientClass} hover:from-indigo-500 hover:to-purple-500 text-white rounded-lg text-sm font-semibold shadow-md shadow-indigo-500/30 transition-all`}

@@ -317,10 +317,6 @@ def update_achievements_on_grade_save(sender, instance, created, **kwargs):
         pos_from_lo = ProgramOutcome.objects.filter(lo_pos__learning_outcome=lo).distinct()
         affected_pos.update(pos_from_lo)
     
-    # Also include direct PO relationships (fallback)
-    direct_pos = assessment.related_pos.all()
-    affected_pos.update(direct_pos)
-    
     # Update all affected POs
     for po in affected_pos:
         calculate_po_achievement(student, po)
@@ -350,9 +346,6 @@ def update_achievements_on_grade_delete(sender, instance, **kwargs):
         pos_from_lo = ProgramOutcome.objects.filter(lo_pos__learning_outcome=lo).distinct()
         affected_pos.update(pos_from_lo)
     
-    direct_pos = assessment.related_pos.all()
-    affected_pos.update(direct_pos)
-    
     for po in affected_pos:
         calculate_po_achievement(student, po)
     
@@ -369,7 +362,7 @@ def update_achievements_on_grade_delete(sender, instance, **kwargs):
 def update_achievements_on_assessment_change(sender, instance, created, **kwargs):
     """
     Update achievements when an assessment is created or updated
-    (e.g., when related_pos or related_los change).
+    (e.g., when related_los change).
     """
     if not instance.is_active:
         return
@@ -392,10 +385,6 @@ def update_achievements_on_assessment_change(sender, instance, created, **kwargs
     for lo in instance.related_los.all():
         pos_from_lo = ProgramOutcome.objects.filter(lo_pos__learning_outcome=lo).distinct()
         affected_pos.update(pos_from_lo)
-    
-    # Also include direct PO relationships
-    for po in instance.related_pos.all():
-        affected_pos.add(po)
     
     for po in affected_pos:
         for student in students:
@@ -439,11 +428,6 @@ def update_achievements_on_enrollment(sender, instance, created, **kwargs):
     for lo in learning_outcomes:
         pos_from_lo = ProgramOutcome.objects.filter(lo_pos__learning_outcome=lo).distinct()
         affected_pos.update(pos_from_lo)
-    
-    # Also include direct PO relationships from assessments
-    for assessment in assessments:
-        for po in assessment.related_pos.all():
-            affected_pos.add(po)
     
     for po in affected_pos:
         calculate_po_achievement(student, po)

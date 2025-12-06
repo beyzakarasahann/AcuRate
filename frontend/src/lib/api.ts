@@ -1446,7 +1446,15 @@ class ApiClient {
     return await this.request('/course-analytics/');
   }
 
-  async getCourseAnalyticsDetail(courseId: number): Promise<{
+  async getCourseAnalyticsDetail(
+    courseId: number,
+    filters?: {
+      instructor?: string;
+      section?: string;
+      attempt?: 'first' | 'retake' | 'all';
+      semester?: string;
+    }
+  ): Promise<{
     success: boolean;
     course: {
       id: number;
@@ -1478,7 +1486,24 @@ class ApiClient {
       }>;
     };
   }> {
-    return await this.request(`/course-analytics/${courseId}/`);
+    const params = new URLSearchParams();
+    if (filters) {
+      if (filters.instructor && filters.instructor !== 'all') {
+        params.append('instructor', filters.instructor);
+      }
+      if (filters.section && filters.section !== 'all') {
+        params.append('section', filters.section);
+      }
+      if (filters.attempt && filters.attempt !== 'all') {
+        params.append('attempt', filters.attempt);
+      }
+      if (filters.semester && filters.semester !== 'all') {
+        params.append('semester', filters.semester);
+      }
+    }
+    const queryString = params.toString();
+    const url = `/course-analytics/${courseId}/${queryString ? `?${queryString}` : ''}`;
+    return await this.request(url);
   }
 
   // Institution Analytics

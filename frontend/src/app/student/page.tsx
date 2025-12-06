@@ -2,7 +2,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Award, BookOpen, CheckSquare, Trophy, ArrowUpRight, ArrowDownRight, TrendingUp, AlertTriangle, Loader2 } from 'lucide-react';
+import { Award, BookOpen, Trophy, ArrowUpRight, ArrowDownRight, TrendingUp, AlertTriangle, Loader2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { api, type DashboardData, type Enrollment, type StudentPOAchievement } from '@/lib/api';
@@ -99,11 +99,67 @@ export default function StudentHomePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [selectedCourse, setSelectedCourse] = useState<string>('all');
+  const [assessments, setAssessments] = useState<any[]>([]);
+  const [allAssessments, setAllAssessments] = useState<any[]>([]);
+  const [programOutcomes, setProgramOutcomes] = useState<any[]>([]);
   
   useEffect(() => {
     setMounted(true);
     fetchDashboardData();
   }, []);
+
+  useEffect(() => {
+    if (dashboardData?.recent_grades && dashboardData.recent_grades.length > 0) {
+      fetchAssessmentsForGrades();
+    }
+  }, [dashboardData]);
+
+  useEffect(() => {
+    // Fetch all data needed for PO calculation (same as PO outcomes page)
+    if (dashboardData?.po_achievements && dashboardData.po_achievements.length > 0) {
+      fetchPOData();
+    }
+  }, [dashboardData]);
+
+  const fetchAssessmentsForGrades = async () => {
+    try {
+      if (!dashboardData?.recent_grades) return;
+      
+      // Get unique assessment IDs from recent grades
+      const assessmentIds = [...new Set(dashboardData.recent_grades.map(g => g.assessment))];
+      
+      // Fetch all assessments (we'll filter by IDs on frontend)
+      const fetchedAssessments = await api.getAssessments();
+      
+      // Filter to only assessments we need
+      const neededAssessments = fetchedAssessments.filter(a => assessmentIds.includes(a.id));
+      setAssessments(neededAssessments);
+    } catch (err) {
+      console.error('Failed to fetch assessments:', err);
+    }
+  };
+
+  const fetchPOData = async () => {
+    try {
+      // Fetch all data needed for PO calculation (same as PO outcomes page)
+      const [programOutcomesData, assessmentsData] = await Promise.allSettled([
+        api.getProgramOutcomes(),
+        api.getAssessments()
+      ]);
+
+      if (programOutcomesData.status === 'fulfilled') {
+        setProgramOutcomes(Array.isArray(programOutcomesData.value) ? programOutcomesData.value : []);
+      }
+
+      if (assessmentsData.status === 'fulfilled') {
+        const fetchedAssessments = Array.isArray(assessmentsData.value) ? assessmentsData.value : [];
+        setAllAssessments(fetchedAssessments);
+      }
+    } catch (err) {
+      console.error('Failed to fetch PO data:', err);
+    }
+  };
 
   const fetchDashboardData = async () => {
     try {
@@ -163,30 +219,83 @@ export default function StudentHomePage() {
     );
   }
 
-  // Extract data
+  // Extract data from backend
   const student = dashboardData.student;
   const enrollments = dashboardData.enrollments || [];
   const poAchievements = dashboardData.po_achievements || [];
-  const overallGpa = dashboardData.overall_gpa || 0;
-  const totalCredits = dashboardData.total_credits || 0;
+  const recentGrades = dashboardData.recent_grades || [];
   const completedCourses = dashboardData.completed_courses || 0;
 
   // Calculate active courses
   const activeCourses = enrollments.filter(e => e.is_active);
 
-  // Calculate total PO achievement
-  const totalPOAchievement = poAchievements.length > 0
-    ? Math.round(poAchievements.reduce((sum, po) => sum + (po.achievement_percentage || 0), 0) / poAchievements.length)
+  // Calculate total PO achievement (same logic as PO outcomes page)
+  // Build achievement map (same as PO outcomes page)
+  const achievementMap = new Map<number, any>();
+  poAchievements.forEach(a => {
+    const poId = typeof a.program_outcome === 'string' ? parseInt(a.program_outcome) : 
+                 (typeof a.program_outcome === 'object' && a.program_outcome?.id) ? 
+                 (typeof a.program_outcome.id === 'string' ? parseInt(a.program_outcome.id) : a.program_outcome.id) :
+                 a.program_outcome;
+    if (poId) achievementMap.set(poId, a);
+  });
+
+  // Filter active POs (same as PO outcomes page)
+  // Only process if programOutcomes is loaded
+  const activePOs = programOutcomes && programOutcomes.length > 0 ? programOutcomes.filter(po => {
+    if (po.is_active === undefined || po.is_active === null) return true;
+    if (typeof po.is_active === 'string') {
+      return po.is_active.toLowerCase() === 'true';
+    }
+    return po.is_active === true;
+  }) : [];
+
+  const POsToShow = activePOs.length > 0 ? activePOs : (programOutcomes || []);
+
+  // Calculate hasData for each PO (same as PO outcomes page)
+  // hasData = achievement exists OR has assessments
+  // For dashboard, we'll check if achievement exists (simplified version)
+  const posWithData = POsToShow.filter(po => {
+    const poId = typeof po.id === 'string' ? parseInt(po.id) : po.id;
+    const achievement = achievementMap.get(poId);
+    
+    // Check if PO has data: achievement exists
+    // In PO outcomes page: hasData = !!achievement || courseIds.size > 0
+    // For dashboard, we'll use a simplified version
+    const hasAchievement = !!achievement && achievement.achievement_percentage !== null && achievement.achievement_percentage !== undefined;
+    return hasAchievement;
+  });
+  
+  // Calculate average using current_percentage (same as PO outcomes page uses 'current')
+  const totalPOAchievement = posWithData.length > 0
+    ? Math.round(posWithData.reduce((sum, po) => {
+        const poId = typeof po.id === 'string' ? parseInt(po.id) : po.id;
+        const achievement = achievementMap.get(poId);
+        
+        // Same as PO outcomes page: current = achievement ? Number(achievementValue) : 0
+        const achievementValue = achievement?.achievement_percentage ?? achievement?.current_percentage ?? 0;
+        const current = achievement ? Number(achievementValue) : 0;
+        
+        return sum + current;
+      }, 0) / posWithData.length)
     : 0;
+
+  // Calculate PO status summary
+  const poStatusSummary = {
+    achieved: poAchievements.filter(po => (po.achievement_percentage || 0) >= (po.target_percentage || 0)).length,
+    needsAttention: poAchievements.filter(po => {
+      const achievement = po.achievement_percentage || 0;
+      const target = po.target_percentage || 0;
+      return achievement > 0 && achievement < target;
+    }).length,
+    noData: poAchievements.filter(po => !po.achievement_percentage || po.achievement_percentage === 0).length
+  };
 
   // Student info
   const studentInfo = {
     name: student ? `${student.first_name} ${student.last_name}` : '-',
     studentId: student?.student_id || '-',
-    major: student?.department || '-',
-    gpa: overallGpa,
-    credits: totalCredits,
-    status: overallGpa >= 3.5 ? 'High Performer' : overallGpa >= 3.0 ? 'Good' : 'Average'
+    major: student?.department || '-'
   };
   
   const performanceStats: Array<{
@@ -197,27 +306,196 @@ export default function StudentHomePage() {
     icon: any;
     color: string;
   }> = [
-    { title: 'Current GPA', value: overallGpa > 0 ? overallGpa.toFixed(2) : '-', change: '', trend: 'up', icon: Trophy, color: 'from-green-500 to-emerald-500' },
-    { title: 'Credits Earned', value: totalCredits > 0 ? totalCredits.toString() : '-', change: '', trend: 'up', icon: BookOpen, color: 'from-blue-500 to-cyan-500' },
-    { title: 'Courses in Progress', value: activeCourses.length > 0 ? activeCourses.length.toString() : '-', change: '', trend: 'stable', icon: CheckSquare, color: 'from-orange-500 to-red-500' },
-    { title: 'Total PO Achievement', value: totalPOAchievement > 0 ? `${totalPOAchievement}%` : '-', change: '', trend: 'up', icon: Award, color: 'from-purple-500 to-pink-500' }
+    { title: 'Courses in Progress', value: activeCourses.length > 0 ? activeCourses.length.toString() : '0', change: '', trend: 'stable', icon: BookOpen, color: 'from-blue-500 to-cyan-500' },
+    { title: 'Total PO Achievement', value: totalPOAchievement > 0 ? `${totalPOAchievement}%` : '-', change: '', trend: 'up', icon: Award, color: 'from-purple-500 to-pink-500' },
+    { title: 'PO Status', value: `${poStatusSummary.achieved}/${poAchievements.length}`, change: '', trend: 'stable', icon: Trophy, color: 'from-orange-500 to-red-500' }
   ];
 
-  // GPA Trend Data (mock for now - can be calculated from semester data if available)
-  const hasGPAData = overallGpa > 0;
-  const gpaTrendData = {
-    labels: hasGPAData ? ['Previous', 'Current'] : [],
-    datasets: [
-        {
-            label: 'GPA',
-            data: hasGPAData ? [overallGpa - 0.1, overallGpa] : [],
+  // Get course information for each grade using assessments and enrollments
+  const getCourseForGrade = (grade: any) => {
+    // Find assessment
+    const assessment = assessments.find(a => a.id === grade.assessment);
+    
+    if (assessment) {
+      // Assessment.course is a number (course ID)
+      const courseId = typeof assessment.course === 'number' 
+        ? assessment.course 
+        : typeof assessment.course === 'string' 
+        ? parseInt(assessment.course) 
+        : null;
+      
+      if (courseId) {
+        // Try to find course in enrollments (both active and completed)
+        const enrollment = enrollments.find(e => {
+          let eCourseId: number | null = null;
+          if (typeof e.course === 'object' && e.course !== null) {
+            eCourseId = (e.course as any).id;
+          } else if (typeof e.course === 'number') {
+            eCourseId = e.course;
+          } else if (typeof e.course === 'string') {
+            eCourseId = parseInt(e.course);
+          }
+          return eCourseId === courseId;
+        });
+        
+        if (enrollment) {
+          return {
+            id: courseId,
+            code: enrollment.course_code || assessment.course_code || 'Unknown',
+            name: enrollment.course_name || assessment.course_name || 'Unknown Course'
+          };
+        }
+        
+        // If not found in enrollments, use assessment's course info if available
+        if (assessment.course_code || assessment.course_name) {
+          return {
+            id: courseId,
+            code: assessment.course_code || 'Unknown',
+            name: assessment.course_name || 'Unknown Course'
+          };
+        }
+      }
+    }
+    return null;
+  };
+
+  // Get unique courses from recent grades
+  const coursesFromGrades = recentGrades
+    .map(g => getCourseForGrade(g))
+    .filter((course): course is { id: number; code: string; name: string } => course !== null);
+  
+  const uniqueCourses = Array.from(
+    new Map(coursesFromGrades.map(c => [c.id, c])).values()
+  );
+
+  // Filter grades by selected course
+  const filteredGrades = selectedCourse === 'all' 
+    ? recentGrades.slice(0, 30) // Show more when all courses
+    : recentGrades.filter(g => {
+        const course = getCourseForGrade(g);
+        return course && course.id.toString() === selectedCourse;
+      });
+
+  // Recent Grades Data - grouped by course
+  const hasRecentGrades = filteredGrades.length > 0;
+  
+  // If filtering by specific course, show single line with course name
+  // If showing all courses, group by course with different colors
+  const courseColors = [
+    { border: 'rgb(16, 185, 129)', bg: 'rgba(16, 185, 129, 0.5)' },
+    { border: 'rgb(59, 130, 246)', bg: 'rgba(59, 130, 246, 0.5)' },
+    { border: 'rgb(168, 85, 247)', bg: 'rgba(168, 85, 247, 0.5)' },
+    { border: 'rgb(236, 72, 153)', bg: 'rgba(236, 72, 153, 0.5)' },
+    { border: 'rgb(245, 158, 11)', bg: 'rgba(245, 158, 11, 0.5)' },
+    { border: 'rgb(239, 68, 68)', bg: 'rgba(239, 68, 68, 0.5)' },
+  ];
+
+  let recentGradesData: any = {
+    labels: [],
+    datasets: []
+  };
+
+  if (hasRecentGrades) {
+    if (selectedCourse === 'all') {
+      // Show course averages as a bar chart - cleaner view
+      const courseAverages = new Map<number, { courseCode: string; courseName: string; grades: number[] }>();
+      
+      filteredGrades.forEach((g) => {
+        const course = getCourseForGrade(g);
+        if (!course) return;
+        
+        if (!courseAverages.has(course.id)) {
+          courseAverages.set(course.id, {
+            courseCode: course.code,
+            courseName: course.name,
+            grades: []
+          });
+        }
+        
+        const courseData = courseAverages.get(course.id)!;
+        courseData.grades.push(Number(g.score) || 0);
+      });
+
+      // Calculate average for each course
+      const courseStats = Array.from(courseAverages.entries()).map(([courseId, courseData]) => {
+        const average = courseData.grades.length > 0
+          ? courseData.grades.reduce((sum, score) => sum + score, 0) / courseData.grades.length
+          : 0;
+        
+        return {
+          courseId,
+          courseCode: courseData.courseCode,
+          courseName: courseData.courseName,
+          average: Math.round(average * 10) / 10,
+          count: courseData.grades.length
+        };
+      }).sort((a, b) => b.average - a.average); // Sort by average descending
+
+      recentGradesData = {
+        labels: courseStats.map(stat => `${stat.courseCode}\n(${stat.count})`),
+        datasets: [{
+          label: 'Course Average Score',
+          data: courseStats.map(stat => stat.average),
+          backgroundColor: courseStats.map((_, index) => {
+            const colors = [
+              'rgba(99, 102, 241, 0.7)',
+              'rgba(16, 185, 129, 0.7)',
+              'rgba(168, 85, 247, 0.7)',
+              'rgba(236, 72, 153, 0.7)',
+              'rgba(245, 158, 11, 0.7)',
+              'rgba(239, 68, 68, 0.7)',
+            ];
+            return colors[index % colors.length];
+          }),
+          borderColor: courseStats.map((_, index) => {
+            const colors = [
+              'rgb(99, 102, 241)',
+              'rgb(16, 185, 129)',
+              'rgb(168, 85, 247)',
+              'rgb(236, 72, 153)',
+              'rgb(245, 158, 11)',
+              'rgb(239, 68, 68)',
+            ];
+            return colors[index % colors.length];
+          }),
+          borderWidth: 2,
+          borderRadius: 6
+        }]
+      };
+    } else {
+      // Single course selected - show only that course's grades chronologically
+      const selectedCourseInfo = uniqueCourses.find(c => c.id.toString() === selectedCourse);
+      const courseGrades = filteredGrades
+        .map(g => ({
+          ...g,
+          course: getCourseForGrade(g)
+        }))
+        .filter(g => g.course && g.course.id.toString() === selectedCourse)
+        .sort((a, b) => {
+          if (a.graded_at && b.graded_at) {
+            return new Date(a.graded_at).getTime() - new Date(b.graded_at).getTime();
+          }
+          return 0;
+        });
+
+      recentGradesData = {
+        labels: courseGrades.map((g) => {
+          const assessmentTitle = g.assessment_title || 'Assessment';
+          return assessmentTitle.length > 30 ? assessmentTitle.substring(0, 30) + '...' : assessmentTitle;
+        }),
+        datasets: [{
+          label: selectedCourseInfo ? `${selectedCourseInfo.code} - ${selectedCourseInfo.name}` : 'Selected Course',
+          data: courseGrades.map(g => Number(g.score) || 0),
             fill: false,
             borderColor: 'rgb(16, 185, 129)',
             backgroundColor: 'rgba(16, 185, 129, 0.5)',
-            tension: 0.4
-        }
-    ]
-  };
+          tension: 0.4,
+          pointRadius: 5,
+          pointHoverRadius: 7
+        }]
+      };
+    }
+  }
 
   // PO Achievement Line Chart Data
   const hasPOData = poAchievements.length > 0;
@@ -271,7 +549,7 @@ export default function StudentHomePage() {
 
   const dynamicBarOptions = barOptions(isDark, secondaryTextClass);
   const dynamicLineOptions = lineOptions(isDark, secondaryTextClass, 0, 100, 'Achievement (%)');
-  const dynamicGPALineOptions = lineOptions(isDark, secondaryTextClass, 0, 4.0, 'GPA');
+  const dynamicRecentGradesOptions = lineOptions(isDark, secondaryTextClass, 0, 100, 'Score');
 
 
   return (
@@ -300,15 +578,10 @@ export default function StudentHomePage() {
         >
             {performanceStats.map((stat, index) => {
                 const { start, end } = getGradientColors(stat.color); 
-                return (
-                    <motion.div
-                        key={index}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.1 + 0.2 }}
-                        whileHover={{ scale: 1.05, y: -5 }}
-                        className={`backdrop-blur-xl ${themeClasses.card} p-6 shadow-2xl hover:shadow-indigo-500/20 transition-all`}
-                    >
+                const isPOCard = stat.title === 'Total PO Achievement';
+                
+                const cardContent = (
+                    <>
                         <div className="flex items-start justify-between mb-4">
                             <div
                                 style={{ backgroundImage: `linear-gradient(to bottom right, ${start}, ${end})` }}
@@ -325,6 +598,25 @@ export default function StudentHomePage() {
                         </div>
                         <h3 className={`${secondaryTextClass} text-sm mb-1`}>{stat.title}</h3>
                         <p className={`text-3xl font-bold ${whiteTextClass}`}>{stat.value || '-'}</p>
+                    </>
+                );
+                
+                return (
+                    <motion.div
+                        key={index}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.1 + 0.2 }}
+                        whileHover={{ scale: 1.05, y: -5 }}
+                        className={`backdrop-blur-xl ${themeClasses.card} p-6 shadow-2xl hover:shadow-indigo-500/20 transition-all ${isPOCard ? 'cursor-pointer' : ''}`}
+                    >
+                        {isPOCard ? (
+                            <Link href="/student/po-outcomes" className="block">
+                                {cardContent}
+                            </Link>
+                        ) : (
+                            cardContent
+                        )}
                     </motion.div>
                 );
             })}
@@ -335,23 +627,53 @@ export default function StudentHomePage() {
             {/* Sol Sütun (Trend ve Radar) */}
             <div className="lg:col-span-2 space-y-6">
                 
-                {/* GPA Trend Line Chart */}
+                {/* Recent Grades Trend Line Chart */}
                 <motion.div
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.2 }}
                     className={`backdrop-blur-xl ${themeClasses.card} p-6 shadow-2xl h-96`}
                 >
-                    <h2 className={`text-xl font-bold ${whiteTextClass} mb-4 flex items-center gap-2`}>
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className={`text-xl font-bold ${whiteTextClass} flex items-center gap-2`}>
                         <TrendingUp className={`w-5 h-5 text-green-500`} />
-                        Academic Performance Trend (GPA)
+                            Recent Grades Trend
                     </h2>
+                        {uniqueCourses.length > 0 ? (
+                            <select
+                                value={selectedCourse}
+                                onChange={(e) => setSelectedCourse(e.target.value)}
+                                className={`px-4 py-2 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 ${
+                                    isDark 
+                                        ? 'bg-white/5 border-white/10 text-white' 
+                                        : 'bg-white border-gray-300 text-gray-900'
+                                }`}
+                            >
+                                <option value="all">All Courses</option>
+                                {uniqueCourses.map(course => (
+                                    <option key={course.id} value={course.id.toString()}>
+                                        {course.code} - {course.name.length > 40 ? course.name.substring(0, 40) + '...' : course.name}
+                                    </option>
+                                ))}
+                            </select>
+                        ) : (
+                            <p className={`text-sm ${secondaryTextClass}`}>No courses available</p>
+                        )}
+                    </div>
                     <div className="h-72">
-                        {hasGPAData ? (
-                            <Line data={gpaTrendData} options={dynamicGPALineOptions} />
+                        {hasRecentGrades ? (
+                            selectedCourse === 'all' ? (
+                                <Bar data={recentGradesData} options={dynamicBarOptions} />
+                            ) : (
+                                <Line data={recentGradesData} options={dynamicRecentGradesOptions} />
+                            )
                         ) : (
                             <div className="flex items-center justify-center h-full">
-                                <p className={secondaryTextClass}>No GPA data available</p>
+                                <p className={secondaryTextClass}>
+                                    {selectedCourse === 'all' 
+                                        ? 'No recent grades available' 
+                                        : 'No grades available for selected course'}
+                                </p>
                             </div>
                         )}
                     </div>
