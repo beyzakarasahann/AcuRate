@@ -36,3 +36,4 @@ Bu klasör AcuRate projesinin tüm dokümantasyonunu içerir.
 
 **Not:** Eski ve geçici dokümantasyonlar `archive/` klasöründe saklanmaktadır.
 
+

@@ -426,58 +426,6 @@ export default function LearningOutcomePage() {
                                   className={`w-full p-2 rounded-lg border ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-indigo-500`}
                                 />
                               </div>
-                              {/* Program Outcomes Contribution Section */}
-                              {programOutcomes.length > 0 && (
-                                <div className="mt-4 pt-4 border-t border-gray-500/20">
-                                  <h4 className={`${whiteText} font-semibold mb-3 text-sm`}>Program Outcome Contributions</h4>
-                                  <div className={`overflow-x-auto ${isDark ? 'bg-white/5' : 'bg-gray-50'} rounded-lg p-3`}>
-                                    <table className="w-full text-sm">
-                                      <thead>
-                                        <tr className={`border-b ${isDark ? 'border-white/10' : 'border-gray-200'}`}>
-                                          <th className={`text-left py-2 px-3 ${mutedText} font-medium`}>PO Code</th>
-                                          <th className={`text-left py-2 px-3 ${mutedText} font-medium`}>Description</th>
-                                          <th className={`text-left py-2 px-3 ${mutedText} font-medium`}>% Contribution</th>
-                                        </tr>
-                                      </thead>
-                                      <tbody>
-                                        {programOutcomes.map((po) => {
-                                          const currentPercentage = editingPOPercentages[lo.id]?.[po.id] || 0;
-                                          return (
-                                            <tr key={po.id} className={`border-b ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
-                                              <td className={`py-2 px-3 ${whiteText} font-medium`}>{po.code}</td>
-                                              <td className={`py-2 px-3 ${mutedText} text-xs`}>{po.title}</td>
-                                              <td className="py-2 px-3">
-                                                <input
-                                                  type="number"
-                                                  min="0"
-                                                  max="100"
-                                                  step="0.1"
-                                                  value={currentPercentage || ''}
-                                                  onChange={(e) => {
-                                                    const value = Number(e.target.value) || 0;
-                                                    setEditingPOPercentages(prev => ({
-                                                      ...prev,
-                                                      [lo.id]: {
-                                                        ...prev[lo.id],
-                                                        [po.id]: value
-                                                      }
-                                                    }));
-                                                  }}
-                                                  placeholder="0"
-                                                  className={`w-20 p-1.5 rounded border text-sm ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-indigo-500`}
-                                                />
-                                              </td>
-                                            </tr>
-                                          );
-                                        })}
-                                      </tbody>
-                                    </table>
-                                  </div>
-                                  <p className={`${mutedText} text-xs mt-2`}>
-                                    Enter percentage (0-100) for each PO. Leave empty or 0 for no connection.
-                                  </p>
-                                </div>
-                              )}
                               <motion.button
                                 whileHover={{ scale: 1.05 }}
                                 whileTap={{ scale: 0.95 }}
@@ -684,61 +632,6 @@ export default function LearningOutcomePage() {
                     />
                     <p className={`${mutedText} text-xs mt-1`}>Default target percentage for this LO (0-100%)</p>
                   </div>
-
-                  {/* Program Outcomes Contribution */}
-                  {programOutcomes.length > 0 && (
-                    <div>
-                      <label className={`block text-sm font-medium ${mutedText} mb-2`}>
-                        Program Outcome Contributions (Optional)
-                      </label>
-                      <p className={`${mutedText} text-xs mb-3`}>
-                        Define how much this Learning Outcome contributes to each Program Outcome (percentage: 0-100)
-                      </p>
-                      <div className={`overflow-x-auto ${isDark ? 'bg-white/5' : 'bg-gray-50'} rounded-lg p-3`}>
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className={`border-b ${isDark ? 'border-white/10' : 'border-gray-200'}`}>
-                              <th className={`text-left py-2 px-3 ${mutedText} font-medium`}>PO Code</th>
-                              <th className={`text-left py-2 px-3 ${mutedText} font-medium`}>Description (Short)</th>
-                              <th className={`text-left py-2 px-3 ${mutedText} font-medium`}>% Contribution</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {programOutcomes.map((po) => {
-                              const currentPercentage = newPOPercentages[po.id] || '';
-                              return (
-                                <tr key={po.id} className={`border-b ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
-                                  <td className={`py-2 px-3 ${whiteText} font-medium`}>{po.code}</td>
-                                  <td className={`py-2 px-3 ${mutedText} text-xs`}>{po.title}</td>
-                                  <td className="py-2 px-3">
-                                    <input
-                                      type="number"
-                                      min="0"
-                                      max="100"
-                                      step="0.1"
-                                      value={currentPercentage}
-                                      onChange={(e) => {
-                                        const value = e.target.value === '' ? '' : Number(e.target.value);
-                                        setNewPOPercentages(prev => ({
-                                          ...prev,
-                                          [po.id]: value === '' ? 0 : value
-                                        }));
-                                      }}
-                                      placeholder="0"
-                                      className={`w-20 p-1.5 rounded border text-sm ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-indigo-500`}
-                                    />
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                      <p className={`${mutedText} text-xs mt-2`}>
-                        Enter percentage (0-100) for each PO. Leave empty or 0 for no connection. No requirement for total to equal 100%.
-                      </p>
-                    </div>
-                  )}
                 </div>
 
                 {/* Action Buttons */}

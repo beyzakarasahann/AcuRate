@@ -500,6 +500,10 @@ class UserViewSet(viewsets.ModelViewSet):
         user = self.request.user
         queryset = User.objects.all()
         
+        # CRITICAL: ALWAYS exclude super admin from ANY role filter
+        # Super admin is NOT a student, teacher, or institution - it's a separate role
+        queryset = queryset.exclude(is_superuser=True)
+        
         # Filter by role if specified
         role = self.request.query_params.get('role', None)
         if role:
@@ -980,6 +984,10 @@ class EnrollmentViewSet(viewsets.ModelViewSet):
         user = self.request.user
         queryset = Enrollment.objects.select_related('student', 'course')
         
+        # CRITICAL: ALWAYS exclude super admin from enrollments
+        # Super admin is NOT a student and should NEVER appear in enrollments
+        queryset = queryset.exclude(student__is_superuser=True)
+        
         # Students see only their enrollments
         if user.role == User.Role.STUDENT:
             queryset = queryset.filter(student=user)
@@ -1275,6 +1283,10 @@ class StudentPOAchievementViewSet(viewsets.ReadOnlyModelViewSet):
         user = self.request.user
         queryset = StudentPOAchievement.objects.select_related('student', 'program_outcome')
         
+        # CRITICAL: ALWAYS exclude super admin from PO achievements
+        # Super admin is NOT a student and should NEVER appear in achievements
+        queryset = queryset.exclude(student__is_superuser=True)
+        
         # Students see only their achievements
         if user.role == User.Role.STUDENT:
             queryset = queryset.filter(student=user)
@@ -1451,13 +1463,94 @@ def teacher_dashboard(request):
         assessment__course__teacher=user
     ).select_related('student', 'assessment').order_by('-graded_at')[:10]
     
+    # Get PO achievements for students in teacher's courses (aggregated by PO)
+    # Get all students enrolled in teacher's courses
+    enrolled_student_ids = Enrollment.objects.filter(
+        course__teacher=user,
+        is_active=True
+    ).values_list('student_id', flat=True).distinct()
+    
+    # Get PO achievements for these students (aggregated by PO)
+    po_achievements_data = []
+    
+    # Get all active POs for teacher's department
+    teacher_dept = user.department
+    if teacher_dept:
+        program_outcomes = ProgramOutcome.objects.filter(
+            department=teacher_dept,
+            is_active=True
+        )
+        
+        for po in program_outcomes:
+            # Get average achievement for this PO across all teacher's students
+            po_achievements = StudentPOAchievement.objects.filter(
+                program_outcome=po,
+                student_id__in=enrolled_student_ids
+            )
+            
+            if po_achievements.exists():
+                avg_achievement = po_achievements.aggregate(
+                    avg=Avg('current_percentage')
+                )['avg']
+                
+                po_achievements_data.append({
+                    'po_code': po.code,
+                    'po_title': po.title,
+                    'achievement_percentage': round(float(avg_achievement), 2) if avg_achievement else 0,
+                    'target_percentage': float(po.target_percentage),
+                    'total_students': po_achievements.values('student').distinct().count(),
+                    'students_achieved': po_achievements.filter(
+                        current_percentage__gte=po.target_percentage
+                    ).values('student').distinct().count()
+                })
+    
+    # Calculate PO achievement per course for better frontend display
+    courses_with_po = []
+    for course in courses:
+        # Get students enrolled in this course
+        course_student_ids = Enrollment.objects.filter(
+            course=course,
+            is_active=True
+        ).values_list('student_id', flat=True).distinct()
+        
+        # Calculate average PO achievement for this course's students
+        course_po_avg = 0
+        if course_student_ids and po_achievements_data:
+            # Get PO achievements for students in this course
+            course_po_achievements = StudentPOAchievement.objects.filter(
+                student_id__in=course_student_ids,
+                program_outcome__department=teacher_dept
+            ) if teacher_dept else StudentPOAchievement.objects.none()
+            
+            if course_po_achievements.exists():
+                course_avg = course_po_achievements.aggregate(
+                    avg=Avg('current_percentage')
+                )['avg']
+                course_po_avg = round(float(course_avg), 2) if course_avg else 0
+        
+        courses_with_po.append({
+            'course_id': course.id,
+            'avg_po_achievement': course_po_avg
+        })
+    
     # Serialize data manually (like student_dashboard)
+    # Add PO achievement to each course
+    courses_data = []
+    for course in courses:
+        course_data = CourseDetailSerializer(course).data
+        # Find PO achievement for this course
+        course_po_info = next((c for c in courses_with_po if c['course_id'] == course.id), None)
+        if course_po_info:
+            course_data['avg_po_achievement'] = course_po_info['avg_po_achievement']
+        courses_data.append(course_data)
+    
     serializer_data = {
         'teacher': UserDetailSerializer(user).data,
-        'courses': [CourseDetailSerializer(course).data for course in courses],
+        'courses': courses_data,
         'total_students': total_students,
         'pending_assessments': pending_assessments,
-        'recent_submissions': [StudentGradeSerializer(submission).data for submission in recent_submissions]
+        'recent_submissions': [StudentGradeSerializer(submission).data for submission in recent_submissions],
+        'po_achievements': po_achievements_data
     }
     
     return Response(serializer_data)
@@ -3205,6 +3298,38 @@ class StudentLOAchievementViewSet(viewsets.ModelViewSet):
         """Filter based on user role"""
         user = self.request.user
         queryset = super().get_queryset()
+        queryset = queryset.select_related('student', 'learning_outcome', 'learning_outcome__course')
+        
+        # CRITICAL: ALWAYS exclude super admin from LO achievements
+        # Super admin is NOT a student and should NEVER appear in achievements
+        queryset = queryset.exclude(student__is_superuser=True)
+        
+        # Filter by course if specified
+        course_id = self.request.query_params.get('course', None)
+        if course_id:
+            try:
+                course_id_int = int(course_id)
+                queryset = queryset.filter(learning_outcome__course_id=course_id_int)
+            except (ValueError, TypeError):
+                pass
+        
+        # Filter by student if specified
+        student_id = self.request.query_params.get('student', None)
+        if student_id:
+            try:
+                student_id_int = int(student_id)
+                queryset = queryset.filter(student_id=student_id_int)
+            except (ValueError, TypeError):
+                pass
+        
+        # Filter by learning_outcome if specified
+        learning_outcome_id = self.request.query_params.get('learning_outcome', None)
+        if learning_outcome_id:
+            try:
+                lo_id_int = int(learning_outcome_id)
+                queryset = queryset.filter(learning_outcome_id=lo_id_int)
+            except (ValueError, TypeError):
+                pass
         
         if user.role == User.Role.STUDENT:
             # Students can only see their own LO achievements

@@ -47,3 +47,4 @@ Bu dokümantasyonlar Django projesini iyileştirmek için rehber niteliğindedir
 
 **Son Güncelleme:** Aralık 2024
 
+

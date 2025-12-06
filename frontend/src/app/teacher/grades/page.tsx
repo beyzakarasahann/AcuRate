@@ -611,6 +611,32 @@ export default function TeacherGradesPage() {
     setShowEditAssessment(true);
   };
 
+  const handleDeleteAssessment = async (assessment: Assessment) => {
+    if (!confirm(`Are you sure you want to delete "${assessment.title}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      await api.deleteAssessment(assessment.id);
+      
+      // Remove from assessments list
+      setAssessments(prev => prev.filter(a => a.id !== assessment.id));
+      
+      // If deleted assessment was selected, clear selection
+      if (selectedAssessment === assessment.id) {
+        setSelectedAssessment(null);
+      }
+      
+      setSaveStatus('success');
+      setTimeout(() => setSaveStatus(null), 3000);
+    } catch (err: any) {
+      console.error('Failed to delete assessment:', err);
+      setSaveStatus('error');
+      alert(err.message || 'Failed to delete assessment. Please try again.');
+      setTimeout(() => setSaveStatus(null), 3000);
+    }
+  };
+
   // Assessment güncelleme
   const handleUpdateAssessment = async () => {
     if (!editingAssessment || !selectedCourse) {
@@ -1017,22 +1043,38 @@ export default function TeacherGradesPage() {
                           </div>
                         </td>
                         <td className="py-4 px-4 w-[15%]">
-                          <motion.button
-                            whileHover={{ scale: 1.1 }}
-                            whileTap={{ scale: 0.9 }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleEditAssessment(assessment);
-                            }}
-                            className={`p-2 rounded-lg cursor-pointer ${
-                              isSelected
-                                ? 'bg-indigo-600 text-white'
-                                : isDark ? 'bg-white/5 hover:bg-white/10 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-                            } transition-all`}
-                            title="Edit assessment"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </motion.button>
+                          <div className="flex items-center gap-2">
+                            <motion.button
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.9 }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEditAssessment(assessment);
+                              }}
+                              className={`p-2 rounded-lg cursor-pointer ${
+                                isSelected
+                                  ? 'bg-indigo-600 text-white'
+                                  : isDark ? 'bg-white/5 hover:bg-white/10 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                              } transition-all`}
+                              title="Edit assessment"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </motion.button>
+                            <motion.button
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.9 }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteAssessment(assessment);
+                              }}
+                              className={`p-2 rounded-lg cursor-pointer ${
+                                isDark ? 'bg-red-500/20 hover:bg-red-500/30 text-red-400' : 'bg-red-100 hover:bg-red-200 text-red-600'
+                              } transition-all`}
+                              title="Delete assessment"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </motion.button>
+                          </div>
                         </td>
                       </motion.tr>
                     );
