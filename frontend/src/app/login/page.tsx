@@ -80,16 +80,21 @@ export default function LoginPage() {
           return;
         }
 
+        // Calculate cookie expiration based on "Remember me" checkbox
+        // If rememberMe is true: 30 days (2592000 seconds)
+        // If rememberMe is false: 1 day (86400 seconds)
+        const cookieMaxAge = rememberMe ? 2592000 : 86400;
+        
         // Store user info in cookie for middleware (lowercase for middleware compatibility)
-        document.cookie = `user_role=${response.user.role.toLowerCase()}; path=/; max-age=86400`;
-        document.cookie = `username=${response.user.username}; path=/; max-age=86400`;
-        document.cookie = `auth_token=authenticated; path=/; max-age=86400`;
+        document.cookie = `user_role=${response.user.role.toLowerCase()}; path=/; max-age=${cookieMaxAge}`;
+        document.cookie = `username=${response.user.username}; path=/; max-age=${cookieMaxAge}`;
+        document.cookie = `auth_token=authenticated; path=/; max-age=${cookieMaxAge}`;
         
         // Store temporary password flag in cookie for middleware
         if (response.user.is_temporary_password) {
-          document.cookie = `is_temporary_password=true; path=/; max-age=86400`;
+          document.cookie = `is_temporary_password=true; path=/; max-age=${cookieMaxAge}`;
         } else {
-          document.cookie = `is_temporary_password=false; path=/; max-age=86400`;
+          document.cookie = `is_temporary_password=false; path=/; max-age=${cookieMaxAge}`;
         }
 
         // If user has temporary password, force them to change it
@@ -521,13 +526,39 @@ export default function LoginPage() {
                   />
                   <span className={`text-sm ${mutedTextColorClass}`}>Remember me</span>
                 </label>
-                <button
-                  type="button"
-                  onClick={handleForgotPasswordClick}
-                  className="text-indigo-400 hover:text-indigo-300 text-sm transition-colors"
-                >
-                  Forgot password?
-                </button>
+                <div className="relative group">
+                  <button
+                    type="button"
+                    onClick={handleForgotPasswordClick}
+                    className="text-indigo-400 hover:text-indigo-300 text-sm transition-colors"
+                  >
+                    Forgot password?
+                  </button>
+                  {/* Hover Popup - Sağ tarafta */}
+                  <div
+                    className={`absolute right-0 top-full mt-2 w-64 p-3 rounded-lg shadow-xl backdrop-blur-xl z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 ${
+                      isDark 
+                        ? 'bg-slate-800/95 border border-white/20 text-gray-200' 
+                        : 'bg-white/95 border border-gray-200 text-gray-700'
+                    }`}
+                  >
+                    <div className="text-xs leading-relaxed">
+                      <p className="font-medium mb-1">Password Reset</p>
+                      <p className={mutedTextColorClass}>
+                        This feature is fully functional.
+                      </p>
+                      <p className={`${mutedTextColorClass} mt-1`}>
+                        If the entered email belongs to a real account in our system, a password reset link will be sent automatically via our verified SendGrid email service.
+                      </p>
+                    </div>
+                    {/* Arrow pointing up */}
+                    <div 
+                      className={`absolute -top-1 right-4 w-2 h-2 rotate-45 ${
+                        isDark ? 'bg-slate-800/95 border-l border-t border-white/20' : 'bg-white/95 border-l border-t border-gray-200'
+                      }`}
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Error Message */}

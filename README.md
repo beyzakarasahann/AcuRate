@@ -103,13 +103,10 @@ pip install -r requirements.txt
 # PostgreSQL veritabanını oluştur
 # PostgreSQL'de 'acurate_db' adında bir veritabanı oluşturun
 
-# Environment variables ayarla (.env dosyası)
-DATABASE_NAME=acurate_db
-DATABASE_USER=acurate_user
-DATABASE_PASSWORD=your_password
-DATABASE_HOST=localhost
-DATABASE_PORT=5432
-SECRET_KEY=your-secret-key-here
+# Environment variables ayarla
+# .env.example dosyasını .env olarak kopyalayın ve düzenleyin
+cp .env.example .env
+# .env dosyasını düzenleyin ve gerekli değerleri girin
 
 # Migrations çalıştır
 python manage.py migrate
@@ -134,8 +131,10 @@ cd frontend
 # Dependencies yükle
 npm install
 
-# Environment variables ayarla (.env.local dosyası)
-NEXT_PUBLIC_API_URL=http://localhost:8000/api
+# Environment variables ayarla
+# .env.example dosyasını .env.local olarak kopyalayın ve düzenleyin
+cp .env.example .env.local
+# .env.local dosyasını düzenleyin ve gerekli değerleri girin
 
 # Development server'ı başlat
 npm run dev

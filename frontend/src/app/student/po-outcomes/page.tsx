@@ -2,7 +2,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Award, Target, CheckCircle2, XCircle, TrendingUp, BookOpen, Loader2, AlertTriangle } from 'lucide-react';
+import { Award, Target, CheckCircle2, XCircle, TrendingUp, Loader2, AlertTriangle } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import { useThemeColors } from '@/hooks/useThemeColors'; 
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
@@ -17,9 +17,10 @@ interface POData {
     description: string;
     target: number;
     current: number;
-    status: 'Achieved' | 'Needs Attention' | 'Excellent';
+    status: 'Achieved' | 'Needs Attention' | 'Excellent' | 'No Data';
     courses: string[];
     poId: number;
+    hasData: boolean;
 }
 
 const container = {
@@ -197,23 +198,28 @@ export default function POOutcomesPage() {
                 const poId = typeof po.id === 'string' ? parseInt(po.id) : po.id;
                 const achievement = achievementMap.get(poId);
                 
+                const courseIds = assessmentCourseMap.get(poId) || new Set<number>();
+                const contributingCourses = Array.from(courseIds)
+                    .map(courseId => enrollmentCourseCodeMap.get(courseId))
+                    .filter((code): code is string => !!code);
+                
+                // Check if PO has data: achievement exists OR has assessments
+                const hasData = !!achievement || courseIds.size > 0;
+                
                 const achievementValue = achievement?.achievement_percentage ?? achievement?.current_percentage ?? 0;
                 const current = achievement ? Number(achievementValue) : 0;
                 const target = Number(po.target_percentage);
 
-                let status: 'Achieved' | 'Needs Attention' | 'Excellent';
-                if (current >= target * 1.1) {
+                let status: 'Achieved' | 'Needs Attention' | 'Excellent' | 'No Data';
+                if (!hasData) {
+                    status = 'No Data';
+                } else if (current >= target * 1.1) {
                     status = 'Excellent';
                 } else if (current >= target) {
                     status = 'Achieved';
                 } else {
                     status = 'Needs Attention';
                 }
-
-                const courseIds = assessmentCourseMap.get(poId) || new Set<number>();
-                const contributingCourses = Array.from(courseIds)
-                    .map(courseId => enrollmentCourseCodeMap.get(courseId))
-                    .filter((code): code is string => !!code);
 
                 return {
                     code: po.code,
@@ -223,7 +229,8 @@ export default function POOutcomesPage() {
                     current: Math.round(current * 10) / 10,
                     status: status,
                     courses: contributingCourses,
-                    poId: po.id
+                    poId: po.id,
+                    hasData: hasData
                 };
             });
 
@@ -242,7 +249,10 @@ export default function POOutcomesPage() {
 
     const overallPOAchievement = useMemo(() => {
         if (programOutcomesData.length === 0) return 0;
-        return Math.round(programOutcomesData.reduce((sum, po) => sum + po.current, 0) / programOutcomesData.length);
+        // Only include PO's with data in the average calculation
+        const posWithData = programOutcomesData.filter(po => po.hasData);
+        if (posWithData.length === 0) return 0;
+        return Math.round(posWithData.reduce((sum, po) => sum + po.current, 0) / posWithData.length);
     }, [programOutcomesData]);
 
     if (!mounted) {
@@ -344,8 +354,20 @@ export default function POOutcomesPage() {
                                 key={po.code}
                                 variants={item}
                                 whileHover={{ y: -8, scale: 1.02 }}
-                                className={`h-full p-6 rounded-2xl ${themeClasses.card} shadow-lg transition-all border ${isDark ? 'border-white/10' : 'border-gray-200'} flex flex-col group hover:shadow-2xl overflow-hidden`}
+                                className={`h-full p-6 rounded-2xl ${themeClasses.card} shadow-lg transition-all border ${isDark ? 'border-white/10' : 'border-gray-200'} flex flex-col group hover:shadow-2xl overflow-hidden relative`}
                             >
+                                {/* Hover Tooltip for Description */}
+                                <div className="absolute inset-0 z-10 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                    <div className={`absolute top-0 left-0 right-0 p-4 rounded-t-2xl ${isDark ? 'bg-gray-900/95 backdrop-blur-sm border-b border-white/10' : 'bg-white/95 backdrop-blur-sm border-b border-gray-200'} shadow-2xl max-h-[60%] overflow-y-auto`}>
+                                        <h3 className={`text-sm font-bold ${whiteText} mb-2 flex items-center gap-2`}>
+                                            <Target className="w-4 h-4 text-indigo-500" />
+                                            {po.code} - {po.title}
+                                        </h3>
+                                        <p className={`text-xs sm:text-sm ${mutedText} leading-relaxed whitespace-pre-wrap`}>
+                                            {po.description || 'No description available'}
+                                        </p>
+                                    </div>
+                                </div>
                                 <div className="flex justify-between items-start mb-4 flex-shrink-0 min-w-0">
                                     <div className="flex items-start gap-3 flex-1 min-w-0 overflow-hidden">
                                         <div className={`p-2 rounded-lg flex-shrink-0 ${isTargetAchieved ? 'bg-green-500/20' : 'bg-orange-500/20'}`}>
@@ -364,7 +386,6 @@ export default function POOutcomesPage() {
                                         <div className="absolute inset-0 flex items-center justify-center">
                                             <div className="text-center">
                                                 <span className={`text-xl sm:text-2xl font-extrabold ${whiteText} block`}>{po.current}%</span>
-                                                <span className={`text-xs ${mutedText}`}>of {po.target}%</span>
                                             </div>
                                         </div>
                                     </div>
@@ -379,12 +400,14 @@ export default function POOutcomesPage() {
                                             <span className={`font-semibold flex items-center gap-1 whitespace-nowrap flex-shrink-0 ${
                                                 po.status === 'Excellent' ? 'text-green-500' :
                                                 po.status === 'Achieved' ? 'text-blue-500' :
+                                                po.status === 'No Data' ? 'text-gray-500' :
                                                 'text-red-500'
                                             }`}>
                                                 {po.status === 'Achieved' && <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />}
                                                 {po.status === 'Needs Attention' && <XCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />}
                                                 {po.status === 'Excellent' && <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />}
-                                                <span className="truncate">{po.status}</span>
+                                                {po.status === 'No Data' && <AlertTriangle className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />}
+                                                <span className="truncate">{po.status === 'No Data' ? 'VERİ YOK' : po.status}</span>
                                             </span>
                                         </div>
                                         <div className="flex justify-between items-center gap-2 min-w-0">
@@ -396,26 +419,6 @@ export default function POOutcomesPage() {
                                             </span>
                                         </div>
                                     </div>
-                                </div>
-                                
-                                <div className="mt-auto pt-4 flex-shrink-0 min-w-0 overflow-hidden">
-                                    <h3 className={`text-xs font-semibold ${mutedText} flex items-center gap-2 mb-3 uppercase tracking-wide`}>
-                                        <BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" /> Contributing Courses
-                                    </h3>
-                                    {po.courses.length > 0 ? (
-                                        <div className="flex flex-wrap gap-2 overflow-hidden">
-                                            {po.courses.map(course => (
-                                                <span 
-                                                    key={course} 
-                                                    className={`px-3 py-1.5 text-xs font-medium rounded-lg truncate max-w-full ${isDark ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' : 'bg-indigo-100 text-indigo-700 border border-indigo-200'}`}
-                                                >
-                                                    {course}
-                                                </span>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <p className={`text-xs ${mutedText} italic`}>No courses available</p>
-                                    )}
                                 </div>
                             </motion.div>
                         );

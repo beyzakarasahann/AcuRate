@@ -289,8 +289,20 @@ export default function LOOutcomesPage() {
                                 key={`${lo.loId}-${lo.code}`}
                                 variants={item}
                                 whileHover={{ y: -8, scale: 1.02 }}
-                                className={`h-full p-6 rounded-2xl ${themeClasses.card} shadow-lg transition-all border ${isDark ? 'border-white/10' : 'border-gray-200'} flex flex-col group hover:shadow-2xl overflow-hidden`}
+                                className={`h-full p-6 rounded-2xl ${themeClasses.card} shadow-lg transition-all border ${isDark ? 'border-white/10' : 'border-gray-200'} flex flex-col group hover:shadow-2xl overflow-hidden relative`}
                             >
+                                {/* Hover Tooltip for Description */}
+                                <div className="absolute inset-0 z-10 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                    <div className={`absolute top-0 left-0 right-0 p-4 rounded-t-2xl ${isDark ? 'bg-gray-900/95 backdrop-blur-sm border-b border-white/10' : 'bg-white/95 backdrop-blur-sm border-b border-gray-200'} shadow-2xl max-h-[60%] overflow-y-auto`}>
+                                        <h3 className={`text-sm font-bold ${whiteText} mb-2 flex items-center gap-2`}>
+                                            <Target className="w-4 h-4 text-purple-500" />
+                                            {lo.code} - {lo.title}
+                                        </h3>
+                                        <p className={`text-xs sm:text-sm ${mutedText} leading-relaxed whitespace-pre-wrap`}>
+                                            {lo.description || 'No description available'}
+                                        </p>
+                                    </div>
+                                </div>
                                 <div className="flex justify-between items-start mb-4 flex-shrink-0 min-w-0">
                                     <div className="flex items-start gap-3 flex-1 min-w-0 overflow-hidden">
                                         <div className={`p-2 rounded-lg flex-shrink-0 ${isTargetAchieved ? 'bg-green-500/20' : 'bg-purple-500/20'}`}>
@@ -309,7 +321,6 @@ export default function LOOutcomesPage() {
                                         <div className="absolute inset-0 flex items-center justify-center">
                                             <div className="text-center">
                                                 <span className={`text-xl sm:text-2xl font-extrabold ${whiteText} block`}>{lo.current}%</span>
-                                                <span className={`text-xs ${mutedText}`}>of {lo.target}%</span>
                                             </div>
                                         </div>
                                     </div>

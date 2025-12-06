@@ -455,7 +455,7 @@ class AssessmentAdmin(admin.ModelAdmin):
     search_fields = ['title', 'course__code', 'course__name', 'description']
     list_editable = ['is_active']
     autocomplete_fields = ['course']
-    filter_horizontal = ['related_pos']
+    # NOTE: related_pos removed - POs are accessed through LO → PO path (via AssessmentLO and LOPO)
     date_hierarchy = 'due_date'
     
     inlines = [StudentGradeInline, AssessmentLOInline]
@@ -470,11 +470,8 @@ class AssessmentAdmin(admin.ModelAdmin):
         ('Grading Details', {
             'fields': ('weight', 'max_score')
         }),
-        ('Program Outcomes', {
-            'fields': ('related_pos',),
-            'description': 'Select program outcomes this assessment evaluates'
-        }),
         # Learning Outcomes are managed via AssessmentLO inline (through model)
+        # Program Outcomes are accessed through LO → PO path (via LOPO)
         ('Schedule & Status', {
             'fields': ('due_date', 'is_active')
         }),

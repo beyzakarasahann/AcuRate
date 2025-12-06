@@ -251,3 +251,8 @@ coverage/
 /backend/media/
 /frontend/.next/
 /frontend/out/
+
+# Sensitive Account Information (DO NOT COMMIT)
+ACCOUNT_CREDENTIALS.md
+ALL_ACCOUNTS.md
+ALL_ACCOUNTS_FULL.txt

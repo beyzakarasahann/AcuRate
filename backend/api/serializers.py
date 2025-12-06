@@ -478,11 +478,7 @@ class AssessmentSerializer(serializers.ModelSerializer):
     course_code = serializers.CharField(source='course.code', read_only=True)
     course_name = serializers.CharField(source='course.name', read_only=True)
     type_display = serializers.CharField(source='get_assessment_type_display', read_only=True)
-    related_pos = serializers.PrimaryKeyRelatedField(
-        many=True, 
-        queryset=ProgramOutcome.objects.all(),
-        required=False
-    )
+    # NOTE: related_pos removed - use related_los instead (POs are accessed through LO → PO path)
     
     class Meta:
         model = Assessment
@@ -490,16 +486,13 @@ class AssessmentSerializer(serializers.ModelSerializer):
             'id', 'course', 'course_code', 'course_name',
             'title', 'description', 'assessment_type', 'type_display',
             'weight', 'max_score', 'due_date', 'is_active',
-            'related_pos', 'feedback_ranges', 'created_at', 'updated_at'
+            'related_los', 'feedback_ranges', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
     
     def create(self, validated_data):
-        """Handle ManyToMany relationship for related_pos"""
-        related_pos = validated_data.pop('related_pos', [])
+        """Create assessment - related_los handled through AssessmentLO model"""
         assessment = Assessment.objects.create(**validated_data)
-        if related_pos:
-            assessment.related_pos.set(related_pos)
         return assessment
     
     def validate_feedback_ranges(self, value):
@@ -537,13 +530,10 @@ class AssessmentSerializer(serializers.ModelSerializer):
         return value
     
     def update(self, instance, validated_data):
-        """Handle ManyToMany relationship for related_pos"""
-        related_pos = validated_data.pop('related_pos', None)
+        """Update assessment - related_los handled through AssessmentLO model"""
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
-        if related_pos is not None:
-            instance.related_pos.set(related_pos)
         return instance
 
 
