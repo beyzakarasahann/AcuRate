@@ -730,9 +730,27 @@ export default function MappingsPage() {
                             </div>
                           </td>
                           <td className={`px-6 py-4 ${text}`}>
-                            <div className="flex items-center gap-2">
-                              <Target className="w-4 h-4 text-purple-500" />
-                              {lo?.code || mapping.lo_code || 'N/A'}
+                            <div 
+                              className="flex flex-col gap-1 group relative cursor-help"
+                              title={lo?.description || mapping.lo_description || 'No description available'}
+                            >
+                              <div className="flex items-center gap-2">
+                                <Target className="w-4 h-4 text-purple-500" />
+                                <span className="font-medium">{lo?.code || mapping.lo_code || 'N/A'}</span>
+                              </div>
+                              {(lo?.title || mapping.lo_title) && (
+                                <div className={`text-xs ${mutedText} ml-6`}>
+                                  {lo?.title || mapping.lo_title}
+                                </div>
+                              )}
+                              {(lo?.description || mapping.lo_description) && (
+                                <div className={`absolute left-0 top-full mt-2 z-50 hidden group-hover:block w-64 p-3 rounded-lg shadow-lg border ${isDark ? 'bg-gray-800 border-gray-700 text-white' : 'bg-white border-gray-200 text-gray-900'}`}>
+                                  <div className="text-xs font-medium mb-1 text-purple-500">{lo?.code || mapping.lo_code} - {lo?.title || mapping.lo_title}</div>
+                                  <div className={`text-xs ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+                                    {lo?.description || mapping.lo_description}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           </td>
                           <td className={`px-6 py-4 ${text}`}>
@@ -1023,15 +1041,51 @@ export default function MappingsPage() {
                       return (
                         <tr key={mapping.id} className={`border-t ${isDark ? 'border-white/10' : 'border-gray-200'}`}>
                           <td className={`px-6 py-4 ${text}`}>
-                            <div className="flex items-center gap-2">
-                              <Target className="w-4 h-4 text-purple-500" />
-                              {lo?.code || mapping.lo_code || 'N/A'}
+                            <div 
+                              className="flex flex-col gap-1 group relative cursor-help"
+                              title={lo?.description || mapping.lo_description || 'No description available'}
+                            >
+                              <div className="flex items-center gap-2">
+                                <Target className="w-4 h-4 text-purple-500" />
+                                <span className="font-medium">{lo?.code || mapping.lo_code || 'N/A'}</span>
+                              </div>
+                              {(lo?.title || mapping.lo_title) && (
+                                <div className={`text-xs ${mutedText} ml-6`}>
+                                  {lo?.title || mapping.lo_title}
+                                </div>
+                              )}
+                              {(lo?.description || mapping.lo_description) && (
+                                <div className={`absolute left-0 top-full mt-2 z-50 hidden group-hover:block w-64 p-3 rounded-lg shadow-lg border ${isDark ? 'bg-gray-800 border-gray-700 text-white' : 'bg-white border-gray-200 text-gray-900'}`}>
+                                  <div className="text-xs font-medium mb-1 text-purple-500">{lo?.code || mapping.lo_code} - {lo?.title || mapping.lo_title}</div>
+                                  <div className={`text-xs ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+                                    {lo?.description || mapping.lo_description}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           </td>
                           <td className={`px-6 py-4 ${text}`}>
-                            <div className="flex items-center gap-2">
-                              <Award className="w-4 h-4 text-green-500" />
-                              {po?.code || mapping.po_code || 'N/A'}
+                            <div 
+                              className="flex flex-col gap-1 group relative cursor-help"
+                              title={po?.description || 'No description available'}
+                            >
+                              <div className="flex items-center gap-2">
+                                <Award className="w-4 h-4 text-green-500" />
+                                <span className="font-medium">{po?.code || mapping.po_code || 'N/A'}</span>
+                              </div>
+                              {(po?.title || mapping.po_title) && (
+                                <div className={`text-xs ${mutedText} ml-6`}>
+                                  {po?.title || mapping.po_title}
+                                </div>
+                              )}
+                              {(po?.description) && (
+                                <div className={`absolute left-0 top-full mt-2 z-50 hidden group-hover:block w-64 p-3 rounded-lg shadow-lg border ${isDark ? 'bg-gray-800 border-gray-700 text-white' : 'bg-white border-gray-200 text-gray-900'}`}>
+                                  <div className="text-xs font-medium mb-1 text-indigo-500">{po.code} - {po.title}</div>
+                                  <div className={`text-xs ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+                                    {po.description}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           </td>
                           <td className={`px-6 py-4 ${text}`}>

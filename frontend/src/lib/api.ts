@@ -650,8 +650,34 @@ class ApiClient {
         // Check if this is a super admin endpoint
         const isSuperAdminEndpoint = requestEndpoint?.includes('/super-admin/');
         
-        // Clean up error messages that might contain HTML
-        let cleanMessage = error.message;
+        // Clean up error messages that might contain HTML or be objects
+        let cleanMessage = '';
+        if (error.message) {
+          if (typeof error.message === 'string') {
+            cleanMessage = error.message;
+          } else if (typeof error.message === 'object') {
+            // Try to stringify the message object
+            try {
+              cleanMessage = JSON.stringify(error.message);
+            } catch {
+              cleanMessage = String(error.message);
+            }
+          } else {
+            cleanMessage = String(error.message);
+          }
+        } else if (typeof error === 'string') {
+          cleanMessage = error;
+        } else if (error && typeof error === 'object') {
+          // Try to extract error message from object
+          try {
+            cleanMessage = JSON.stringify(error);
+          } catch {
+            cleanMessage = 'An unknown error occurred';
+          }
+        } else {
+          cleanMessage = 'An unknown error occurred';
+        }
+        
         if (cleanMessage.includes('<!DOCTYPE') || cleanMessage.includes('<html')) {
           // Extract meaningful info from HTML error if possible
           const titleMatch = cleanMessage.match(/<title>([^<]+)<\/title>/i);

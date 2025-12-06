@@ -567,3 +567,4 @@ class Command(BaseCommand):
         self.stdout.write(f"Failed: {results['summary']['failed']}/{results['summary']['total_checks']}")
         self.stdout.write("="*60 + "\n")
 
+

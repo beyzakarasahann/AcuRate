@@ -220,7 +220,6 @@ export default function TeacherHomePage() {
   const teacher = dashboardData.teacher;
   const courses = dashboardData.courses || [];
   const totalStudents = dashboardData.total_students || 0;
-  const pendingAssessments = dashboardData.pending_assessments || 0;
 
   // Calculate stats
   const totalCourses = courses.length;
@@ -247,6 +246,19 @@ export default function TeacherHomePage() {
       ? enrollments.reduce((sum: number, e: any) => sum + (e.final_grade || 0), 0) / enrollments.length
       : 0;
     
+    // Get PO achievement from backend (course.avg_po_achievement) or calculate from aggregated PO achievements
+    let poAchievement = 0;
+    if ((course as any).avg_po_achievement !== undefined && (course as any).avg_po_achievement !== null) {
+      // Use backend calculated PO achievement for this course
+      poAchievement = (course as any).avg_po_achievement;
+    } else if (poAchievements.length > 0) {
+      // Fallback: Calculate average from aggregated PO achievements
+      const totalPO = poAchievements.reduce((sum: number, po: any) => {
+        return sum + (po.achievement_percentage || 0);
+      }, 0);
+      poAchievement = totalPO / poAchievements.length;
+    }
+    
     let status: 'excellent' | 'good' | 'average' = 'average';
     if (avgGrade >= 85) status = 'excellent';
     else if (avgGrade >= 75) status = 'good';
@@ -255,7 +267,7 @@ export default function TeacherHomePage() {
       ...course,
       students,
       avgGrade: Math.round(avgGrade * 10) / 10,
-      poAchievement: 85, // TODO: Calculate from PO achievements
+      poAchievement: Math.round(poAchievement * 10) / 10,
       status
     };
   });
@@ -271,8 +283,7 @@ export default function TeacherHomePage() {
   }> = [
     { title: 'Active Courses', value: totalCourses > 0 ? totalCourses.toString() : '-', change: '', trend: 'up', icon: BookOpen, color: 'from-blue-500 to-cyan-500' },
     { title: 'Total Students', value: totalStudents > 0 ? totalStudents.toString() : '-', change: '', trend: 'up', icon: Users, color: 'from-purple-500 to-pink-500' },
-    { title: 'Avg Grade', value: avgGrade > 0 ? `${Math.round(avgGrade * 10) / 10}%` : '-', change: '', trend: 'up', icon: Award, color: 'from-green-500 to-emerald-500' },
-    { title: 'Pending Assessments', value: pendingAssessments > 0 ? pendingAssessments.toString() : '-', change: '', trend: 'up', icon: Target, color: 'from-orange-500 to-red-500' }
+    { title: 'Avg Grade', value: avgGrade > 0 ? `${Math.round(avgGrade * 10) / 10}%` : '-', change: '', trend: 'up', icon: Award, color: 'from-green-500 to-emerald-500' }
   ];
 
   // Recent activities from recent submissions (if available)
@@ -285,12 +296,6 @@ export default function TeacherHomePage() {
     color: 'blue' as const
   }));
 
-  const gradedToday = recentSubmissions.filter((submission: any) => {
-    if (!submission.graded_at) return false;
-    const gradedDate = new Date(submission.graded_at);
-    const now = new Date();
-    return gradedDate.toDateString() === now.toDateString();
-  }).length;
 
   // Calculate grade distribution from actual grades
   const gradeDistribution = {
@@ -411,7 +416,6 @@ export default function TeacherHomePage() {
     { label: 'Courses', value: totalCourses.toString() },
     { label: 'Students', value: totalStudents.toString() },
     { label: 'Avg Grade', value: avgGrade > 0 ? `${Math.round(avgGrade * 10) / 10}%` : '-' },
-    { label: 'Graded Today', value: gradedToday.toString() },
   ];
 
   const quickActions = [
