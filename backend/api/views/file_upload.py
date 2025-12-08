@@ -8,6 +8,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from django.core.files.storage import default_storage
+# File upload views - no additional imports needed
 from django.core.files.base import ContentFile
 from django.conf import settings
 import os

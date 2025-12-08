@@ -10,9 +10,9 @@ from .views import (
     # Auth views
     login_view, logout_view, current_user_view, register_view, create_teacher_view, forgot_password_view, forgot_username_view,
     # Dashboard views
-    student_dashboard, teacher_dashboard, institution_dashboard, super_admin_dashboard,
+    student_dashboard, teacher_dashboard, institution_dashboard,
     # Super Admin views
-    super_admin_institutions, super_admin_activity_logs, create_institution, delete_institution,
+    super_admin_dashboard, super_admin_institutions, super_admin_activity_logs, create_institution, delete_institution,
     # Course Analytics views
     course_analytics_overview, course_analytics_detail,
     # Institution Analytics views
@@ -27,8 +27,8 @@ from .views import (
     StudentPOAchievementViewSet, StudentLOAchievementViewSet, ContactRequestViewSet,
     AssessmentLOViewSet, LOPOViewSet
 )
-from .views_file_upload import upload_profile_picture, upload_file
-from .views_bulk_operations import bulk_import_students, bulk_export_grades, bulk_import_grades
+from .views.file_upload import upload_profile_picture, upload_file
+from .views.bulk_operations import bulk_import_students, bulk_export_grades, bulk_import_grades
 
 # Create router for ViewSets
 router = DefaultRouter()

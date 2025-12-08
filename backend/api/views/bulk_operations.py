@@ -13,8 +13,8 @@ from django.http import HttpResponse
 from django.db import transaction
 from decimal import Decimal, InvalidOperation
 
-from .models import User, Course, Enrollment, Assessment, StudentGrade
-from .utils import log_activity
+from ..models import User, Course, Enrollment, Assessment, StudentGrade
+from ..utils import log_activity
 
 
 @api_view(['POST'])
