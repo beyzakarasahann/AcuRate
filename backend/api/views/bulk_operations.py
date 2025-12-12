@@ -1,10 +1,12 @@
 """
 AcuRate - Bulk Operations Views
 Handles CSV/Excel import/export operations
+SECURITY: Includes file size limits, row limits, encoding validation
 """
 
 import csv
 import io
+import logging
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -15,6 +17,12 @@ from decimal import Decimal, InvalidOperation
 
 from ..models import User, Course, Enrollment, Assessment, StudentGrade
 from ..utils import log_activity
+
+logger = logging.getLogger(__name__)
+
+# SECURITY: CSV Import limits
+MAX_CSV_SIZE = 10 * 1024 * 1024  # 10MB max file size
+MAX_CSV_ROWS = 10000  # Maximum rows to process
 
 
 @api_view(['POST'])
@@ -61,17 +69,76 @@ def bulk_import_students(request):
     
     file = request.FILES['file']
     
+    # SECURITY: Validate file size
+    if file.size > MAX_CSV_SIZE:
+        return Response(
+            {
+                'success': False,
+                'error': {
+                    'type': 'ValidationError',
+                    'message': f'File too large. Maximum size: {MAX_CSV_SIZE / 1024 / 1024}MB',
+                    'code': status.HTTP_400_BAD_REQUEST,
+                }
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # SECURITY: Validate file extension
+    if not file.name.lower().endswith('.csv'):
+        return Response(
+            {
+                'success': False,
+                'error': {
+                    'type': 'ValidationError',
+                    'message': 'Only CSV files are allowed',
+                    'code': status.HTTP_400_BAD_REQUEST,
+                }
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
     try:
-        # Read CSV
-        decoded_file = file.read().decode('utf-8')
+        # SECURITY: Read and validate CSV encoding (UTF-8 required)
+        try:
+            decoded_file = file.read().decode('utf-8')
+        except UnicodeDecodeError:
+            return Response(
+                {
+                    'success': False,
+                    'error': {
+                        'type': 'ValidationError',
+                        'message': 'Invalid file encoding. Please use UTF-8 encoded CSV files.',
+                        'code': status.HTTP_400_BAD_REQUEST,
+                    }
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
         csv_reader = csv.DictReader(io.StringIO(decoded_file))
+        
+        # SECURITY: Count rows first to prevent DoS
+        rows = list(csv_reader)
+        if len(rows) > MAX_CSV_ROWS:
+            return Response(
+                {
+                    'success': False,
+                    'error': {
+                        'type': 'ValidationError',
+                        'message': f'Too many rows. Maximum allowed: {MAX_CSV_ROWS}',
+                        'code': status.HTTP_400_BAD_REQUEST,
+                    }
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        logger.info(f"Processing student CSV import with {len(rows)} rows by user {request.user.username}")
         
         created_count = 0
         updated_count = 0
         errors = []
         
         with transaction.atomic():
-            for row_num, row in enumerate(csv_reader, start=2):  # Start at 2 (header is row 1)
+            for row_num, row in enumerate(rows, start=2):  # Start at 2 (header is row 1)
                 try:
                     email = row.get('email', '').strip()
                     if not email:

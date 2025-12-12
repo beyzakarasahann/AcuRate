@@ -55,9 +55,33 @@ def login_view(request):
     POST /api/auth/login/
     Body: {"username": "...", "password": "..."}
     """
+    # Brute-force protection: Check failed login attempts
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        ip = x_forwarded_for.split(',')[0]
+    else:
+        ip = request.META.get('REMOTE_ADDR', 'unknown')
+    
+    login_attempts_key = f'login_attempts:{ip}'
+    login_attempts = cache.get(login_attempts_key, 0)
+    
+    # Block if more than 5 failed attempts in last 15 minutes
+    if login_attempts >= 5:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Blocked login attempt from IP {ip} - too many failed attempts")
+        return Response({
+            'success': False,
+            'error': 'Too many failed login attempts. Please try again in 15 minutes.',
+            'errors': {'non_field_errors': ['Too many failed login attempts. Please try again in 15 minutes.']}
+        }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+    
     serializer = LoginSerializer(data=request.data)
     if serializer.is_valid():
         user = serializer.validated_data['user']
+        
+        # Clear failed login attempts on successful login
+        cache.delete(login_attempts_key)
         
         # Generate JWT tokens
         refresh = RefreshToken.for_user(user)
@@ -87,6 +111,9 @@ def login_view(request):
             },
             'requires_password_change': requires_password_change
         })
+    
+    # Increment failed login attempts (expires in 15 minutes = 900 seconds)
+    cache.set(login_attempts_key, login_attempts + 1, 900)
     
     # Format errors for better frontend handling
     errors = serializer.errors
@@ -412,13 +439,9 @@ def create_teacher_view(request):
             else:
                 response_data["email_warning"] = "Email could not be sent"
             
-            if temp_password:
-                # Include credentials in response if email failed
-                response_data["credentials"] = {
-                    "username": teacher.username,
-                    "password": temp_password,
-                    "email": teacher.email
-                }
+            # SECURITY: Never return passwords in API response
+            # Admin should check server logs or use password reset
+            response_data["action_required"] = "Please use the password reset feature or check server logs for temporary credentials"
         
         if email_error:
             response_data["email_error"] = email_error
@@ -490,14 +513,9 @@ def create_student_view(request):
             else:
                 response_data["email_warning"] = "Email could not be sent"
             
-            if temp_password:
-                # Include credentials in response if email failed
-                response_data["credentials"] = {
-                    "username": student.username,
-                    "password": temp_password,
-                    "email": student.email,
-                    "student_id": student.student_id
-                }
+            # SECURITY: Never return passwords in API response
+            # Admin should check server logs or use password reset
+            response_data["action_required"] = "Please use the password reset feature or check server logs for temporary credentials"
         
         if email_error:
             response_data["email_error"] = email_error
