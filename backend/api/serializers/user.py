@@ -143,7 +143,7 @@ class TeacherCreateSerializer(serializers.ModelSerializer):
             logger = logging.getLogger(__name__)
             logger.warning(
                 f"SendGrid API key not configured. Email not sent to {user.email}. "
-                f"User created successfully. Username: {user.username}, Password: {temp_password}"
+                f"User created successfully. Username: {user.username}. Use password reset if needed."
             )
             email_error_message = "SendGrid API key not configured"
         else:
@@ -171,7 +171,7 @@ class TeacherCreateSerializer(serializers.ModelSerializer):
                 error_str = str(email_error)
                 logger.error(
                     f"Failed to send email to {user.email} for teacher account creation: {error_str}. "
-                    f"User was created successfully. Username: {user.username}, Password: {temp_password}",
+                    f"User was created successfully. Username: {user.username}. Use password reset if needed.",
                     exc_info=True
                 )
                 email_error_message = f"Email sending failed: {error_str}"
@@ -265,7 +265,7 @@ class StudentCreateSerializer(serializers.ModelSerializer):
             logger = logging.getLogger(__name__)
             logger.warning(
                 f"SendGrid API key not configured. Email not sent to {user.email}. "
-                f"User created successfully. Username: {user.username}, Password: {temp_password}"
+                f"User created successfully. Username: {user.username}. Use password reset if needed."
             )
             email_error_message = "SendGrid API key not configured"
         else:
@@ -295,7 +295,7 @@ class StudentCreateSerializer(serializers.ModelSerializer):
                 error_str = str(email_error)
                 logger.error(
                     f"Failed to send email to {user.email} for student account creation: {error_str}. "
-                    f"User was created successfully. Username: {user.username}, Password: {temp_password}",
+                    f"User was created successfully. Username: {user.username}. Use password reset if needed.",
                     exc_info=True
                 )
                 email_error_message = f"Email sending failed: {error_str}"
@@ -402,7 +402,7 @@ class InstitutionCreateSerializer(serializers.ModelSerializer):
             logger = logging.getLogger(__name__)
             logger.warning(
                 f"SendGrid API key not configured. Email not sent to {user.email}. "
-                f"User created successfully. Username: {user.username}, Password: {temp_password}"
+                f"User created successfully. Username: {user.username}. Use password reset if needed."
             )
             email_error_message = "SendGrid API key not configured"
         else:
@@ -459,7 +459,7 @@ class InstitutionCreateSerializer(serializers.ModelSerializer):
                     logger.error(
                         f"Failed to send email to {user.email} for institution account creation. "
                         f"Error type: {error_type}, Error: {error_str}. "
-                        f"User was created successfully. Username: {user.username}, Password: {temp_password}",
+                        f"User was created successfully. Username: {user.username}. Use password reset if needed.",
                         exc_info=True
                     )
                     email_error_message = f"Email sending failed ({error_type}): {error_str}"

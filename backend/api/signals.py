@@ -91,88 +91,20 @@ def calculate_po_achievement(student, program_outcome):
 
 def calculate_po_achievement_fallback(student, program_outcome):
     """
-    Fallback method: Calculate PO from assessments directly (old method).
-    Used when no LO-PO mappings exist.
+    Fallback method: When no LO-PO mappings exist.
+    NOTE: The old related_pos field on Assessment has been removed.
+    This fallback now just sets achievement to 0 since the proper way
+    is through LO -> PO mappings.
     """
-    # Get all enrollments for this student
-    enrollments = Enrollment.objects.filter(student=student, is_active=True)
-    enrolled_course_ids = enrollments.values_list('course_id', flat=True)
-    
-    # Find all assessments related to this PO in enrolled courses
-    assessments = Assessment.objects.filter(
-        course_id__in=enrolled_course_ids,
-        related_pos=program_outcome,
-        is_active=True
-    ).distinct()
-    
-    total_assessments = assessments.count()
-    
-    if total_assessments == 0:
-        StudentPOAchievement.objects.update_or_create(
-            student=student,
-            program_outcome=program_outcome,
-            defaults={
-                'current_percentage': Decimal('0.00'),
-                'total_assessments': 0,
-                'completed_assessments': 0
-            }
-        )
-        return
-    
-    # Get all grades for these assessments
-    grades = StudentGrade.objects.filter(
-        student=student,
-        assessment__in=assessments
-    ).select_related('assessment')
-    
-    completed_assessments = grades.count()
-    
-    if completed_assessments == 0:
-        StudentPOAchievement.objects.update_or_create(
-            student=student,
-            program_outcome=program_outcome,
-            defaults={
-                'current_percentage': Decimal('0.00'),
-                'total_assessments': total_assessments,
-                'completed_assessments': 0
-            }
-        )
-        return
-    
-    # Calculate weighted average
-    from .models import CoursePO
-    total_weighted_score = Decimal('0.00')
-    total_weight = Decimal('0.00')
-    
-    for grade in grades:
-        assessment = grade.assessment
-        course_po = CoursePO.objects.filter(
-            course=assessment.course,
-            program_outcome=program_outcome
-        ).first()
-        course_po_weight = course_po.weight if course_po else Decimal('1.00')
-        
-        if assessment.max_score > 0:
-            percentage = (grade.score / assessment.max_score) * Decimal('100.00')
-        else:
-            percentage = Decimal('0.00')
-        
-        combined_weight = assessment.weight * course_po_weight
-        total_weighted_score += percentage * combined_weight
-        total_weight += combined_weight
-    
-    if total_weight > 0:
-        achievement_percentage = total_weighted_score / total_weight
-    else:
-        achievement_percentage = Decimal('0.00')
-    
+    # No LO mappings exist for this PO, set achievement to 0
+    # The proper flow is: Assessment -> LO -> PO via AssessmentLO and LOPO
     StudentPOAchievement.objects.update_or_create(
         student=student,
         program_outcome=program_outcome,
         defaults={
-            'current_percentage': achievement_percentage,
-            'total_assessments': total_assessments,
-            'completed_assessments': completed_assessments
+            'current_percentage': Decimal('0.00'),
+            'total_assessments': 0,
+            'completed_assessments': 0
         }
     )
 

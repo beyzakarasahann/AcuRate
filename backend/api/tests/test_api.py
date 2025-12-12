@@ -16,7 +16,7 @@ from ..models import (
     LearningOutcome, StudentLOAchievement, ContactRequest
 )
 
-from .base import BaseTestCase
+from .test_base import BaseTestCase
 
 # =============================================================================
 # API ENDPOINT TESTS
