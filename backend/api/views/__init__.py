@@ -12,6 +12,7 @@ from .auth import (
     forgot_username_view,
     current_user_view,
     create_teacher_view,
+    create_student_view,
 )
 
 # Dashboard views
@@ -28,6 +29,7 @@ from .super_admin import (
     super_admin_activity_logs,
     create_institution,
     delete_institution,
+    reset_institution_password,
     _get_time_ago,
 )
 
@@ -131,3 +133,5 @@ __all__ = [
     'AssessmentLOViewSet',
     'LOPOViewSet',
 ]
+
+

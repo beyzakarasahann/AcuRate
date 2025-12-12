@@ -9,6 +9,7 @@ from .user import (
     UserDetailSerializer,
     UserCreateSerializer,
     TeacherCreateSerializer,
+    StudentCreateSerializer,
     InstitutionCreateSerializer,
     LoginSerializer,
     generate_temp_password,
@@ -69,6 +70,7 @@ __all__ = [
     'UserDetailSerializer',
     'UserCreateSerializer',
     'TeacherCreateSerializer',
+    'StudentCreateSerializer',
     'InstitutionCreateSerializer',
     'LoginSerializer',
     'generate_temp_password',
@@ -101,3 +103,5 @@ __all__ = [
     'ContactRequestSerializer',
     'ContactRequestCreateSerializer',
 ]
+
+

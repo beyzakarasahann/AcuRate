@@ -952,6 +952,14 @@ class ApiClient {
     return [];
   }
 
+  async getStudents(params?: { search?: string }): Promise<User[]> {
+    const queryParams = new URLSearchParams();
+    if (params?.search) queryParams.append('search', params.search);
+    const queryString = queryParams.toString();
+    const endpoint = `/users/${queryString ? `?${queryString}&role=STUDENT` : '?role=STUDENT'}`;
+    return await this.request<User[]>(endpoint);
+  }
+
   async getTeachers(params?: { search?: string }): Promise<User[]> {
     const query = new URLSearchParams({ role: 'TEACHER' });
     if (params?.search) {
@@ -1034,6 +1042,40 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify(data),
     });
+  }
+
+  async createStudent(data: {
+    email: string;
+    first_name?: string;
+    last_name?: string;
+    department?: string;
+    student_id?: string;
+    year_of_study?: number;
+  }): Promise<{ success: boolean; student: User; email_sent?: boolean; email_warning?: string; email_error?: string; credentials?: { username: string; password: string; email: string; student_id: string } }> {
+    return await this.request('/students/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async bulkImportStudents(file: FormData): Promise<{ success: boolean; created?: number; updated?: number; errors?: string[]; error?: { message: string } }> {
+    const token = TokenManager.getAccessToken();
+    const endpoint = `${API_BASE_URL}/bulk/import/students/`;
+    
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Authorization': token ? `Bearer ${token}` : '',
+      },
+      body: file, // Don't set Content-Type, let browser set it with boundary
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: { message: `Request failed with status ${response.status}` } }));
+      throw new Error(errorData.error?.message || `Request failed with status ${response.status}`);
+    }
+
+    return await response.json();
   }
 
   async deleteTeacher(teacherId: number): Promise<void> {
@@ -1840,8 +1882,24 @@ class ApiClient {
   }
 
   // Super Admin Institutions
-  async getSuperAdminInstitutions(): Promise<Institution[]> {
-    return await this.request<Institution[]>('/super-admin/institutions/');
+  async getSuperAdminInstitutions(): Promise<{
+    institutions: Institution[];
+    summary: {
+      total_institutions: number;
+      total_students: number;
+      total_teachers: number;
+      total_courses: number;
+    };
+  }> {
+    return await this.request<{
+      institutions: Institution[];
+      summary: {
+        total_institutions: number;
+        total_students: number;
+        total_teachers: number;
+        total_courses: number;
+      };
+    }>('/super-admin/institutions/');
   }
 
   // Create Institution
@@ -1900,6 +1958,13 @@ class ApiClient {
   }
 
   // Delete Institution
+  async resetInstitutionPassword(institutionId: number): Promise<{ success: boolean; message?: string; email_sent?: boolean; error?: string }> {
+    const response = await this.request(`/super-admin/institutions/${institutionId}/reset-password/`, {
+      method: 'POST',
+    });
+    return response as { success: boolean; message?: string; email_sent?: boolean; error?: string };
+  }
+
   async deleteInstitution(institutionId: number): Promise<{ success: boolean; message?: string; error?: string }> {
     return await this.request(`/super-admin/institutions/${institutionId}/`, {
       method: 'DELETE',

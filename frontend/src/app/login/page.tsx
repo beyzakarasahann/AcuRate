@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { User, Lock, Eye, EyeOff, GraduationCap, Users as UsersIcon, Building2, Sun, Moon, ArrowLeft } from 'lucide-react';
+import { User, Lock, Eye, EyeOff, GraduationCap, Users as UsersIcon, Building2, Sun, Moon, ArrowLeft, Zap } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -38,29 +38,62 @@ export default function LoginPage() {
 
   // Not: useEffect(() => { setMounted(true); }, []); kaldırıldı.
 
+  // Demo accounts for auto-fill (from ALL_ACCOUNTS.md)
+  const demoAccounts = {
+    student: {
+      username: 'beyza2',
+      password: 'beyza123',
+      role: 'student' as Role,
+    },
+    teacher: {
+      username: 'ahmet.bulut',
+      password: 'ahmet123',
+      role: 'teacher' as Role,
+    },
+    institution: {
+      username: 'institution',
+      password: 'institution123',
+      role: 'institution' as Role,
+    },
+  };
+
   const roles = [
     {
       id: 'student' as Role,
       name: 'Student',
       icon: GraduationCap,
       description: 'View your courses and performance',
-      color: 'from-blue-500 to-cyan-500'
+      color: 'from-blue-500 to-cyan-500',
+      demoAccount: demoAccounts.student,
     },
     {
       id: 'teacher' as Role,
       name: 'Teacher',
       icon: UsersIcon,
       description: 'Manage courses and grade students',
-      color: 'from-purple-500 to-pink-500'
+      color: 'from-purple-500 to-pink-500',
+      demoAccount: demoAccounts.teacher,
     },
     {
       id: 'institution' as Role,
       name: 'Institution',
       icon: Building2,
       description: 'View analytics and reports',
-      color: 'from-indigo-500 to-purple-600'
+      color: 'from-indigo-500 to-purple-600',
+      demoAccount: demoAccounts.institution,
     }
   ];
+
+  // Auto-fill function
+  const handleAutoFill = (role: Role) => {
+    const account = demoAccounts[role];
+    if (account) {
+      setUsername(account.username);
+      setPassword(account.password);
+      setSelectedRole(role);
+      setError(''); // Clear any previous errors
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -332,34 +365,59 @@ export default function LoginPage() {
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.1 * index }}
                   whileHover={{ scale: 1.02 }}
-                  onClick={() => setSelectedRole(role.id)}
-                  className={`backdrop-blur-xl rounded-2xl border p-5 cursor-pointer transition-all ${
+                  className={`backdrop-blur-xl rounded-2xl border p-5 transition-all ${
                     selectedRole === role.id
                       ? roleCardSelectedClass // Seçili kartın temaya göre rengi
                       : `${roleCardBgClass}` // Seçili olmayan kartın temaya göre rengi
                   }`}
                 >
                   <div className="flex items-start gap-4">
-                    <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${role.color} flex items-center justify-center shadow-lg shrink-0`}>
-                      <role.icon className="w-6 h-6 text-white" />
+                    <div 
+                      onClick={() => setSelectedRole(role.id)}
+                      className="flex-1 cursor-pointer"
+                    >
+                      <div className="flex items-start gap-4">
+                        <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${role.color} flex items-center justify-center shadow-lg shrink-0`}>
+                          <role.icon className="w-6 h-6 text-white" />
+                        </div>
+                        <div className="flex-1">
+                          <h3 className={`${textColorClass} font-semibold mb-1`}>{role.name}</h3>
+                          <p className={`${mutedTextColorClass} text-sm`}>{role.description}</p>
+                        </div>
+                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                          selectedRole === role.id
+                            ? 'border-indigo-400 bg-indigo-500'
+                            : isDark ? 'border-white/30' : 'border-gray-400'
+                        }`}>
+                          {selectedRole === role.id && (
+                            <motion.div
+                              initial={{ scale: 0 }}
+                              animate={{ scale: 1 }}
+                              className="w-2 h-2 bg-white rounded-full"
+                            />
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex-1">
-                      <h3 className={`${textColorClass} font-semibold mb-1`}>{role.name}</h3>
-                      <p className={`${mutedTextColorClass} text-sm`}>{role.description}</p>
-                    </div>
-                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                      selectedRole === role.id
-                        ? 'border-indigo-400 bg-indigo-500'
-                        : isDark ? 'border-white/30' : 'border-gray-400'
-                    }`}>
-                      {selectedRole === role.id && (
-                        <motion.div
-                          initial={{ scale: 0 }}
-                          animate={{ scale: 1 }}
-                          className="w-2 h-2 bg-white rounded-full"
-                        />
-                      )}
-                    </div>
+                    {/* Auto-fill Button */}
+                    <motion.button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAutoFill(role.id);
+                      }}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      className={`ml-2 px-3 py-2 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 shrink-0 ${
+                        isDark
+                          ? 'bg-indigo-500/20 text-indigo-300 hover:bg-indigo-500/30 border border-indigo-500/30'
+                          : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200 border border-indigo-300'
+                      }`}
+                      title={`Auto-fill ${role.name} credentials`}
+                    >
+                      <Zap className="w-3.5 h-3.5" />
+                      <span>Auto-fill</span>
+                    </motion.button>
                   </div>
                 </motion.div>
               ))}

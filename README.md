@@ -76,8 +76,10 @@ AcuRate, üniversiteler, okullar ve eğitim kurumları için kapsamlı bir akade
 
 - **Node.js** 18+ 
 - **Python** 3.12+
-- **PostgreSQL** 14+
+- **Docker** ve **Docker Compose** (PostgreSQL için ZORUNLU)
 - **npm** veya **yarn**
+
+> **Not:** PostgreSQL Docker ile otomatik kurulur. Yerel PostgreSQL kurulumu gerekmez.
 
 ## 🚀 Kurulum
 
@@ -85,7 +87,7 @@ AcuRate, üniversiteler, okullar ve eğitim kurumları için kapsamlı bir akade
 
 ```bash
 git clone <repository-url>
-cd AcuRate
+cd acuratetemiz
 ```
 
 ### 2. Backend Kurulumu
@@ -645,15 +647,10 @@ Kurumsal demo talepleri için: `/contact` sayfasını kullanın.
 
 ## 📚 Ek Dokümantasyon
 
-Proje hakkında daha detaylı bilgi için `docs/` klasöründeki dokümantasyon dosyalarına bakabilirsiniz:
+### Kullanıcı Dokümantasyonu
 - `docs/API_INTEGRATION_GUIDE.md` - API kullanım kılavuzu ve örnekler
 - `docs/QUICK_START.md` - Hızlı başlangıç rehberi
-- `docs/NEXT_STEPS.md` - Devam edilecek işler ve roadmap
-- `docs/SESSION_SUMMARY.md` - Geliştirme süreci özeti
 - `docs/TROUBLESHOOTING.md` - Sorun giderme rehberi
-- `docs/BRANCH_WORKFLOW.md` - Git branch workflow ve takım çalışması
-- `docs/TEAM_QUICK_START.md` - Takım için hızlı başlangıç rehberi
-- `docs/MERGE_GUIDE.md` - Merge işlemleri kılavuzu
 
 ## 🎯 Proje Durumu
 

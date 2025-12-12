@@ -2,7 +2,7 @@
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { useEffect, useState } from 'react';
-import { Building2, Users, GraduationCap, BookOpen, Calendar, Mail, Phone, Search, Loader2, RefreshCw, TrendingUp, TrendingDown, Minus, Plus, X, AlertCircle, CheckCircle2, Trash2, AlertTriangle } from 'lucide-react';
+import { Building2, Users, GraduationCap, BookOpen, Calendar, Mail, Phone, Search, Loader2, RefreshCw, TrendingUp, TrendingDown, Minus, Plus, X, AlertCircle, CheckCircle2, Trash2, AlertTriangle, KeyRound } from 'lucide-react';
 import { api, Institution } from '@/lib/api';
 import { useThemeColors } from '@/hooks/useThemeColors';
 
@@ -12,6 +12,12 @@ export default function SuperAdminInstitutionsPage() {
   const [institutions, setInstitutions] = useState<Institution[]>([]);
   const [filteredInstitutions, setFilteredInstitutions] = useState<Institution[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [summaryStats, setSummaryStats] = useState<{
+    total_institutions: number;
+    total_students: number;
+    total_teachers: number;
+    total_courses: number;
+  } | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedInstitution, setSelectedInstitution] = useState<Institution | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -21,6 +27,9 @@ export default function SuperAdminInstitutionsPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<Institution | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [resettingPassword, setResettingPassword] = useState<number | null>(null);
+  const [resetPasswordError, setResetPasswordError] = useState<string | null>(null);
+  const [resetPasswordSuccess, setResetPasswordSuccess] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     // Institution Admin Info
     email: '',
@@ -50,11 +59,14 @@ export default function SuperAdminInstitutionsPage() {
     try {
       setLoading(true);
       setError(null);
-      const data = await api.getSuperAdminInstitutions();
-      if (Array.isArray(data)) {
-        setInstitutions(data);
+      const response = await api.getSuperAdminInstitutions();
+      if (response.institutions && Array.isArray(response.institutions)) {
+        setInstitutions(response.institutions);
       } else {
         setInstitutions([]);
+      }
+      if (response.summary) {
+        setSummaryStats(response.summary);
       }
     } catch (err: any) {
       setError(err.message || 'Failed to load institutions');
@@ -175,6 +187,36 @@ export default function SuperAdminInstitutionsPage() {
     }
   };
 
+  const handleResetPassword = async (institutionId: number) => {
+    try {
+      setResettingPassword(institutionId);
+      setResetPasswordError(null);
+      setResetPasswordSuccess(null);
+      
+      const result = await api.resetInstitutionPassword(institutionId);
+      
+      if (result.success) {
+        if (result.email_sent) {
+          setResetPasswordSuccess(`Password reset link sent to ${institutions.find(i => i.id === institutionId)?.email}`);
+        } else {
+          setResetPasswordSuccess(result.message || 'Password reset link generated');
+          if (result.credentials) {
+            // Show credentials if email failed
+            alert(`Password reset link could not be sent. Credentials:\nUsername: ${result.credentials.username}\nPassword: ${result.credentials.password}`);
+          }
+        }
+        // Clear success message after 5 seconds
+        setTimeout(() => setResetPasswordSuccess(null), 5000);
+      } else {
+        setResetPasswordError(result.error || 'Failed to reset password');
+      }
+    } catch (err: any) {
+      setResetPasswordError(err.message || 'Failed to reset password');
+    } finally {
+      setResettingPassword(null);
+    }
+  };
+
   const handleDeleteInstitution = async () => {
     if (!deleteConfirm) return;
     
@@ -239,11 +281,16 @@ export default function SuperAdminInstitutionsPage() {
     );
   }
 
-  const totalStats = {
+  const totalStats = summaryStats ? {
+    institutions: summaryStats.total_institutions,
+    students: summaryStats.total_students,
+    teachers: summaryStats.total_teachers,
+    courses: summaryStats.total_courses,
+  } : {
     institutions: institutions.length,
-    students: institutions.reduce((sum, inst) => sum + inst.student_count, 0),
-    teachers: institutions.reduce((sum, inst) => sum + inst.teacher_count, 0),
-    courses: institutions.reduce((sum, inst) => sum + inst.course_count, 0),
+    students: 0,
+    teachers: 0,
+    courses: 0,
   };
 
   return (
@@ -362,22 +409,45 @@ export default function SuperAdminInstitutionsPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       {getLoginStatusBadge(institution.login_status)}
-                      {/* Don't show delete button for super admin accounts */}
+                      {/* Don't show action buttons for super admin accounts */}
                       {!institution.is_superuser && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDeleteConfirm(institution);
-                          }}
-                          className={`p-2 rounded-lg transition-all ${
-                            isDark 
-                              ? 'hover:bg-red-500/20 text-red-400 hover:text-red-300' 
-                              : 'hover:bg-red-50 text-red-600 hover:text-red-700'
-                          }`}
-                          title="Delete institution"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <>
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              if (window.confirm(`Send password reset link to ${institution.email}?`)) {
+                                await handleResetPassword(institution.id);
+                              }
+                            }}
+                            disabled={resettingPassword === institution.id}
+                            className={`p-2 rounded-lg transition-all ${
+                              isDark 
+                                ? 'hover:bg-blue-500/20 text-blue-400 hover:text-blue-300' 
+                                : 'hover:bg-blue-50 text-blue-600 hover:text-blue-700'
+                            } ${resettingPassword === institution.id ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            title="Reset password"
+                          >
+                            {resettingPassword === institution.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <KeyRound className="w-4 h-4" />
+                            )}
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteConfirm(institution);
+                            }}
+                            className={`p-2 rounded-lg transition-all ${
+                              isDark 
+                                ? 'hover:bg-red-500/20 text-red-400 hover:text-red-300' 
+                                : 'hover:bg-red-50 text-red-600 hover:text-red-700'
+                            }`}
+                            title="Delete institution"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>
@@ -558,6 +628,32 @@ export default function SuperAdminInstitutionsPage() {
                 </button>
               </div>
 
+              {resetPasswordSuccess && (
+                <motion.div
+                  initial={{ opacity: 0, y: -20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  className={`${cardBgClass} border border-green-500/50 rounded-xl p-4 mb-4`}
+                >
+                  <div className="flex items-center gap-2 text-green-400">
+                    <CheckCircle2 className="w-5 h-5" />
+                    <p className="text-sm">{resetPasswordSuccess}</p>
+                  </div>
+                </motion.div>
+              )}
+              {resetPasswordError && (
+                <motion.div
+                  initial={{ opacity: 0, y: -20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  className={`${cardBgClass} border border-red-500/50 rounded-xl p-4 mb-4`}
+                >
+                  <div className="flex items-center gap-2 text-red-400">
+                    <AlertCircle className="w-5 h-5" />
+                    <p className="text-sm">{resetPasswordError}</p>
+                  </div>
+                </motion.div>
+              )}
               {createError && (
                 <motion.div
                   initial={{ opacity: 0, y: -10 }}

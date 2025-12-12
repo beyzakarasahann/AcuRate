@@ -2,7 +2,7 @@
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { useEffect, useState } from 'react';
-import { GraduationCap, Search, Mail, Building2, Loader2, User as UserIcon, BookOpen, Filter, RefreshCw } from 'lucide-react';
+import { GraduationCap, Search, Mail, Building2, Loader2, User as UserIcon, BookOpen, Filter, RefreshCw, PlusCircle, X } from 'lucide-react';
 import { api, type User } from '@/lib/api';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { Inter } from 'next/font/google';
@@ -23,6 +23,24 @@ export default function StudentsPage() {
   const [selectedDepartment, setSelectedDepartment] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [yearFilter, setYearFilter] = useState<string>('all');
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [formSuccess, setFormSuccess] = useState<string | null>(null);
+  const [form, setForm] = useState({
+    first_name: '',
+    last_name: '',
+    email: '',
+    department: '',
+    student_id: '',
+    year_of_study: 1,
+  });
+  const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importSuccess, setImportSuccess] = useState<string | null>(null);
+  const [importResults, setImportResults] = useState<{ created: number; updated: number; errors: string[] } | null>(null);
 
   const {
     mounted: themeMounted,
@@ -63,11 +81,131 @@ export default function StudentsPage() {
 
   const fetchDepartments = async () => {
     try {
-      const deptData = await api.getDepartments();
-      const deptNames = Array.from(new Set(deptData.map(dept => dept.name.trim()))).sort();
+      // Get departments from multiple sources and merge them
+      const allDeptNames = new Set<string>();
+      
+      // 1. Get departments from database (CRUD list)
+      try {
+        const deptListData = await api.getDepartmentsList();
+        deptListData.forEach(dept => {
+          if (dept.name?.trim()) {
+            allDeptNames.add(dept.name.trim());
+          }
+        });
+      } catch (error) {
+        console.warn('Failed to load departments list', error);
+      }
+      
+      // 2. Get departments from analytics (includes departments from students)
+      try {
+        const analyticsDeptData = await api.getDepartments();
+        analyticsDeptData.forEach(dept => {
+          if (dept.name?.trim()) {
+            allDeptNames.add(dept.name.trim());
+          }
+        });
+      } catch (error) {
+        console.warn('Failed to load analytics departments', error);
+      }
+      
+      // 3. Get departments from existing students (to catch any missing ones)
+      try {
+        const studentsData = await api.getStudents();
+        studentsData.forEach(student => {
+          if (student.department?.trim()) {
+            allDeptNames.add(student.department.trim());
+          }
+        });
+      } catch (error) {
+        console.warn('Failed to load students for department list', error);
+      }
+      
+      // Convert to sorted array
+      const deptNames = Array.from(allDeptNames).sort();
       setDepartments(deptNames);
     } catch (error: any) {
       console.error('Failed to load departments', error);
+      // Final fallback: try analytics only
+      try {
+        const deptData = await api.getDepartments();
+        const deptNames = Array.from(new Set(deptData.map(dept => dept.name.trim()))).sort();
+        setDepartments(deptNames);
+      } catch (fallbackError: any) {
+        console.error('Failed to load departments (fallback)', fallbackError);
+      }
+    }
+  };
+
+  const handleInputChange = (field: keyof typeof form, value: string | number) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleCloseForm = () => {
+    setIsFormOpen(false);
+    setFormError(null);
+    setFormSuccess(null);
+    setForm({
+      first_name: '',
+      last_name: '',
+      email: '',
+      department: selectedDepartment || '',
+      student_id: '',
+      year_of_study: 1,
+    });
+  };
+
+  const validateForm = () => {
+    if (!form.first_name || !form.last_name || !form.email) {
+      setFormError('Please fill in the required fields.');
+      return false;
+    }
+    return true;
+  };
+
+  const handleCreateStudent = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setFormError(null);
+    setFormSuccess(null);
+
+    if (!validateForm()) {
+      return;
+    }
+
+    const toastId = toast.loading('Creating student account...');
+    try {
+      setCreating(true);
+      const response = await api.createStudent({
+        email: form.email,
+        first_name: form.first_name,
+        last_name: form.last_name,
+        department: form.department || undefined,
+        student_id: form.student_id || undefined,
+        year_of_study: form.year_of_study || undefined,
+      });
+      
+      if (response.success) {
+        toast.success('Student account created successfully! A one-time password has been emailed.', { id: toastId });
+        setForm({
+          first_name: '',
+          last_name: '',
+          email: '',
+          department: selectedDepartment || '',
+          student_id: '',
+          year_of_study: 1,
+        });
+        await fetchStudents();
+        setTimeout(() => {
+          setIsFormOpen(false);
+        }, 500);
+      } else {
+        toast.error(response.email_error || 'Failed to create student account.', { id: toastId });
+        setFormError(response.email_error || 'Failed to create student.');
+      }
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to create student account.', { id: toastId });
+      setFormError(error.message || 'Failed to create student.');
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -189,20 +327,35 @@ export default function StudentsPage() {
                 )}
               </div>
               
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={fetchStudents}
-                disabled={loading}
-                className={`px-4 py-2 rounded-lg border transition-all flex items-center gap-2 text-sm font-medium ${
-                  isDark 
-                    ? 'bg-white/5 border-white/10 text-white hover:bg-white/10' 
-                    : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
-                } ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                Refresh
-              </motion.button>
+              <div className="flex items-center gap-3">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setIsFormOpen(true)}
+                  className={`px-4 py-2 rounded-lg border transition-all flex items-center gap-2 text-sm font-medium ${
+                    isDark 
+                      ? 'bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-500' 
+                      : 'bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-500'
+                  }`}
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  Add Student
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={fetchStudents}
+                  disabled={loading}
+                  className={`px-4 py-2 rounded-lg border transition-all flex items-center gap-2 text-sm font-medium ${
+                    isDark 
+                      ? 'bg-white/5 border-white/10 text-white hover:bg-white/10' 
+                      : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                  } ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                  Refresh
+                </motion.button>
+              </div>
             </div>
           </motion.div>
 
@@ -345,6 +498,204 @@ export default function StudentsPage() {
           )}
         </div>
       </div>
+
+      {/* Slide-Over Panel for Create Student Form */}
+      <AnimatePresence>
+        {isFormOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={handleCloseForm}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
+            />
+
+            {/* Slide-Over Panel */}
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+              className={`fixed right-0 top-0 h-full w-full max-w-2xl ${isDark ? 'bg-gray-900' : 'bg-white'} shadow-2xl z-50 flex flex-col`}
+            >
+              {/* Header */}
+              <div className={`flex items-center justify-between p-8 border-b ${isDark ? 'border-white/10' : 'border-gray-200'}`}>
+                <div className="flex items-center gap-4">
+                  <div className={`p-2.5 rounded-xl ${isDark ? 'bg-green-500/10' : 'bg-green-50'}`}>
+                    <PlusCircle className="w-5 h-5 text-green-500" />
+                  </div>
+                  <div>
+                    <h2 className={`text-2xl font-bold ${text}`}>Create Student</h2>
+                    <p className={`text-sm ${mutedText} mt-1`}>Add a new student to the system</p>
+                  </div>
+                </div>
+                <motion.button
+                  whileHover={{ scale: 1.1, rotate: 90 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={handleCloseForm}
+                  className={`p-2 rounded-xl transition-colors ${isDark ? 'hover:bg-white/10 text-white' : 'hover:bg-gray-100 text-gray-600'}`}
+                >
+                  <X className="w-5 h-5" />
+                </motion.button>
+              </div>
+
+              {/* Form Content - Scrollable */}
+              <div className="flex-1 overflow-y-auto p-8">
+                <form className="space-y-6" onSubmit={handleCreateStudent}>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className={`block text-xs font-semibold uppercase tracking-wider ${mutedText}`}>
+                        First Name <span className="text-red-400">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={form.first_name}
+                        onChange={(e) => handleInputChange('first_name', e.target.value)}
+                        className={`w-full px-4 py-3 rounded-xl border transition-all duration-200 ${isDark ? 'bg-white/[0.03] border-white/10 text-white placeholder:text-white/30' : 'bg-white border-gray-200 text-gray-900 placeholder:text-gray-400'} focus:ring-2 focus:ring-green-500/30 focus:border-green-500/50 outline-none text-sm font-medium`}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className={`block text-xs font-semibold uppercase tracking-wider ${mutedText}`}>
+                        Last Name <span className="text-red-400">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={form.last_name}
+                        onChange={(e) => handleInputChange('last_name', e.target.value)}
+                        className={`w-full px-4 py-3 rounded-xl border transition-all duration-200 ${isDark ? 'bg-white/[0.03] border-white/10 text-white placeholder:text-white/30' : 'bg-white border-gray-200 text-gray-900 placeholder:text-gray-400'} focus:ring-2 focus:ring-green-500/30 focus:border-green-500/50 outline-none text-sm font-medium`}
+                        required
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className={`block text-xs font-semibold uppercase tracking-wider ${mutedText}`}>
+                      Email <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      type="email"
+                      value={form.email}
+                      onChange={(e) => handleInputChange('email', e.target.value)}
+                      className={`w-full px-4 py-3 rounded-xl border transition-all duration-200 ${isDark ? 'bg-white/[0.03] border-white/10 text-white placeholder:text-white/30' : 'bg-white border-gray-200 text-gray-900 placeholder:text-gray-400'} focus:ring-2 focus:ring-green-500/30 focus:border-green-500/50 outline-none text-sm font-medium`}
+                      required
+                    />
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className={`block text-xs font-semibold uppercase tracking-wider ${mutedText}`}>
+                        Department <span className="text-red-400">*</span>
+                      </label>
+                      <select
+                        value={form.department}
+                        onChange={(e) => handleInputChange('department', e.target.value)}
+                        className={`w-full px-4 py-3 rounded-xl border transition-all duration-200 ${isDark ? 'bg-white/[0.03] border-white/10 text-white' : 'bg-white border-gray-200 text-gray-900'} focus:ring-2 focus:ring-green-500/30 focus:border-green-500/50 outline-none text-sm font-medium`}
+                        required
+                      >
+                        <option value="">Select Department</option>
+                        {departments.map((dept) => (
+                          <option key={dept} value={dept}>
+                            {dept}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className={`block text-xs font-semibold uppercase tracking-wider ${mutedText}`}>
+                        Year of Study
+                      </label>
+                      <select
+                        value={form.year_of_study}
+                        onChange={(e) => handleInputChange('year_of_study', parseInt(e.target.value))}
+                        className={`w-full px-4 py-3 rounded-xl border transition-all duration-200 ${isDark ? 'bg-white/[0.03] border-white/10 text-white' : 'bg-white border-gray-200 text-gray-900'} focus:ring-2 focus:ring-green-500/30 focus:border-green-500/50 outline-none text-sm font-medium`}
+                      >
+                        {[1, 2, 3, 4, 5, 6].map(year => (
+                          <option key={year} value={year}>Year {year}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className={`block text-xs font-semibold uppercase tracking-wider ${mutedText}`}>
+                      Student ID (Optional - Auto-generated if not provided)
+                    </label>
+                    <input
+                      type="text"
+                      value={form.student_id}
+                      onChange={(e) => handleInputChange('student_id', e.target.value)}
+                      placeholder="e.g. 2024001"
+                      className={`w-full px-4 py-3 rounded-xl border transition-all duration-200 ${isDark ? 'bg-white/[0.03] border-white/10 text-white placeholder:text-white/30' : 'bg-white border-gray-200 text-gray-900 placeholder:text-gray-400'} focus:ring-2 focus:ring-green-500/30 focus:border-green-500/50 outline-none text-sm font-medium`}
+                    />
+                  </div>
+                  
+                  {/* Info box: password will be emailed */}
+                  <div className={`p-3.5 rounded-xl text-xs sm:text-sm ${isDark ? 'bg-green-500/10 text-green-200 border border-green-500/30' : 'bg-green-50 text-green-800 border border-green-200'}`}>
+                    When you create this student, a one-time temporary password will be generated and sent directly to their email address. They must change it on first login.
+                  </div>
+
+                  {formError && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className={`p-3.5 rounded-xl text-sm font-medium ${isDark ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-red-50 text-red-700 border border-red-200'}`}
+                    >
+                      {formError}
+                    </motion.div>
+                  )}
+                  {formSuccess && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className={`p-3.5 rounded-xl text-sm font-medium ${isDark ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-green-50 text-green-700 border border-green-200'}`}
+                    >
+                      {formSuccess}
+                    </motion.div>
+                  )}
+
+                  {/* Footer with Submit Button */}
+                  <div className={`pt-6 mt-6 border-t ${isDark ? 'border-white/10' : 'border-gray-200'}`}>
+                    <div className="flex items-center justify-end gap-3">
+                      <motion.button
+                        type="button"
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={handleCloseForm}
+                        className={`px-5 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 ${isDark ? 'bg-white/5 border border-white/10 text-white hover:bg-white/10' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'}`}
+                      >
+                        Cancel
+                      </motion.button>
+                      <motion.button
+                        type="submit"
+                        whileHover={{ scale: creating ? 1 : 1.02 }}
+                        whileTap={{ scale: creating ? 1 : 0.98 }}
+                        disabled={creating}
+                        className={`px-6 py-2.5 rounded-xl font-semibold text-sm transition-all duration-200 flex items-center gap-2.5 ${creating ? 'opacity-70 cursor-not-allowed' : ''} ${isDark ? 'bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-500/20' : 'bg-green-600 hover:bg-green-700 text-white shadow-md'}`}
+                      >
+                        {creating ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Creating...
+                          </>
+                        ) : (
+                          <>
+                            <PlusCircle className="w-4 h-4" />
+                            Create Student
+                          </>
+                        )}
+                      </motion.button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
