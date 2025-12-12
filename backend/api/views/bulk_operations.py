@@ -93,10 +93,51 @@ def bulk_import_students(request):
                     )
                     
                     if created:
-                        # Set default password
-                        student.set_password('student123')
+                        # Generate temporary password and set it
+                        from ..serializers import generate_temp_password
+                        temp_password = generate_temp_password()
+                        student.set_password(temp_password)
+                        student.is_temporary_password = True
+                        student.created_by = user
                         student.save()
                         created_count += 1
+                        
+                        # Send email with credentials (optional, can be skipped if email fails)
+                        try:
+                            from django.core.mail import send_mail
+                            from django.conf import settings
+                            import ssl
+                            import os
+                            
+                            # Ensure SSL skip is applied if needed
+                            if os.environ.get("SENDGRID_SKIP_SSL_VERIFY", "").lower() == "true":
+                                ssl._create_default_https_context = ssl._create_unverified_context
+                            
+                            sendgrid_api_key = getattr(settings, "SENDGRID_API_KEY", "")
+                            if sendgrid_api_key and sendgrid_api_key != "your-sendgrid-api-key-here":
+                                full_name = (student.get_full_name() or "").strip()
+                                greeting = f"Hello {full_name},\n\n" if full_name else "Hello,\n\n"
+                                
+                                send_mail(
+                                    subject="Your AcuRate Student Account",
+                                    message=(
+                                        greeting
+                                        + "Your AcuRate student account has been created.\n\n"
+                                        + f"Username: {student.username}\n"
+                                        + f"Email: {student.email}\n"
+                                        + f"Student ID: {student.student_id or 'N/A'}\n"
+                                        + f"Temporary password: {temp_password}\n\n"
+                                        + "Please log in using your EMAIL ADDRESS or USERNAME and this temporary password.\n"
+                                        + "After logging in, you will be REQUIRED to change your password immediately.\n"
+                                        + "You will not be able to use the system until you update your password.\n"
+                                    ),
+                                    from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
+                                    recipient_list=[student.email],
+                                    fail_silently=True,
+                                )
+                        except Exception:
+                            # Email sending failed, but student is created - continue
+                            pass
                     else:
                         # Update existing student
                         student.first_name = row.get('first_name', '').strip() or student.first_name

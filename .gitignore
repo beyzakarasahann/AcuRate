@@ -86,6 +86,7 @@ coverage/
 .env.production.local
 .env*.local
 *.env
+backend/env.example
 secrets/
 .secrets
 

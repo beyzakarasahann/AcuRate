@@ -24,7 +24,7 @@ from ..utils import log_activity, get_institution_for_user
 from ..cache_utils import cache_response, invalidate_dashboard_cache
 from ..serializers import (
     UserSerializer, UserDetailSerializer, UserCreateSerializer, LoginSerializer,
-    TeacherCreateSerializer, InstitutionCreateSerializer,
+    TeacherCreateSerializer, StudentCreateSerializer, InstitutionCreateSerializer,
     DepartmentSerializer,
     ProgramOutcomeSerializer, ProgramOutcomeStatsSerializer,
     LearningOutcomeSerializer,
@@ -74,6 +74,9 @@ def login_view(request):
             related_object_id=user.id
         )
         
+        # Check if user needs to change password
+        requires_password_change = getattr(user, 'is_temporary_password', False)
+        
         return Response({
             'success': True,
             'message': 'Login successful',
@@ -81,7 +84,8 @@ def login_view(request):
             'tokens': {
                 'refresh': str(refresh),
                 'access': str(refresh.access_token),
-            }
+            },
+            'requires_password_change': requires_password_change
         })
     
     # Format errors for better frontend handling
@@ -373,6 +377,11 @@ def create_teacher_view(request):
     if serializer.is_valid():
         teacher = serializer.save()
         
+        # Check email sending status
+        email_sent = getattr(teacher, '_email_sent', False)
+        email_error = getattr(teacher, '_email_error', None)
+        temp_password = getattr(teacher, '_temp_password', None)
+        
         # Log teacher creation
         institution = get_institution_for_user(request.user) or (request.user if hasattr(request.user, 'role') and request.user.role == User.Role.INSTITUTION else None)
         log_activity(
@@ -383,14 +392,118 @@ def create_teacher_view(request):
             description=f"Teacher account created: {teacher.get_full_name() or teacher.username}",
             related_object_type='User',
             related_object_id=teacher.id,
-            metadata={'role': 'TEACHER', 'created_by': request.user.username}
+            metadata={
+                'role': 'TEACHER', 
+                'created_by': request.user.username,
+                'email_sent': email_sent,
+                'email_error': email_error
+            }
         )
         
+        response_data = {
+            "success": True,
+            "teacher": UserDetailSerializer(teacher).data,
+            "email_sent": email_sent,
+        }
+        
+        if not email_sent:
+            if email_error:
+                response_data["email_warning"] = f"Email could not be sent: {email_error}"
+            else:
+                response_data["email_warning"] = "Email could not be sent"
+            
+            if temp_password:
+                # Include credentials in response if email failed
+                response_data["credentials"] = {
+                    "username": teacher.username,
+                    "password": temp_password,
+                    "email": teacher.email
+                }
+        
+        if email_error:
+            response_data["email_error"] = email_error
+        
         return Response(
-            {
-                "success": True,
-                "teacher": UserDetailSerializer(teacher).data,
-            },
+            response_data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    return Response(
+        {"success": False, "errors": serializer.errors},
+        status=status.HTTP_400_BAD_REQUEST,
+    )
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_student_view(request):
+    """
+    Admin/Institution creates a student with a backend-generated temporary password.
+
+    POST /api/students/
+    Body: { "email", "first_name", "last_name", "department", "student_id", "year_of_study" }
+    """
+    user = request.user
+    if not hasattr(user, 'role') or (user.role != User.Role.INSTITUTION and not user.is_staff):
+        return Response(
+            {"detail": "Only institution admins can create students."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    serializer = StudentCreateSerializer(data=request.data, context={"request": request})
+    if serializer.is_valid():
+        student = serializer.save()
+        
+        # Check email sending status
+        email_sent = getattr(student, '_email_sent', False)
+        email_error = getattr(student, '_email_error', None)
+        temp_password = getattr(student, '_temp_password', None)
+        
+        # Log student creation
+        institution = get_institution_for_user(request.user) or (request.user if hasattr(request.user, 'role') and request.user.role == User.Role.INSTITUTION else None)
+        log_activity(
+            action_type=ActivityLog.ActionType.USER_CREATED,
+            user=request.user,
+            institution=institution,
+            department=student.department,
+            description=f"Student account created: {student.get_full_name() or student.username} (Student ID: {student.student_id})",
+            related_object_type='User',
+            related_object_id=student.id,
+            metadata={
+                'role': 'STUDENT', 
+                'created_by': request.user.username,
+                'email_sent': email_sent,
+                'email_error': email_error,
+                'student_id': student.student_id
+            }
+        )
+        
+        response_data = {
+            "success": True,
+            "student": UserDetailSerializer(student).data,
+            "email_sent": email_sent,
+        }
+        
+        if not email_sent:
+            if email_error:
+                response_data["email_warning"] = f"Email could not be sent: {email_error}"
+            else:
+                response_data["email_warning"] = "Email could not be sent"
+            
+            if temp_password:
+                # Include credentials in response if email failed
+                response_data["credentials"] = {
+                    "username": student.username,
+                    "password": temp_password,
+                    "email": student.email,
+                    "student_id": student.student_id
+                }
+        
+        if email_error:
+            response_data["email_error"] = email_error
+        
+        return Response(
+            response_data,
             status=status.HTTP_201_CREATED,
         )
 

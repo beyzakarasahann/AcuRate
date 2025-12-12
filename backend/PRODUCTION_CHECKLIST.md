@@ -130,3 +130,4 @@ python manage.py check --deploy
 
 **Son Güncelleme:** 2 Aralık 2024
 
+

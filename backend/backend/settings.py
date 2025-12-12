@@ -134,17 +134,39 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-# PostgreSQL Database Configuration
+# PostgreSQL Database Configuration (REQUIRED - Docker only)
+# This project uses Docker for PostgreSQL. Local PostgreSQL is NOT allowed.
+POSTGRES_HOST = os.environ.get('POSTGRES_HOST', 'localhost')
+
+# Validate that Docker PostgreSQL is being used (not local PostgreSQL)
+# Note: If Django runs on host machine, use POSTGRES_HOST=localhost
+#       If Django runs in Docker, use POSTGRES_HOST=postgres
+# We allow localhost only if it's for Docker container access from host
+if POSTGRES_HOST not in ['localhost', '127.0.0.1', 'postgres']:
+    raise ValueError(
+        f"❌ ERROR: Invalid POSTGRES_HOST value: {POSTGRES_HOST}\n"
+        "Valid values: 'localhost' (for host machine access to Docker), 'postgres' (for Docker network)\n\n"
+        "See DOCKER_SETUP.md for installation instructions."
+    )
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': os.environ.get('POSTGRES_DB', 'acurate_db'),
         'USER': os.environ.get('POSTGRES_USER', 'acurate_user'),
         'PASSWORD': os.environ.get('POSTGRES_PASSWORD', 'acurate_pass_2024'),
-        'HOST': os.environ.get('POSTGRES_HOST', 'localhost'),
+        'HOST': POSTGRES_HOST,
         'PORT': os.environ.get('POSTGRES_PORT', '5432'),
     }
 }
+
+# Validate PostgreSQL connection on startup
+if DATABASES['default']['ENGINE'] != 'django.db.backends.postgresql':
+    raise ValueError(
+        "❌ ERROR: This project requires PostgreSQL. SQLite is not supported.\n"
+        "Please use Docker PostgreSQL as configured in docker-compose.yml.\n"
+        "See DOCKER_SETUP.md for installation instructions."
+    )
 
 
 # Password validation

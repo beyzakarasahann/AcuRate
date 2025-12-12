@@ -8,11 +8,11 @@ from rest_framework_simplejwt.views import TokenRefreshView
 
 from .views import (
     # Auth views
-    login_view, logout_view, current_user_view, register_view, create_teacher_view, forgot_password_view, forgot_username_view,
+    login_view, logout_view, current_user_view, register_view, create_teacher_view, create_student_view, forgot_password_view, forgot_username_view,
     # Dashboard views
     student_dashboard, teacher_dashboard, institution_dashboard,
     # Super Admin views
-    super_admin_dashboard, super_admin_institutions, super_admin_activity_logs, create_institution, delete_institution,
+    super_admin_dashboard, super_admin_institutions, super_admin_activity_logs, create_institution, delete_institution, reset_institution_password,
     # Course Analytics views
     course_analytics_overview, course_analytics_detail,
     # Institution Analytics views
@@ -58,6 +58,7 @@ urlpatterns = [
     path('auth/me/', current_user_view, name='current-user'),
     path('auth/token/refresh/', TokenRefreshView.as_view(), name='token-refresh'),
     path('teachers/', create_teacher_view, name='create-teacher'),
+    path('students/', create_student_view, name='create-student'),
     
     # Dashboard endpoints
     path('dashboard/student/', student_dashboard, name='student-dashboard'),
@@ -69,6 +70,7 @@ urlpatterns = [
     path('super-admin/institutions/', super_admin_institutions, name='super-admin-institutions'),
     path('super-admin/institutions/create/', create_institution, name='create-institution'),
     path('super-admin/institutions/<int:institution_id>/', delete_institution, name='delete-institution'),
+    path('super-admin/institutions/<int:institution_id>/reset-password/', reset_institution_password, name='reset-institution-password'),
     path('super-admin/activity-logs/', super_admin_activity_logs, name='super-admin-activity-logs'),
     
     # Course Analytics endpoints

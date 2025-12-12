@@ -1,5 +1,7 @@
 """SUPER ADMIN Views Module"""
 
+import os
+import logging
 from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
@@ -381,6 +383,11 @@ def create_institution(request):
         try:
             institution = serializer.save()
             
+            # Check email sending status
+            email_sent = getattr(institution, '_email_sent', False)
+            email_error = getattr(institution, '_email_error', None)
+            temp_password = getattr(institution, '_temp_password', None)
+            
             # Log institution creation
             log_activity(
                 action_type=ActivityLog.ActionType.USER_CREATED,
@@ -390,14 +397,44 @@ def create_institution(request):
                 description=f"Institution admin account created: {institution.get_full_name() or institution.username}",
                 related_object_type='User',
                 related_object_id=institution.id,
-                metadata={'role': 'INSTITUTION', 'created_by': user.username}
+                metadata={
+                    'role': 'INSTITUTION', 
+                    'created_by': user.username,
+                    'email_sent': email_sent,
+                    'email_error': email_error
+                }
             )
             
-            return Response({
+            # Prepare response message based on email status
+            if email_sent:
+                message = 'Institution created successfully. Credentials have been sent to the email.'
+            else:
+                if email_error:
+                    message = f'Institution created successfully, but email could not be sent: {email_error}. '
+                else:
+                    message = 'Institution created successfully, but email could not be sent. '
+                if temp_password:
+                    message += f'Please provide these credentials manually: Username: {institution.username}, Password: {temp_password}'
+            
+            response_data = {
                 'success': True,
-                'message': 'Institution created successfully. Credentials have been sent to the email.',
-                'institution': UserDetailSerializer(institution).data
-            }, status=status.HTTP_201_CREATED)
+                'message': message,
+                'institution': UserDetailSerializer(institution).data,
+                'email_sent': email_sent,
+            }
+            
+            if not email_sent and temp_password:
+                # Include credentials in response if email failed
+                response_data['credentials'] = {
+                    'username': institution.username,
+                    'password': temp_password,
+                    'email': institution.email
+                }
+            
+            if email_error:
+                response_data['email_error'] = email_error
+            
+            return Response(response_data, status=status.HTTP_201_CREATED)
         except Exception as e:
             return Response({
                 'success': False,
@@ -582,34 +619,95 @@ def super_admin_institutions(request):
         # Get department name from institution (if available)
         inst_dept = inst.department or ''
         
-        # Count students in this institution's department
+        # Count teachers created by this institution
+        teachers_created_by_inst = User.objects.filter(
+            role=User.Role.TEACHER,
+            is_active=True,
+            created_by=inst
+        )
+        teacher_count = teachers_created_by_inst.count()
+        
+        # Count courses taught by teachers created by this institution
+        course_count = 0
+        if teacher_count > 0:
+            teacher_ids = teachers_created_by_inst.values_list('id', flat=True)
+            course_count = Course.objects.filter(
+                teacher_id__in=teacher_ids
+            ).count()
+        
+        # If no teachers created by institution, try to match by department
+        if teacher_count == 0 and inst_dept:
+            teachers_in_dept = User.objects.filter(
+                role=User.Role.TEACHER,
+                is_active=True,
+                department=inst_dept
+            )
+            teacher_count = teachers_in_dept.count()
+            if teacher_count > 0:
+                teacher_ids = teachers_in_dept.values_list('id', flat=True)
+                course_count = Course.objects.filter(
+                    teacher_id__in=teacher_ids
+                ).count()
+        
+        # If still no courses, try to count by department
+        if course_count == 0 and inst_dept:
+            course_count = Course.objects.filter(department=inst_dept).count()
+        
+        # If institution has no created teachers and department is "Administration" or empty,
+        # it likely manages the entire system, so count all active records
+        if teacher_count == 0 and (not inst_dept or inst_dept.lower() == 'administration'):
+            # Count all active teachers in the system
+            teacher_count = User.objects.filter(
+                role=User.Role.TEACHER,
+                is_active=True
+            ).count()
+            
+            # Count all courses in the system
+            course_count = Course.objects.all().count()
+        
+        # Count students enrolled in courses taught by this institution's teachers
         student_count = 0
-        if inst_dept:
+        if course_count > 0:
+            if teacher_count > 0:
+                # Get courses taught by institution's teachers
+                if teachers_created_by_inst.exists():
+                    teacher_ids = teachers_created_by_inst.values_list('id', flat=True)
+                elif inst_dept and inst_dept.lower() != 'administration':
+                    teacher_ids = User.objects.filter(
+                        role=User.Role.TEACHER,
+                        is_active=True,
+                        department=inst_dept
+                    ).values_list('id', flat=True)
+                else:
+                    # If institution manages all, get all teacher IDs
+                    teacher_ids = User.objects.filter(
+                        role=User.Role.TEACHER,
+                        is_active=True
+                    ).values_list('id', flat=True)
+                
+                course_ids = Course.objects.filter(
+                    teacher_id__in=teacher_ids
+                ).values_list('id', flat=True)
+                
+                # Count unique students enrolled in these courses
+                from ..models import Enrollment
+                student_count = Enrollment.objects.filter(
+                    course_id__in=course_ids
+                ).values('student_id').distinct().count()
+        
+        # If no students found via courses, try to match by department
+        if student_count == 0 and inst_dept and inst_dept.lower() != 'administration':
             student_count = User.objects.filter(
                 role=User.Role.STUDENT,
                 is_active=True,
                 department=inst_dept
             ).count()
-        
-        # Count teachers created by this institution or in same department
-        teacher_count = User.objects.filter(
-            role=User.Role.TEACHER,
-            is_active=True,
-            created_by=inst
-        ).count()
-        
-        # If no teachers created by institution, try to match by department
-        if teacher_count == 0 and inst_dept:
-            teacher_count = User.objects.filter(
-                role=User.Role.TEACHER,
-                is_active=True,
-                department=inst_dept
-            ).count()
-        
-        # Count courses in this institution's department
-        course_count = 0
-        if inst_dept:
-            course_count = Course.objects.filter(department=inst_dept).count()
+        elif student_count == 0 and (not inst_dept or inst_dept.lower() == 'administration'):
+            # If institution manages all, count all active students
+            from ..models import Enrollment
+            student_count = Enrollment.objects.filter(
+                is_active=True
+            ).values('student_id').distinct().count()
         
         # Last login info
         last_login = inst.last_login
@@ -648,7 +746,164 @@ def super_admin_institutions(request):
                 'course_count': course_count,
             })
     
-    return Response(institutions_data)
+    # Calculate summary statistics
+    total_institutions = len(institutions_data)
+    total_students = User.objects.filter(
+        role=User.Role.STUDENT,
+        is_active=True
+    ).count()
+    total_teachers = User.objects.filter(
+        role=User.Role.TEACHER,
+        is_active=True
+    ).count()
+    total_courses = Course.objects.all().count()
+    
+    return Response({
+        'institutions': institutions_data,
+        'summary': {
+            'total_institutions': total_institutions,
+            'total_students': total_students,
+            'total_teachers': total_teachers,
+            'total_courses': total_courses,
+        }
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def reset_institution_password(request, institution_id):
+    """
+    Reset password for an institution admin by super admin
+    Sends password reset link via email
+    
+    POST /api/super-admin/institutions/{institution_id}/reset-password/
+    """
+    user = request.user
+    
+    # Only superusers can reset institution passwords
+    if not user.is_superuser:
+        return Response({
+            'error': 'Only super admins can reset institution passwords'
+        }, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        institution = User.objects.get(id=institution_id, role=User.Role.INSTITUTION)
+        
+        # Don't allow resetting super admin accounts
+        if institution.is_superuser:
+            return Response({
+                'success': False,
+                'error': 'Cannot reset password for super admin accounts'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Generate temporary password
+        from ..serializers import generate_temp_password
+        temp_password = generate_temp_password()
+        
+        # Set temporary password and mark user as needing password change
+        institution.set_password(temp_password)
+        if hasattr(institution, "is_temporary_password"):
+            institution.is_temporary_password = True
+        institution.save()
+        
+        # Build email
+        full_name = (institution.get_full_name() or "").strip()
+        if full_name:
+            greeting_line = f"Hello {full_name},\n\n"
+        else:
+            greeting_line = "Hello,\n\n"
+        
+        message = (
+            greeting_line
+            + "Your AcuRate institution admin account password has been reset by a super administrator.\n\n"
+            + "Account Details:\n"
+            + f"Username: {institution.username}\n"
+            + f"Email address: {institution.email}\n"
+            + f"Temporary password: {temp_password}\n\n"
+            + "IMPORTANT: Please log in using your EMAIL ADDRESS or USERNAME and this temporary password.\n"
+            + "After logging in, you will be REQUIRED to change your password immediately.\n"
+            + "You will not be able to use the system until you update your password.\n\n"
+            + "If you did not request this password reset, please contact your administrator immediately.\n\n"
+            + "Best regards,\n"
+            + "AcuRate Team"
+        )
+        
+        email_sent = False
+        email_error_message = None
+        
+        # Ensure SSL skip is applied if needed
+        import ssl
+        if os.environ.get("SENDGRID_SKIP_SSL_VERIFY", "").lower() == "true":
+            ssl._create_default_https_context = ssl._create_unverified_context
+        
+        try:
+            result = send_mail(
+                subject="AcuRate - Temporary Password (Admin Reset)",
+                message=message,
+                from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
+                recipient_list=[institution.email],
+                fail_silently=False,
+            )
+            email_sent = result > 0
+            if not email_sent:
+                email_error_message = "Email sending returned 0 (no emails sent)"
+        except Exception as email_error:
+            error_str = str(email_error)
+            error_type = type(email_error).__name__
+            logger = logging.getLogger(__name__)
+            logger.error(
+                f"Failed to send password reset email to {institution.email}. "
+                f"Error type: {error_type}, Error: {error_str}",
+                exc_info=True
+            )
+            email_error_message = f"Email sending failed ({error_type}): {error_str}"
+        
+        # Log password reset
+        log_activity(
+            action_type=ActivityLog.ActionType.PASSWORD_RESET,
+            user=user,
+            institution=None,
+            department=institution.department,
+            description=f"Password reset for institution admin: {institution.get_full_name() or institution.username} (requested by super admin)",
+            related_object_type='User',
+            related_object_id=institution.id,
+            metadata={
+                'role': 'INSTITUTION',
+                'reset_by': user.username,
+                'email_sent': email_sent,
+                'email_error': email_error_message
+            }
+        )
+        
+        if email_sent:
+            return Response({
+                'success': True,
+                'message': f'Temporary password has been sent to {institution.email}. User will be required to change password on next login.',
+                'email_sent': True
+            }, status=status.HTTP_200_OK)
+        else:
+            return Response({
+                'success': True,
+                'message': f'Password has been reset, but email could not be sent: {email_error_message}. Please provide the temporary password manually.',
+                'email_sent': False,
+                'email_error': email_error_message,
+                'credentials': {
+                    'username': institution.username,
+                    'password': temp_password,
+                    'email': institution.email
+                }
+            }, status=status.HTTP_200_OK)
+            
+    except User.DoesNotExist:
+        return Response({
+            'success': False,
+            'error': 'Institution not found'
+        }, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': f'Failed to reset password: {str(e)}'
+        }, status=status.HTTP_400_BAD_REQUEST)
 
 
 # =============================================================================
