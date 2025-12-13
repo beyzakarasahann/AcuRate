@@ -88,3 +88,49 @@ class RequestLoggingMiddleware(MiddlewareMixin):
             )
         return response
 
+
+class SecurityHeadersMiddleware(MiddlewareMixin):
+    """
+    Add security headers to all responses
+    SECURITY: Content Security Policy, Permissions-Policy, etc.
+    """
+    
+    def process_response(self, request, response):
+        # Only add security headers to HTTP responses (not streaming responses)
+        if not hasattr(response, 'headers'):
+            return response
+        # Content Security Policy (CSP) - XSS protection
+        # Note: Adjust based on your frontend requirements
+        csp_policy = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "  # unsafe-inline/unsafe-eval for Next.js
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: https:; "
+            "font-src 'self' data:; "
+            "connect-src 'self' https:; "
+            "frame-ancestors 'none';"
+        )
+        response['Content-Security-Policy'] = csp_policy
+        
+        # Permissions-Policy (formerly Feature-Policy) - Browser feature control
+        permissions_policy = (
+            "camera=(), "
+            "microphone=(), "
+            "geolocation=(), "
+            "interest-cohort=(), "
+            "payment=(), "
+            "usb=()"
+        )
+        response['Permissions-Policy'] = permissions_policy
+        
+        # X-Content-Type-Options - Prevent MIME type sniffing
+        response['X-Content-Type-Options'] = 'nosniff'
+        
+        # X-XSS-Protection - Legacy XSS protection (modern browsers ignore but good for compatibility)
+        response['X-XSS-Protection'] = '1; mode=block'
+        
+        # Referrer-Policy - Control referrer information
+        response['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+        
+        return response
+

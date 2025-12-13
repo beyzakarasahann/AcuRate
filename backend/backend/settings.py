@@ -23,6 +23,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Load environment variables from backend/.env
 load_dotenv(BASE_DIR / '.env')
 
+# Quick-start development settings - unsuitable for production
+# See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
+
+# SECURITY WARNING: don't run with debug turned on in production!
+# Default to True for development, set DJANGO_DEBUG=False in production
+DEBUG = os.environ.get('DJANGO_DEBUG', 'True').lower() == 'true'
+
 # Optional: disable SSL verification for SendGrid in dev if explicitly requested
 # SECURITY WARNING: This should NEVER be enabled in production
 if os.environ.get("SENDGRID_SKIP_SSL_VERIFY", "").lower() == "true":
@@ -36,14 +43,6 @@ if os.environ.get("SENDGRID_SKIP_SSL_VERIFY", "").lower() == "true":
             "vulnerable to MITM (Man-in-the-Middle) attacks.",
             UserWarning
         )
-
-
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
-
-# SECURITY WARNING: don't run with debug turned on in production!
-# Default to True for development, set DJANGO_DEBUG=False in production
-DEBUG = os.environ.get('DJANGO_DEBUG', 'True').lower() == 'true'
 
 # SECURITY WARNING: keep the secret key used in production secret!
 # In production, SECRET_KEY must be set via environment variable
@@ -122,6 +121,7 @@ INSTALLED_APPS = [
 if SPECTACULAR_AVAILABLE:
     INSTALLED_APPS.insert(-1, 'drf_spectacular')  # Add before 'api'
 
+# Build middleware list
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
@@ -133,7 +133,23 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'api.middleware.RequestLoggingMiddleware',  # Request logging
     'api.middleware.RateLimitMiddleware',  # Rate limiting (only in production)
+    'api.middleware.SecurityHeadersMiddleware',  # Security headers (CSP, Permissions-Policy)
 ]
+
+# Add WhiteNoise middleware only if available and in production
+try:
+    import whitenoise
+    # Insert WhiteNoise after SecurityMiddleware (before SessionMiddleware)
+    MIDDLEWARE.insert(2, 'whitenoise.middleware.WhiteNoiseMiddleware')
+except ImportError:
+    # WhiteNoise not installed - only needed for production
+    if not DEBUG:
+        import warnings
+        warnings.warn(
+            "WhiteNoise is not installed. Static files may not be served correctly in production. "
+            "Install with: pip install whitenoise",
+            UserWarning
+        )
 
 ROOT_URLCONF = 'backend.urls'
 
@@ -181,6 +197,10 @@ DATABASES = {
         'PASSWORD': os.environ.get('POSTGRES_PASSWORD', 'acurate_pass_2024'),
         'HOST': POSTGRES_HOST,
         'PORT': os.environ.get('POSTGRES_PORT', '5432'),
+        # SECURITY: Use SSL for database connection in production
+        'OPTIONS': {
+            'sslmode': 'require' if not DEBUG else 'prefer',
+        }
     }
 }
 
@@ -192,6 +212,23 @@ if DATABASES['default']['ENGINE'] != 'django.db.backends.postgresql':
         "See DOCKER_SETUP.md for installation instructions."
     )
 
+
+# Password hashing - Use Argon2 for better security
+# SECURITY: Argon2 is the most secure password hashing algorithm
+try:
+    import argon2
+    PASSWORD_HASHERS = [
+        'django.contrib.auth.hashers.Argon2PasswordHasher',  # En güvenli
+        'django.contrib.auth.hashers.PBKDF2PasswordHasher',  # Fallback
+        'django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher',
+    ]
+except ImportError:
+    # Fallback to PBKDF2 if Argon2 is not available
+    PASSWORD_HASHERS = [
+        'django.contrib.auth.hashers.PBKDF2PasswordHasher',
+        'django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher',
+        'django.contrib.auth.hashers.BCryptSHA256PasswordHasher',
+    ]
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
@@ -296,6 +333,15 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 20,
     # Exception handling
     'EXCEPTION_HANDLER': 'api.exceptions.custom_exception_handler',
+    # SECURITY: API Throttling to prevent abuse
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle'
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '100/hour',      # Anonymous users: 100 requests per hour
+        'user': '1000/hour',      # Authenticated users: 1000 requests per hour
+    }
 }
 
 # Add API Documentation schema only if drf-spectacular is available
@@ -379,6 +425,16 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 # --- Static Files ---
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# WhiteNoise configuration for static files serving (only if available)
+# https://whitenoise.readthedocs.io/en/latest/
+try:
+    import whitenoise
+    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+except ImportError:
+    # WhiteNoise not installed - use default storage
+    # In production, install whitenoise: pip install whitenoise
+    STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
 
 # --- Logging Configuration ---
 # Check if python-json-logger is available

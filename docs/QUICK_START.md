@@ -52,7 +52,6 @@ Dashboard: /institution
 - **Frontend:** http://localhost:3000
 - **Backend API:** http://localhost:8000/api
 - **Admin Panel:** http://localhost:8000/admin (admin/admin123)
-- **API Test Page:** http://localhost:3000/test-api.html
 
 ---
 

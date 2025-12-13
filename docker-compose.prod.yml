@@ -1,0 +1,127 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: acurate_postgres_prod
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-acurate_db}
+      POSTGRES_USER: ${POSTGRES_USER:-acurate_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-acurate_user} -d ${POSTGRES_DB:-acurate_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - acurate_network
+    # Don't expose port in production (only internal access)
+    # ports:
+    #   - "5432:5432"
+
+  # Redis Cache (Optional)
+  redis:
+    image: redis:7-alpine
+    container_name: acurate_redis_prod
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - acurate_network
+    # Don't expose port in production (only internal access)
+    # ports:
+    #   - "6379:6379"
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: acurate_backend_prod
+    restart: unless-stopped
+    environment:
+      # Django Settings
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-False}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS}
+      
+      # Database
+      POSTGRES_DB: ${POSTGRES_DB:-acurate_db}
+      POSTGRES_USER: ${POSTGRES_USER:-acurate_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      
+      # Email / SendGrid
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY}
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL}
+      SENDGRID_SANDBOX_MODE_IN_DEBUG: ${SENDGRID_SANDBOX_MODE_IN_DEBUG:-False}
+      
+      # CORS
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+      
+      # Security
+      SECURE_SSL_REDIRECT: ${SECURE_SSL_REDIRECT:-True}
+      
+      # Redis (Optional)
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/1}
+    volumes:
+      - backend_static:/app/staticfiles
+      - backend_media:/app/media
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - acurate_network
+    # Expose backend port (use reverse proxy in production)
+    ports:
+      - "8000:8000"
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py collectstatic --noinput &&
+             gunicorn backend.wsgi:application --bind 0.0.0.0:8000 --workers 4 --timeout 120"
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: acurate_frontend_prod
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://backend:8000/api}
+    depends_on:
+      - backend
+    networks:
+      - acurate_network
+    # Expose frontend port (use reverse proxy in production)
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  backend_static:
+    driver: local
+  backend_media:
+    driver: local
+
+networks:
+  acurate_network:
+    driver: bridge
