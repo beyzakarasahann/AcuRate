@@ -88,3 +88,62 @@ class RequestLoggingMiddleware(MiddlewareMixin):
             )
         return response
 
+
+class SecurityHeadersMiddleware(MiddlewareMixin):
+    """
+    SECURITY: Add security headers to all responses
+    Content-Security-Policy, Permissions-Policy, etc.
+    """
+    
+    def process_response(self, request, response):
+        # Content-Security-Policy - Prevent XSS and injection attacks
+        # Note: Adjust 'self' and domains based on your frontend URLs
+        if not settings.DEBUG:
+            # Production CSP - strict
+            csp_directives = [
+                "default-src 'self'",
+                "script-src 'self'",
+                "style-src 'self' 'unsafe-inline'",  # Allow inline styles for UI frameworks
+                "img-src 'self' data: https:",
+                "font-src 'self' https://fonts.gstatic.com",
+                "connect-src 'self'",
+                "frame-ancestors 'none'",
+                "base-uri 'self'",
+                "form-action 'self'",
+            ]
+        else:
+            # Development CSP - more permissive for hot reload, etc.
+            csp_directives = [
+                "default-src 'self'",
+                "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+                "style-src 'self' 'unsafe-inline'",
+                "img-src 'self' data: https: http:",
+                "font-src 'self' https://fonts.gstatic.com data:",
+                "connect-src 'self' ws: wss: http://localhost:* http://127.0.0.1:*",
+                "frame-ancestors 'self'",
+            ]
+        
+        response['Content-Security-Policy'] = '; '.join(csp_directives)
+        
+        # Permissions-Policy - Disable unnecessary browser features
+        response['Permissions-Policy'] = (
+            'accelerometer=(), '
+            'camera=(), '
+            'geolocation=(), '
+            'gyroscope=(), '
+            'magnetometer=(), '
+            'microphone=(), '
+            'payment=(), '
+            'usb=()'
+        )
+        
+        # Additional security headers
+        response['X-Content-Type-Options'] = 'nosniff'
+        response['X-Frame-Options'] = 'DENY'
+        response['X-XSS-Protection'] = '1; mode=block'
+        
+        # Referrer-Policy (also set in settings.py for production)
+        if not response.get('Referrer-Policy'):
+            response['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+        
+        return response

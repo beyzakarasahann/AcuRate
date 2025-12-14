@@ -475,7 +475,7 @@ logger.warning(
 - [x] Hesap kilitleme mekanizması eklendi ✅ (auth.py - 5 deneme/15 dk blok)
 - [x] File upload güvenlik kontrolleri eklendi ✅ (file_upload.py - MIME, magic bytes, blocklist)
 - [x] Rate limiting iyileştirildi ✅ (middleware.py - 100 req/dk production)
-- [x] Security headers eklendi ✅ (settings.py - HSTS, XSS, CSP, Referrer-Policy)
+- [x] Security headers eklendi ✅ (settings.py + middleware.py - HSTS, XSS, CSP, Permissions-Policy, Referrer-Policy)
 - [x] Log'larda hassas bilgi kaydı kaldırıldı ✅ (serializers/user.py düzeltildi)
 - [x] Password policy güçlendirildi ✅ (validators.py - PasswordComplexityValidator)
 - [x] Input sanitization eklendi ✅ (validators.py - XSS koruması, serializers güncellendi)

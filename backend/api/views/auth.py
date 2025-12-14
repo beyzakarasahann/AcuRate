@@ -169,14 +169,14 @@ def forgot_password_view(request):
             }
         )
 
-    # Rate limiting: Check if password reset was requested recently (within 3 minutes)
+    # SECURITY: Rate limiting - prevent password reset spam (15 minutes cooldown)
     cache_key = f'password_reset_{user.id}_{user.email}'
     last_reset_time = cache.get(cache_key)
     
     if last_reset_time:
         # Calculate remaining time in seconds
         elapsed = (timezone.now() - last_reset_time).total_seconds()
-        remaining_seconds = 180 - elapsed  # 3 minutes = 180 seconds
+        remaining_seconds = 900 - elapsed  # 15 minutes = 900 seconds (increased from 3 min for security)
         
         if remaining_seconds > 0:
             remaining_minutes = int(remaining_seconds // 60)
@@ -237,8 +237,8 @@ def forgot_password_view(request):
             fail_silently=False,
         )
         
-        # Set cache to prevent spam (3 minutes = 180 seconds)
-        cache.set(cache_key, timezone.now(), 180)
+        # SECURITY: Set cache to prevent spam (15 minutes = 900 seconds)
+        cache.set(cache_key, timezone.now(), 900)
     except Exception as e:
         return Response(
             {
@@ -353,8 +353,8 @@ def forgot_username_view(request):
             fail_silently=False,
         )
         
-        # Set cache to prevent spam (3 minutes = 180 seconds)
-        cache.set(cache_key, timezone.now(), 180)
+        # SECURITY: Set cache to prevent spam (15 minutes = 900 seconds)
+        cache.set(cache_key, timezone.now(), 900)
     except Exception as e:
         return Response(
             {
