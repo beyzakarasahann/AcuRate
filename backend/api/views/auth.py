@@ -22,6 +22,7 @@ from ..models import (
 )
 from ..utils import log_activity, get_institution_for_user
 from ..cache_utils import cache_response, invalidate_dashboard_cache
+from ..middleware import rate_limit
 from ..serializers import (
     UserSerializer, UserDetailSerializer, UserCreateSerializer, LoginSerializer,
     TeacherCreateSerializer, StudentCreateSerializer, InstitutionCreateSerializer,
@@ -48,6 +49,7 @@ from ..serializers import (
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@rate_limit(requests_per_minute=10, key_prefix='login')  # SECURITY: 10 login attempts/min per IP
 def login_view(request):
     """
     Login endpoint - Returns JWT tokens
@@ -136,6 +138,7 @@ def login_view(request):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@rate_limit(requests_per_minute=3, key_prefix='forgot_password')  # SECURITY: 3 reset requests/min per IP
 def forgot_password_view(request):
     """
     Forgot password endpoint - generates a temporary password and emails it to the user.

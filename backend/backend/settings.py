@@ -304,13 +304,21 @@ if SPECTACULAR_AVAILABLE:
     REST_FRAMEWORK['DEFAULT_SCHEMA_CLASS'] = 'drf_spectacular.openapi.AutoSchema'
 
 # --- JWT Ayarları ---
+# SECURITY: JWT token configuration with security best practices
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(hours=1),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
-    'ROTATE_REFRESH_TOKENS': True,
-    'BLACKLIST_AFTER_ROTATION': True,
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=1),  # Short-lived access tokens
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),  # Longer refresh tokens
+    'ROTATE_REFRESH_TOKENS': True,  # Rotate refresh tokens on each use
+    'BLACKLIST_AFTER_ROTATION': True,  # Blacklist old refresh tokens
     'AUTH_HEADER_TYPES': ('Bearer',),
+    'UPDATE_LAST_LOGIN': True,  # Track last login time
+    'TOKEN_OBTAIN_SERIALIZER': 'rest_framework_simplejwt.serializers.TokenObtainPairSerializer',
+    'TOKEN_REFRESH_SERIALIZER': 'rest_framework_simplejwt.serializers.TokenRefreshSerializer',
 }
+
+# SECURITY: Maximum concurrent sessions per user (for future implementation)
+# Set to 0 to disable limit
+MAX_SESSIONS_PER_USER = int(os.environ.get('MAX_SESSIONS_PER_USER', 5))
 
 # --- API Documentation (drf-spectacular) ---
 # Only define if drf-spectacular is available

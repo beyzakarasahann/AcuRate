@@ -1,7 +1,50 @@
 """
 Utility functions for AcuRate API
+SECURITY: Includes sensitive data sanitization for logging
 """
 from .models import ActivityLog, User
+
+# SECURITY: Keys that should never be logged
+SENSITIVE_KEYS = {
+    'password', 'temp_password', 'token', 'access_token', 'refresh_token',
+    'secret', 'api_key', 'apikey', 'secret_key', 'credentials', 'auth',
+    'authorization', 'cookie', 'session', 'csrf', 'ssn', 'credit_card'
+}
+
+
+def sanitize_metadata(metadata: dict) -> dict:
+    """
+    SECURITY: Remove sensitive keys from metadata before logging.
+    """
+    if not metadata:
+        return {}
+    
+    sanitized = {}
+    for key, value in metadata.items():
+        key_lower = key.lower()
+        # Check if key contains any sensitive word
+        if any(sensitive in key_lower for sensitive in SENSITIVE_KEYS):
+            sanitized[key] = '***REDACTED***'
+        elif isinstance(value, dict):
+            sanitized[key] = sanitize_metadata(value)
+        else:
+            sanitized[key] = value
+    
+    return sanitized
+
+
+def sanitize_description(description: str) -> str:
+    """
+    SECURITY: Remove potential sensitive data from description.
+    """
+    if not description:
+        return ''
+    
+    import re
+    # Remove anything that looks like a password or token
+    sanitized = re.sub(r'[Pp]assword[:\s]*\S+', 'password: ***', description)
+    sanitized = re.sub(r'[Tt]oken[:\s]*\S+', 'token: ***', sanitized)
+    return sanitized
 
 
 def log_activity(
@@ -16,18 +59,22 @@ def log_activity(
 ):
     """
     Helper function to create activity logs.
-    No sensitive data should be included in description or metadata.
+    SECURITY: Automatically sanitizes sensitive data from description and metadata.
     """
     try:
+        # Sanitize before logging
+        safe_description = sanitize_description(description)
+        safe_metadata = sanitize_metadata(metadata)
+        
         ActivityLog.objects.create(
             action_type=action_type,
             user=user,
             institution=institution,
             department=department,
-            description=description,
+            description=safe_description,
             related_object_type=related_object_type,
             related_object_id=related_object_id,
-            metadata=metadata or {}
+            metadata=safe_metadata
         )
     except Exception as e:
         # Don't fail the main operation if logging fails
