@@ -406,6 +406,7 @@ def create_institution(request):
             )
             
             # Prepare response message based on email status
+            # SECURITY: Never expose temp_password in API response
             if email_sent:
                 message = 'Institution created successfully. Credentials have been sent to the email.'
             else:
@@ -413,8 +414,7 @@ def create_institution(request):
                     message = f'Institution created successfully, but email could not be sent: {email_error}. '
                 else:
                     message = 'Institution created successfully, but email could not be sent. '
-                if temp_password:
-                    message += f'Please provide these credentials manually: Username: {institution.username}, Password: {temp_password}'
+                message += 'Please use the password reset feature to set up credentials, or check server logs (admin only).'
             
             response_data = {
                 'success': True,
@@ -423,13 +423,12 @@ def create_institution(request):
                 'email_sent': email_sent,
             }
             
+            # SECURITY: Log credentials securely for admin access (never in API response)
             if not email_sent and temp_password:
-                # Include credentials in response if email failed
-                response_data['credentials'] = {
-                    'username': institution.username,
-                    'password': temp_password,
-                    'email': institution.email
-                }
+                logger.info(
+                    f"[ADMIN] Credentials for institution {institution.username}: "
+                    f"Check server logs or use password reset. (temp password NOT exposed in API)"
+                )
             
             if email_error:
                 response_data['email_error'] = email_error
@@ -882,16 +881,17 @@ def reset_institution_password(request, institution_id):
                 'email_sent': True
             }, status=status.HTTP_200_OK)
         else:
+            # SECURITY: Log credentials for admin, never expose in API response
+            logger.info(
+                f"[ADMIN] Password reset for {institution.username} - email failed. "
+                f"Admin should check server logs or use alternative method."
+            )
             return Response({
                 'success': True,
-                'message': f'Password has been reset, but email could not be sent: {email_error_message}. Please provide the temporary password manually.',
+                'message': f'Password has been reset, but email could not be sent: {email_error_message}. Please check server logs (admin only) or use an alternative method to provide credentials.',
                 'email_sent': False,
                 'email_error': email_error_message,
-                'credentials': {
-                    'username': institution.username,
-                    'password': temp_password,
-                    'email': institution.email
-                }
+                'action_required': 'Contact system administrator for credentials or retry email sending'
             }, status=status.HTTP_200_OK)
             
     except User.DoesNotExist:

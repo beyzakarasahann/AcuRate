@@ -23,17 +23,26 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Load environment variables from backend/.env
 load_dotenv(BASE_DIR / '.env')
 
-# Optional: disable SSL verification for SendGrid in dev if explicitly requested
-if os.environ.get("SENDGRID_SKIP_SSL_VERIFY", "").lower() == "true":
-    ssl._create_default_https_context = ssl._create_unverified_context
-
-
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: don't run with debug turned on in production!
 # Default to True for development, set DJANGO_DEBUG=False in production
 DEBUG = os.environ.get('DJANGO_DEBUG', 'True').lower() == 'true'
+
+# Optional: disable SSL verification for SendGrid in dev if explicitly requested
+# SECURITY WARNING: This should NEVER be enabled in production
+if os.environ.get("SENDGRID_SKIP_SSL_VERIFY", "").lower() == "true":
+    ssl._create_default_https_context = ssl._create_unverified_context
+    # Log warning if used in production
+    if not DEBUG:
+        import warnings
+        warnings.warn(
+            "⚠️  SECURITY WARNING: SSL verification is disabled! "
+            "This should NEVER be used in production as it makes the application "
+            "vulnerable to MITM (Man-in-the-Middle) attacks.",
+            UserWarning
+        )
 
 # SECURITY WARNING: keep the secret key used in production secret!
 # In production, SECRET_KEY must be set via environment variable
@@ -69,6 +78,20 @@ if not DEBUG:
     SECURE_HSTS_SECONDS = 31536000  # 1 year
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
+    
+    # Content Security Policy
+    # Note: Configure based on your frontend domains
+    SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
+    
+    # Session security
+    SESSION_COOKIE_AGE = 3600  # 1 hour
+    SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
+    
+    # CSRF cookie settings
+    CSRF_COOKIE_HTTPONLY = True
+    CSRF_COOKIE_SAMESITE = 'Lax'
 
 
 # Application definition
@@ -107,6 +130,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'api.middleware.SecurityHeadersMiddleware',  # SECURITY: CSP, Permissions-Policy
     'api.middleware.RequestLoggingMiddleware',  # Request logging
     'api.middleware.RateLimitMiddleware',  # Rate limiting (only in production)
 ]
@@ -178,12 +202,19 @@ AUTH_PASSWORD_VALIDATORS = [
     },
     {
         'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        'OPTIONS': {
+            'min_length': 10,  # Production: minimum 10 characters
+        }
     },
     {
         'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
     },
     {
         'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+    },
+    # Custom validator for complexity (uppercase, lowercase, digit, special char)
+    {
+        'NAME': 'api.validators.PasswordComplexityValidator',
     },
 ]
 
@@ -220,12 +251,38 @@ SENDGRID_SANDBOX_MODE_IN_DEBUG = False
 DEFAULT_FROM_EMAIL = 'beyza.karasahan@live.acibadem.edu.tr'
 
 # --- CORS Ayarları ---
-CORS_ALLOWED_ORIGINS = [
+# Development origins
+CORS_ALLOWED_ORIGINS_DEV = [
     "http://localhost:3000",   # Next.js dev server
+    "http://localhost:3003",   # Alternative port
     "http://127.0.0.1:3000",
+    "http://127.0.0.1:3003",
 ]
 
+# Production origins (add your production domains here)
+CORS_ALLOWED_ORIGINS_PROD = os.environ.get('CORS_ALLOWED_ORIGINS', '').split(',')
+CORS_ALLOWED_ORIGINS_PROD = [origin.strip() for origin in CORS_ALLOWED_ORIGINS_PROD if origin.strip()]
+
+# Combine based on DEBUG mode
+if DEBUG:
+    CORS_ALLOWED_ORIGINS = CORS_ALLOWED_ORIGINS_DEV
+else:
+    CORS_ALLOWED_ORIGINS = CORS_ALLOWED_ORIGINS_PROD or CORS_ALLOWED_ORIGINS_DEV
+
 CORS_ALLOW_CREDENTIALS = True
+
+# Additional CORS headers for security
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
 
 # --- REST Framework Ayarları ---
 REST_FRAMEWORK = {
@@ -246,13 +303,21 @@ if SPECTACULAR_AVAILABLE:
     REST_FRAMEWORK['DEFAULT_SCHEMA_CLASS'] = 'drf_spectacular.openapi.AutoSchema'
 
 # --- JWT Ayarları ---
+# SECURITY: JWT token configuration with security best practices
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(hours=1),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
-    'ROTATE_REFRESH_TOKENS': True,
-    'BLACKLIST_AFTER_ROTATION': True,
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=1),  # Short-lived access tokens
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),  # Longer refresh tokens
+    'ROTATE_REFRESH_TOKENS': True,  # Rotate refresh tokens on each use
+    'BLACKLIST_AFTER_ROTATION': True,  # Blacklist old refresh tokens
     'AUTH_HEADER_TYPES': ('Bearer',),
+    'UPDATE_LAST_LOGIN': True,  # Track last login time
+    'TOKEN_OBTAIN_SERIALIZER': 'rest_framework_simplejwt.serializers.TokenObtainPairSerializer',
+    'TOKEN_REFRESH_SERIALIZER': 'rest_framework_simplejwt.serializers.TokenRefreshSerializer',
 }
+
+# SECURITY: Maximum concurrent sessions per user (for future implementation)
+# Set to 0 to disable limit
+MAX_SESSIONS_PER_USER = int(os.environ.get('MAX_SESSIONS_PER_USER', 5))
 
 # --- API Documentation (drf-spectacular) ---
 # Only define if drf-spectacular is available
@@ -267,7 +332,12 @@ if SPECTACULAR_AVAILABLE:
         'AUTHENTICATION_WHITELIST': [
             'rest_framework_simplejwt.authentication.JWTAuthentication',
         ],
+        # SECURITY: Restrict API docs in production
+        'SERVE_PERMISSIONS': ['rest_framework.permissions.IsAdminUser'] if not DEBUG else ['rest_framework.permissions.AllowAny'],
     }
+
+# SECURITY: Control API docs visibility
+API_DOCS_ENABLED = os.environ.get('API_DOCS_ENABLED', 'True' if DEBUG else 'False').lower() == 'true'
 
 # --- Caching Configuration ---
 # Use local memory cache for development, Redis for production

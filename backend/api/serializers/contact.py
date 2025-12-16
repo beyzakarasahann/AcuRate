@@ -1,4 +1,6 @@
-"""CONTACT Serializers Module"""
+"""CONTACT Serializers Module
+SECURITY: Input sanitization for user-submitted content
+"""
 
 from rest_framework import serializers
 from django.contrib.auth import authenticate
@@ -11,6 +13,7 @@ from ..models import (
     ContactRequest, LearningOutcome, StudentLOAchievement,
     AssessmentLO, LOPO
 )
+from ..validators import sanitize_text_field, sanitize_html, validate_no_html
 
 
 # =============================================================================
@@ -37,7 +40,10 @@ class ContactRequestSerializer(serializers.ModelSerializer):
 
 
 class ContactRequestCreateSerializer(serializers.ModelSerializer):
-    """Serializer for creating contact requests (public endpoint)"""
+    """
+    Serializer for creating contact requests (public endpoint)
+    SECURITY: All text fields are sanitized to prevent XSS attacks
+    """
     
     class Meta:
         model = ContactRequest
@@ -51,13 +57,34 @@ class ContactRequestCreateSerializer(serializers.ModelSerializer):
         """Validate email format"""
         if not value:
             raise serializers.ValidationError("Email is required")
-        return value
+        # SECURITY: Sanitize email (escape HTML)
+        return sanitize_text_field(value, max_length=254, allow_newlines=False)
     
     def validate_institution_name(self, value):
         """Validate institution name"""
         if not value or len(value.strip()) < 2:
             raise serializers.ValidationError("Institution name must be at least 2 characters")
-        return value.strip()
+        # SECURITY: Sanitize to prevent XSS
+        return sanitize_text_field(value, max_length=255, allow_newlines=False)
+    
+    def validate_contact_name(self, value):
+        """SECURITY: Sanitize contact name"""
+        if value:
+            return sanitize_text_field(value, max_length=255, allow_newlines=False)
+        return value
+    
+    def validate_contact_phone(self, value):
+        """SECURITY: Sanitize phone number"""
+        if value:
+            return sanitize_text_field(value, max_length=20, allow_newlines=False)
+        return value
+    
+    def validate_message(self, value):
+        """SECURITY: Sanitize message content (allow newlines for multiline text)"""
+        if value:
+            # Remove dangerous HTML but allow plain text with newlines
+            return sanitize_html(value)
+        return value
 
 
 # =============================================================================

@@ -1,4 +1,6 @@
-"""USER Serializers Module"""
+"""USER Serializers Module
+SECURITY: Input sanitization for user-submitted content
+"""
 
 from rest_framework import serializers
 from django.contrib.auth import authenticate
@@ -12,6 +14,7 @@ from ..models import (
     ContactRequest, LearningOutcome, StudentLOAchievement,
     AssessmentLO, LOPO
 )
+from ..validators import sanitize_text_field
 
 
 # =============================================================================
@@ -49,7 +52,10 @@ class UserDetailSerializer(serializers.ModelSerializer):
 
 
 class UserCreateSerializer(serializers.ModelSerializer):
-    """Serializer for creating new users"""
+    """
+    Serializer for creating new users
+    SECURITY: All text fields are sanitized to prevent XSS attacks
+    """
     password = serializers.CharField(write_only=True, min_length=8)
     password_confirm = serializers.CharField(write_only=True)
     
@@ -60,6 +66,30 @@ class UserCreateSerializer(serializers.ModelSerializer):
             'first_name', 'last_name', 'role',
             'phone', 'student_id', 'department', 'year_of_study'
         ]
+    
+    def validate_first_name(self, value):
+        """SECURITY: Sanitize first name"""
+        if value:
+            return sanitize_text_field(value, max_length=150, allow_newlines=False)
+        return value
+    
+    def validate_last_name(self, value):
+        """SECURITY: Sanitize last name"""
+        if value:
+            return sanitize_text_field(value, max_length=150, allow_newlines=False)
+        return value
+    
+    def validate_department(self, value):
+        """SECURITY: Sanitize department name"""
+        if value:
+            return sanitize_text_field(value, max_length=100, allow_newlines=False)
+        return value
+    
+    def validate_phone(self, value):
+        """SECURITY: Sanitize phone number"""
+        if value:
+            return sanitize_text_field(value, max_length=20, allow_newlines=False)
+        return value
     
     def validate(self, data):
         if data['password'] != data['password_confirm']:
@@ -143,7 +173,7 @@ class TeacherCreateSerializer(serializers.ModelSerializer):
             logger = logging.getLogger(__name__)
             logger.warning(
                 f"SendGrid API key not configured. Email not sent to {user.email}. "
-                f"User created successfully. Username: {user.username}, Password: {temp_password}"
+                f"User created successfully. Username: {user.username}. Use password reset if needed."
             )
             email_error_message = "SendGrid API key not configured"
         else:
@@ -171,7 +201,7 @@ class TeacherCreateSerializer(serializers.ModelSerializer):
                 error_str = str(email_error)
                 logger.error(
                     f"Failed to send email to {user.email} for teacher account creation: {error_str}. "
-                    f"User was created successfully. Username: {user.username}, Password: {temp_password}",
+                    f"User was created successfully. Username: {user.username}. Use password reset if needed.",
                     exc_info=True
                 )
                 email_error_message = f"Email sending failed: {error_str}"
@@ -265,7 +295,7 @@ class StudentCreateSerializer(serializers.ModelSerializer):
             logger = logging.getLogger(__name__)
             logger.warning(
                 f"SendGrid API key not configured. Email not sent to {user.email}. "
-                f"User created successfully. Username: {user.username}, Password: {temp_password}"
+                f"User created successfully. Username: {user.username}. Use password reset if needed."
             )
             email_error_message = "SendGrid API key not configured"
         else:
@@ -295,7 +325,7 @@ class StudentCreateSerializer(serializers.ModelSerializer):
                 error_str = str(email_error)
                 logger.error(
                     f"Failed to send email to {user.email} for student account creation: {error_str}. "
-                    f"User was created successfully. Username: {user.username}, Password: {temp_password}",
+                    f"User was created successfully. Username: {user.username}. Use password reset if needed.",
                     exc_info=True
                 )
                 email_error_message = f"Email sending failed: {error_str}"
@@ -402,7 +432,7 @@ class InstitutionCreateSerializer(serializers.ModelSerializer):
             logger = logging.getLogger(__name__)
             logger.warning(
                 f"SendGrid API key not configured. Email not sent to {user.email}. "
-                f"User created successfully. Username: {user.username}, Password: {temp_password}"
+                f"User created successfully. Username: {user.username}. Use password reset if needed."
             )
             email_error_message = "SendGrid API key not configured"
         else:
@@ -459,7 +489,7 @@ class InstitutionCreateSerializer(serializers.ModelSerializer):
                     logger.error(
                         f"Failed to send email to {user.email} for institution account creation. "
                         f"Error type: {error_type}, Error: {error_str}. "
-                        f"User was created successfully. Username: {user.username}, Password: {temp_password}",
+                        f"User was created successfully. Username: {user.username}. Use password reset if needed.",
                         exc_info=True
                     )
                     email_error_message = f"Email sending failed ({error_type}): {error_str}"

@@ -22,6 +22,7 @@ from ..models import (
 )
 from ..utils import log_activity, get_institution_for_user
 from ..cache_utils import cache_response, invalidate_dashboard_cache
+from ..middleware import rate_limit
 from ..serializers import (
     UserSerializer, UserDetailSerializer, UserCreateSerializer, LoginSerializer,
     TeacherCreateSerializer, StudentCreateSerializer, InstitutionCreateSerializer,
@@ -48,6 +49,7 @@ from ..serializers import (
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@rate_limit(requests_per_minute=10, key_prefix='login')  # SECURITY: 10 login attempts/min per IP
 def login_view(request):
     """
     Login endpoint - Returns JWT tokens
@@ -55,9 +57,33 @@ def login_view(request):
     POST /api/auth/login/
     Body: {"username": "...", "password": "..."}
     """
+    # Brute-force protection: Check failed login attempts
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        ip = x_forwarded_for.split(',')[0]
+    else:
+        ip = request.META.get('REMOTE_ADDR', 'unknown')
+    
+    login_attempts_key = f'login_attempts:{ip}'
+    login_attempts = cache.get(login_attempts_key, 0)
+    
+    # Block if more than 5 failed attempts in last 15 minutes
+    if login_attempts >= 5:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Blocked login attempt from IP {ip} - too many failed attempts")
+        return Response({
+            'success': False,
+            'error': 'Too many failed login attempts. Please try again in 15 minutes.',
+            'errors': {'non_field_errors': ['Too many failed login attempts. Please try again in 15 minutes.']}
+        }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+    
     serializer = LoginSerializer(data=request.data)
     if serializer.is_valid():
         user = serializer.validated_data['user']
+        
+        # Clear failed login attempts on successful login
+        cache.delete(login_attempts_key)
         
         # Generate JWT tokens
         refresh = RefreshToken.for_user(user)
@@ -88,6 +114,9 @@ def login_view(request):
             'requires_password_change': requires_password_change
         })
     
+    # Increment failed login attempts (expires in 15 minutes = 900 seconds)
+    cache.set(login_attempts_key, login_attempts + 1, 900)
+    
     # Format errors for better frontend handling
     errors = serializer.errors
     error_message = None
@@ -109,6 +138,7 @@ def login_view(request):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@rate_limit(requests_per_minute=3, key_prefix='forgot_password')  # SECURITY: 3 reset requests/min per IP
 def forgot_password_view(request):
     """
     Forgot password endpoint - generates a temporary password and emails it to the user.
@@ -142,14 +172,14 @@ def forgot_password_view(request):
             }
         )
 
-    # Rate limiting: Check if password reset was requested recently (within 3 minutes)
+    # SECURITY: Rate limiting - prevent password reset spam (15 minutes cooldown)
     cache_key = f'password_reset_{user.id}_{user.email}'
     last_reset_time = cache.get(cache_key)
     
     if last_reset_time:
         # Calculate remaining time in seconds
         elapsed = (timezone.now() - last_reset_time).total_seconds()
-        remaining_seconds = 180 - elapsed  # 3 minutes = 180 seconds
+        remaining_seconds = 900 - elapsed  # 15 minutes = 900 seconds (increased from 3 min for security)
         
         if remaining_seconds > 0:
             remaining_minutes = int(remaining_seconds // 60)
@@ -210,8 +240,8 @@ def forgot_password_view(request):
             fail_silently=False,
         )
         
-        # Set cache to prevent spam (3 minutes = 180 seconds)
-        cache.set(cache_key, timezone.now(), 180)
+        # SECURITY: Set cache to prevent spam (15 minutes = 900 seconds)
+        cache.set(cache_key, timezone.now(), 900)
     except Exception as e:
         return Response(
             {
@@ -326,8 +356,8 @@ def forgot_username_view(request):
             fail_silently=False,
         )
         
-        # Set cache to prevent spam (3 minutes = 180 seconds)
-        cache.set(cache_key, timezone.now(), 180)
+        # SECURITY: Set cache to prevent spam (15 minutes = 900 seconds)
+        cache.set(cache_key, timezone.now(), 900)
     except Exception as e:
         return Response(
             {
@@ -412,13 +442,9 @@ def create_teacher_view(request):
             else:
                 response_data["email_warning"] = "Email could not be sent"
             
-            if temp_password:
-                # Include credentials in response if email failed
-                response_data["credentials"] = {
-                    "username": teacher.username,
-                    "password": temp_password,
-                    "email": teacher.email
-                }
+            # SECURITY: Never return passwords in API response
+            # Admin should check server logs or use password reset
+            response_data["action_required"] = "Please use the password reset feature or check server logs for temporary credentials"
         
         if email_error:
             response_data["email_error"] = email_error
@@ -490,14 +516,9 @@ def create_student_view(request):
             else:
                 response_data["email_warning"] = "Email could not be sent"
             
-            if temp_password:
-                # Include credentials in response if email failed
-                response_data["credentials"] = {
-                    "username": student.username,
-                    "password": temp_password,
-                    "email": student.email,
-                    "student_id": student.student_id
-                }
+            # SECURITY: Never return passwords in API response
+            # Admin should check server logs or use password reset
+            response_data["action_required"] = "Please use the password reset feature or check server logs for temporary credentials"
         
         if email_error:
             response_data["email_error"] = email_error
