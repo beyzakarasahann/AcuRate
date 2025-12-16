@@ -19,35 +19,56 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from django.http import JsonResponse
-from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
+
+# Try to import drf_spectacular views (optional dependency)
+try:
+    from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
+    SPECTACULAR_AVAILABLE = True
+except ImportError:
+    SPECTACULAR_AVAILABLE = False
 
 def root_view(request):
     """Root endpoint to verify backend is running"""
+    endpoints = {
+        'admin': '/admin/',
+        'api': '/api/',
+    }
+    
+    # Add API docs endpoints only if drf-spectacular is available
+    if SPECTACULAR_AVAILABLE and getattr(settings, 'API_DOCS_ENABLED', False):
+        endpoints.update({
+            'api_docs': '/api/docs/',
+            'api_redoc': '/api/redoc/',
+            'api_schema': '/api/schema/',
+        })
+    
     return JsonResponse({
         'success': True,
         'message': 'AcuRate Backend API is running!',
         'version': '1.0.0',
-        'endpoints': {
-            'api_docs': '/api/docs/',
-            'api_redoc': '/api/redoc/',
-            'api_schema': '/api/schema/',
-            'admin': '/admin/',
-            'api': '/api/',
-        }
+        'endpoints': endpoints,
     })
 
 urlpatterns = [
     path('', root_view, name='root'),
     path('admin/', admin.site.urls),
     path('api/', include('api.urls')),
-    
-    # API Documentation
-    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
-    path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
-    path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
 ]
 
-# Serve media files in development
+# API Documentation (only if drf-spectacular is available and enabled)
+if SPECTACULAR_AVAILABLE and getattr(settings, 'API_DOCS_ENABLED', False):
+    urlpatterns += [
+        path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+        path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+        path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
+    ]
+
+# Serve media and static files in development
 if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+    # Only serve media files if MEDIA_ROOT is set
+    if hasattr(settings, 'MEDIA_ROOT') and settings.MEDIA_ROOT:
+        urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    
+    # Only serve static files if STATIC_ROOT is set
+    if hasattr(settings, 'STATIC_ROOT') and settings.STATIC_ROOT:
+        urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

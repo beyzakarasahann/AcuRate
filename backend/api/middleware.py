@@ -76,11 +76,24 @@ def rate_limit(requests_per_minute=10, key_prefix='rl'):
 
 class RateLimitMiddleware(MiddlewareMixin):
     """
-    Simple rate limiting middleware
-    Limits requests per IP address
+    Enhanced rate limiting middleware
+    Limits requests per IP address or user
+    Only active when RATELIMIT_ENABLE is True (production mode)
+    SECURITY: Includes user-based rate limiting for authenticated users
     """
     
+    def get_client_ip(self, request):
+        """Get client IP address, handling X-Forwarded-For header"""
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            return x_forwarded_for.split(',')[0].strip()
+        return request.META.get('REMOTE_ADDR', 'unknown')
+    
     def process_request(self, request):
+        # Skip rate limiting if disabled in settings
+        if not getattr(settings, 'RATELIMIT_ENABLE', False):
+            return None
+        
         # Skip rate limiting in DEBUG mode
         if settings.DEBUG:
             return None
@@ -89,19 +102,32 @@ class RateLimitMiddleware(MiddlewareMixin):
         if request.path.startswith('/admin/') or request.path.startswith('/static/'):
             return None
         
-        # Get client IP
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(',')[0]
+        # Get identifier (user ID if authenticated, IP if not)
+        if request.user.is_authenticated:
+            identifier = f"user:{request.user.id}"
+            limit = 200  # Higher limit for authenticated users
         else:
-            ip = request.META.get('REMOTE_ADDR')
+            identifier = f"ip:{self.get_client_ip(request)}"
+            limit = 100  # Lower limit for anonymous users
         
-        # Rate limit: 100 requests per minute per IP
-        cache_key = f'ratelimit:{ip}'
+        cache_key = f'ratelimit:{identifier}'
         requests = cache.get(cache_key, 0)
         
-        if requests >= 100:
-            logger.warning(f"Rate limit exceeded for IP: {ip}")
+        if requests >= limit:
+            # SECURITY: Log rate limit exceeded event
+            try:
+                from .utils import log_security_event
+                log_security_event(
+                    event_type='rate_limit_exceeded',
+                    user=request.user if request.user.is_authenticated else None,
+                    ip_address=self.get_client_ip(request),
+                    details={'limit': limit, 'requests': requests, 'identifier': identifier},
+                    severity='WARNING'
+                )
+            except Exception:
+                pass  # Don't fail if logging fails
+            
+            logger.warning(f"Rate limit exceeded: {identifier} ({requests}/{limit} requests/min)")
             return JsonResponse(
                 {
                     'success': False,
@@ -109,6 +135,7 @@ class RateLimitMiddleware(MiddlewareMixin):
                         'type': 'RateLimitExceeded',
                         'message': 'Too many requests. Please try again later.',
                         'code': 429,
+                        'retry_after': 60,
                     }
                 },
                 status=429

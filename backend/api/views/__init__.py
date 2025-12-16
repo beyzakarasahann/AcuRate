@@ -9,6 +9,7 @@ from .auth import (
     logout_view,
     register_view,
     forgot_password_view,
+    reset_password_with_token,
     forgot_username_view,
     current_user_view,
     create_teacher_view,
@@ -30,7 +31,6 @@ from .super_admin import (
     create_institution,
     delete_institution,
     reset_institution_password,
-    _get_time_ago,
 )
 
 # Analytics views
@@ -63,6 +63,13 @@ from .file_upload import (
     upload_file,
 )
 
+# Health check views
+from .health import (
+    health_check,
+    readiness_check,
+    liveness_check,
+)
+
 # ViewSets
 from .viewsets import (
     UserViewSet,
@@ -86,6 +93,7 @@ __all__ = [
     'logout_view',
     'register_view',
     'forgot_password_view',
+    'reset_password_with_token',
     'forgot_username_view',
     'current_user_view',
     'create_teacher_view',
@@ -99,7 +107,7 @@ __all__ = [
     'super_admin_activity_logs',
     'create_institution',
     'delete_institution',
-    '_get_time_ago',
+    'reset_institution_password',
     # Analytics
     'course_analytics_overview',
     'course_analytics_detail',

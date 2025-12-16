@@ -1,5 +1,6 @@
 """COURSE Models Module"""
 
+from decimal import Decimal
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.core.exceptions import ValidationError
@@ -87,6 +88,11 @@ class Course(models.Model):
         unique_together = ['code', 'academic_year']
         verbose_name = 'Course'
         verbose_name_plural = 'Courses'
+        indexes = [
+            models.Index(fields=['code', 'academic_year']),
+            models.Index(fields=['teacher', 'academic_year']),
+            models.Index(fields=['department', 'academic_year']),
+        ]
     
     def __str__(self):
         return f"{self.code}: {self.name} ({self.academic_year})"
@@ -120,7 +126,7 @@ class CoursePO(models.Model):
         max_digits=5,
         decimal_places=2,
         default=1.00,
-        validators=[MinValueValidator(0.1), MaxValueValidator(10.0)],
+        validators=[MinValueValidator(Decimal('0.1')), MaxValueValidator(Decimal('10.0'))],
         help_text="Weight/importance of this PO in the course (default: 1.0)"
     )
     
@@ -177,7 +183,7 @@ class Enrollment(models.Model):
         decimal_places=2,
         blank=True,
         null=True,
-        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        validators=[MinValueValidator(Decimal('0')), MaxValueValidator(Decimal('100'))],
         help_text="Final grade for the course (0-100)"
     )
     
@@ -190,6 +196,12 @@ class Enrollment(models.Model):
         ordering = ['-enrolled_at']
         verbose_name = 'Enrollment'
         verbose_name_plural = 'Enrollments'
+        indexes = [
+            models.Index(fields=['student', 'is_active']),
+            models.Index(fields=['course', 'is_active']),
+            models.Index(fields=['student', 'course']),
+            models.Index(fields=['enrolled_at']),
+        ]
     
     def __str__(self):
         return f"{self.student.username} enrolled in {self.course.code}"

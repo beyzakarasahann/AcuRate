@@ -852,10 +852,29 @@ export default function ScoresPage() {
     } else if (nodeId.startsWith('lo-')) {
       const lo = courseData?.los.find(l => l.id === nodeId);
       if (lo) {
+        // Find which assessments contribute to this LO
+        const contributingAssessments = courseData?.assessments.filter(a => 
+          Object.keys(a.weights || {}).includes(lo.id)
+        ).map(assessment => {
+          const weight = assessment.weights[lo.id] || 0;
+          return {
+            label: assessment.label,
+            score: `${Number(assessment.score || 0).toFixed(1)}/${Number(assessment.maxScore || 100).toFixed(0)}`,
+            percentage: `${Number(assessment.percentage || 0).toFixed(1)}%`,
+            weight: `${(weight * 100).toFixed(0)}%`,
+          };
+        }) || [];
+
         tooltipContent = {
           type: 'lo',
           title: lo.label,
+          fullTitle: lo.title || '',
+          description: lo.description || '',
           score: `${Number(lo.score || 0).toFixed(1)}%`,
+          target: lo.target || 70,
+          targetMet: Number(lo.score || 0) >= (lo.target || 70),
+          difference: Number(lo.score || 0) - (lo.target || 70),
+          contributingAssessments,
           contributions: Object.entries(lo.poWeights || {}).map(([poId, weight]) => ({
             target: courseData?.pos.find(po => po.id === poId)?.label || poId,
             weight: `${(weight * 100).toFixed(0)}%`,
@@ -865,10 +884,29 @@ export default function ScoresPage() {
     } else if (nodeId.startsWith('po-')) {
       const po = courseData?.pos.find(p => p.id === nodeId);
       if (po) {
+        // Find which LOs contribute to this PO
+        const contributingLOs = courseData?.los.filter(lo => 
+          Object.keys(lo.poWeights || {}).includes(po.id)
+        ).map(lo => {
+          const weight = lo.poWeights[po.id] || 0;
+          return {
+            label: lo.label,
+            title: lo.title || '',
+            score: `${Number(lo.score || 0).toFixed(1)}%`,
+            weight: `${(weight * 100).toFixed(0)}%`,
+          };
+        }) || [];
+
         tooltipContent = {
           type: 'po',
           title: po.label,
+          fullTitle: po.title || '',
+          description: po.description || '',
           score: `${Number(po.score || 0).toFixed(1)}%`,
+          target: po.target || 70,
+          targetMet: Number(po.score || 0) >= (po.target || 70),
+          difference: Number(po.score || 0) - (po.target || 70),
+          contributingLOs,
         };
       }
     }
@@ -1015,26 +1053,133 @@ export default function ScoresPage() {
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            className={`${isDark ? 'bg-gray-900/95 border border-gray-700' : 'bg-white/95 border border-gray-200'} rounded-lg shadow-xl p-4 max-w-xs backdrop-blur-sm`}
+            className={`${isDark ? 'bg-gray-900/95 border border-gray-700' : 'bg-white/95 border border-gray-200'} rounded-lg shadow-xl p-4 max-w-sm backdrop-blur-sm`}
           >
-            <div className="space-y-2">
-              <h4 className={`font-bold text-sm ${text} flex items-center gap-2`}>
-                {tooltipData.type === 'assessment' && <FileText className="w-4 h-4 text-blue-500" />}
-                {tooltipData.type === 'lo' && <Target className="w-4 h-4 text-purple-500" />}
-                {tooltipData.type === 'po' && <Award className="w-4 h-4 text-green-500" />}
-                {tooltipData.title}
-              </h4>
-              {tooltipData.score && (
-                <p className={`text-xs ${mutedText}`}>
-                  Score: <span className={`font-semibold ${text}`}>{tooltipData.score}</span>
-                  {tooltipData.percentage && (
-                    <span className={`ml-2 ${text}`}>({tooltipData.percentage})</span>
+            <div className="space-y-3">
+              {/* Header */}
+              <div className="flex items-center gap-2 pb-2 border-b border-gray-500/20">
+                {tooltipData.type === 'assessment' && <FileText className="w-5 h-5 text-blue-500" />}
+                {tooltipData.type === 'lo' && <Target className="w-5 h-5 text-purple-500" />}
+                {tooltipData.type === 'po' && <Award className="w-5 h-5 text-green-500" />}
+                <div className="flex-1">
+                  <h4 className={`font-bold text-sm ${text}`}>{tooltipData.title}</h4>
+                  {tooltipData.fullTitle && (
+                    <p className={`text-xs ${mutedText} mt-0.5`}>{tooltipData.fullTitle}</p>
                   )}
+                </div>
+              </div>
+
+              {/* Description */}
+              {tooltipData.description && (
+                <p className={`text-xs ${mutedText} line-clamp-2`}>
+                  {tooltipData.description}
                 </p>
               )}
+
+              {/* Score and Target Info */}
+              <div className="space-y-2">
+                {tooltipData.score && (
+                  <div className="flex items-center justify-between">
+                    <span className={`text-xs ${mutedText}`}>Current Score:</span>
+                    <span className={`text-sm font-bold ${
+                      tooltipData.type === 'assessment' ? 'text-blue-500' :
+                      tooltipData.type === 'lo' ? 'text-purple-500' :
+                      'text-green-500'
+                    }`}>
+                      {tooltipData.score}
+                      {tooltipData.percentage && ` (${tooltipData.percentage})`}
+                    </span>
+                  </div>
+                )}
+
+                {tooltipData.target !== undefined && (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className={`text-xs ${mutedText}`}>Target:</span>
+                      <span className={`text-xs font-semibold ${text}`}>
+                        {tooltipData.target}%
+                      </span>
+                    </div>
+                    {tooltipData.difference !== undefined && (
+                      <div className="flex items-center justify-between">
+                        <span className={`text-xs ${mutedText}`}>Difference:</span>
+                        <span className={`text-xs font-semibold ${
+                          tooltipData.targetMet
+                            ? (isDark ? 'text-green-400' : 'text-green-600')
+                            : (isDark ? 'text-red-400' : 'text-red-600')
+                        }`}>
+                          {tooltipData.targetMet ? '+' : ''}{tooltipData.difference.toFixed(1)}%
+                        </span>
+                      </div>
+                    )}
+                    {tooltipData.score && tooltipData.target && (
+                      <div className="pt-1">
+                        <div className={`w-full ${isDark ? 'bg-gray-700' : 'bg-gray-200'} rounded-full h-1.5 overflow-hidden`}>
+                          <div
+                            className={`h-1.5 rounded-full ${
+                              tooltipData.type === 'lo' ? 'bg-purple-500' : 'bg-green-500'
+                            }`}
+                            style={{ width: `${Math.min((parseFloat(tooltipData.score) / tooltipData.target) * 100, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Contributing Assessments (for LO) */}
+              {tooltipData.contributingAssessments && tooltipData.contributingAssessments.length > 0 && (
+                <div className="pt-2 border-t border-gray-500/20">
+                  <p className={`text-xs font-semibold ${mutedText} mb-2`}>
+                    Contributing Assessments:
+                  </p>
+                  <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                    {tooltipData.contributingAssessments.map((contrib: any, idx: number) => (
+                      <div key={idx} className={`text-xs p-2 rounded ${isDark ? 'bg-gray-800/50' : 'bg-gray-50'}`}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className={`font-medium ${text}`}>{contrib.label}</span>
+                          <span className={`font-semibold ${text}`}>{contrib.weight}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-xs">
+                          <span className={mutedText}>{contrib.score}</span>
+                          <span className={mutedText}>{contrib.percentage}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Contributing LOs (for PO) */}
+              {tooltipData.contributingLOs && tooltipData.contributingLOs.length > 0 && (
+                <div className="pt-2 border-t border-gray-500/20">
+                  <p className={`text-xs font-semibold ${mutedText} mb-2`}>
+                    Contributing Learning Outcomes:
+                  </p>
+                  <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                    {tooltipData.contributingLOs.map((contrib: any, idx: number) => (
+                      <div key={idx} className={`text-xs p-2 rounded ${isDark ? 'bg-gray-800/50' : 'bg-gray-50'}`}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className={`font-medium ${text}`}>{contrib.label}</span>
+                          <span className={`font-semibold text-purple-500`}>{contrib.weight}</span>
+                        </div>
+                        {contrib.title && (
+                          <p className={`text-xs ${mutedText} mb-1 line-clamp-1`}>{contrib.title}</p>
+                        )}
+                        <span className={`text-xs ${mutedText}`}>Score: {contrib.score}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Contributions to POs (for LO) */}
               {tooltipData.contributions && tooltipData.contributions.length > 0 && (
-                <div className="mt-2 pt-2 border-t border-gray-500/20">
-                  <p className={`text-xs font-semibold ${mutedText} mb-1`}>Contributions:</p>
+                <div className="pt-2 border-t border-gray-500/20">
+                  <p className={`text-xs font-semibold ${mutedText} mb-1`}>
+                    Contributes to Program Outcomes:
+                  </p>
                   <div className="space-y-1">
                     {tooltipData.contributions.map((contrib: any, idx: number) => (
                       <div key={idx} className="flex justify-between text-xs">

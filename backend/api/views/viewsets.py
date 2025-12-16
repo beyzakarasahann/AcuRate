@@ -1,4 +1,7 @@
-"""VIEWSETS Module - All ModelViewSet classes"""
+"""VIEWSETS Module - All ModelViewSet classes
+
+All database write operations use transactions to ensure data consistency.
+"""
 
 from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action, api_view, permission_classes
@@ -8,6 +11,7 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from django.db.models import Q, Avg, Count, F, Min, Max, StdDev
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.core.mail import send_mail
@@ -67,7 +71,9 @@ class UserViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Filter users based on role and permissions"""
         user = self.request.user
-        queryset = User.objects.all()
+        # Optimize: select_related for foreign keys, prefetch_related for reverse relations
+        # Note: 'department' is a CharField, not a ForeignKey, so it cannot be used in select_related
+        queryset = User.objects.select_related('created_by').all()
         
         # CRITICAL: ALWAYS exclude super admin from ANY role filter
         # Super admin is NOT a student, teacher, or institution - it's a separate role
@@ -135,10 +141,10 @@ class UserViewSet(viewsets.ModelViewSet):
                 'error': 'New passwords do not match'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        if len(new_password) < 8:
+        if len(new_password) < 10:
             return Response({
                 'success': False,
-                'error': 'New password must be at least 8 characters long'
+                'error': 'New password must be at least 10 characters long'
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # Only check old password if user doesn't have temporary password
@@ -150,16 +156,41 @@ class UserViewSet(viewsets.ModelViewSet):
                 }, status=status.HTTP_400_BAD_REQUEST)
             
             if not user.check_password(old_password):
+                from ..utils import log_security_event, get_client_ip
+                log_security_event(
+                    event_type='failed_password_change',
+                    user=user,
+                    ip_address=get_client_ip(request),
+                    details={'reason': 'incorrect_old_password'},
+                    severity='WARNING'
+                )
                 return Response({
                     'success': False,
                     'error': 'Current password is incorrect'
                 }, status=status.HTTP_400_BAD_REQUEST)
         
-        user.set_password(new_password)
-        # If the user had a temporary password, mark it as no longer temporary
-        if hasattr(user, "is_temporary_password"):
-            user.is_temporary_password = False
-        user.save()
+        # SECURITY: Check password history (prevent reuse of last 5 passwords)
+        if user.check_password_history(new_password):
+            return Response({
+                'success': False,
+                'error': 'You cannot reuse a recently used password. Please choose a different password.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        with transaction.atomic():
+            user.set_password(new_password)
+            # If the user had a temporary password, mark it as no longer temporary
+            if hasattr(user, "is_temporary_password"):
+                user.is_temporary_password = False
+            user.save()
+        
+        # SECURITY: Log password change
+        from ..utils import log_security_event, get_client_ip
+        log_security_event(
+            event_type='password_changed',
+            user=user,
+            ip_address=get_client_ip(request),
+            severity='INFO'
+        )
         
         return Response({
             'success': True,
@@ -281,24 +312,27 @@ class DepartmentViewSet(viewsets.ModelViewSet):
                 return [IsAdminUser()]  # This will deny access
         return [IsAuthenticated()]
     
+    @transaction.atomic
     def create(self, request, *args, **kwargs):
-        """Only INSTITUTION can create departments"""
+        """Only INSTITUTION can create departments. Uses transaction for atomicity."""
         if not hasattr(request.user, 'role') or (request.user.role != User.Role.INSTITUTION and not request.user.is_staff):
             return Response({
                 'error': 'Only institution administrators can create departments'
             }, status=status.HTTP_403_FORBIDDEN)
         return super().create(request, *args, **kwargs)
     
+    @transaction.atomic
     def update(self, request, *args, **kwargs):
-        """Only INSTITUTION can update departments"""
+        """Only INSTITUTION can update departments. Uses transaction for atomicity."""
         if not hasattr(request.user, 'role') or (request.user.role != User.Role.INSTITUTION and not request.user.is_staff):
             return Response({
                 'error': 'Only institution administrators can update departments'
             }, status=status.HTTP_403_FORBIDDEN)
         return super().update(request, *args, **kwargs)
     
+    @transaction.atomic
     def destroy(self, request, *args, **kwargs):
-        """Only INSTITUTION can delete departments"""
+        """Only INSTITUTION can delete departments. Uses transaction for atomicity."""
         if not hasattr(request.user, 'role') or (request.user.role != User.Role.INSTITUTION and not request.user.is_staff):
             return Response({
                 'error': 'Only institution administrators can delete departments'
@@ -420,6 +454,8 @@ class CourseViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Filter courses based on user role"""
         user = self.request.user
+        # Optimize: select_related for teacher to avoid N+1 queries
+        # Note: 'department' is a CharField, not a ForeignKey, so it cannot be used in select_related
         queryset = Course.objects.select_related('teacher')
         
         # Filter by teacher
@@ -551,7 +587,9 @@ class EnrollmentViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Filter enrollments based on user role"""
         user = self.request.user
-        queryset = Enrollment.objects.select_related('student', 'course')
+        # Optimize: select_related for all foreign keys to avoid N+1 queries
+        # Note: 'department' fields are CharFields, not ForeignKeys, so they cannot be used in select_related
+        queryset = Enrollment.objects.select_related('student', 'course', 'course__teacher')
         
         # CRITICAL: ALWAYS exclude super admin from enrollments
         # Super admin is NOT a student and should NEVER appear in enrollments
@@ -647,7 +685,9 @@ class AssessmentViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Filter assessments based on user role"""
         user = self.request.user
-        queryset = Assessment.objects.select_related('course')
+        # Optimize: select_related for course and course__teacher to avoid N+1 queries
+        # Note: 'department' is a CharField, not a ForeignKey, so it cannot be used in select_related
+        queryset = Assessment.objects.select_related('course', 'course__teacher')
         
         # Teachers see only their course assessments
         if user.role == User.Role.TEACHER:
@@ -678,7 +718,8 @@ class AssessmentViewSet(viewsets.ModelViewSet):
     def grades(self, request, pk=None):
         """Get all grades for this assessment"""
         assessment = self.get_object()
-        grades = StudentGrade.objects.filter(assessment=assessment)
+        # Optimize: select_related for foreign keys
+        grades = StudentGrade.objects.select_related('student', 'assessment').filter(assessment=assessment)
         serializer = StudentGradeSerializer(grades, many=True)
         return Response(serializer.data)
 
@@ -705,7 +746,12 @@ class StudentGradeViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Filter grades based on user role"""
         user = self.request.user
-        queryset = StudentGrade.objects.select_related('student', 'assessment')
+        # Optimize: select_related for all foreign keys to avoid N+1 queries
+        # Note: 'department' fields are CharFields, not ForeignKeys, so they cannot be used in select_related
+        queryset = StudentGrade.objects.select_related(
+            'student',
+            'assessment', 'assessment__course', 'assessment__course__teacher'
+        )
         
         # Students see only their grades
         if user.role == User.Role.STUDENT:
@@ -726,8 +772,9 @@ class StudentGradeViewSet(viewsets.ModelViewSet):
         
         return queryset
     
+    @transaction.atomic
     def create(self, request, *args, **kwargs):  # type: ignore[override]
-        """Override create to log activity"""
+        """Override create to log activity. Uses transaction for atomicity."""
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
@@ -748,53 +795,9 @@ class StudentGradeViewSet(viewsets.ModelViewSet):
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
     
+    @transaction.atomic
     def update(self, request, *args, **kwargs):  # type: ignore[override]
-        """Override update to log activity"""
-        partial = kwargs.pop('partial', False)
-        instance = self.get_object()
-        serializer = self.get_serializer(instance, data=request.data, partial=partial)
-        serializer.is_valid(raise_exception=True)
-        self.perform_update(serializer)
-        
-        # Log grade update
-        institution = get_institution_for_user(request.user) or get_institution_for_user(instance.student) or get_institution_for_user(instance.assessment.course.teacher)
-        log_activity(
-            action_type=ActivityLog.ActionType.GRADE_UPDATED,
-            user=request.user,
-            institution=institution,
-            department=instance.student.department or instance.assessment.course.department,
-            description=f"Grade updated: {instance.score}/{instance.assessment.max_score} for {instance.assessment.title}",
-            related_object_type='StudentGrade',
-            related_object_id=instance.id,
-            metadata={'assessment_id': instance.assessment.id, 'course_code': instance.assessment.course.code}
-        )
-        
-        return Response(serializer.data)
-    
-    def create(self, request, *args, **kwargs):
-        """Override create to log activity"""
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        instance = serializer.save()
-        
-        # Log grade assignment
-        institution = get_institution_for_user(request.user) or get_institution_for_user(instance.student) or get_institution_for_user(instance.assessment.course.teacher)
-        log_activity(
-            action_type=ActivityLog.ActionType.GRADE_ASSIGNED,
-            user=request.user,
-            institution=institution,
-            department=instance.student.department or instance.assessment.course.department,
-            description=f"Grade assigned: {instance.score}/{instance.assessment.max_score} for {instance.assessment.title}",
-            related_object_type='StudentGrade',
-            related_object_id=instance.id,
-            metadata={'assessment_id': instance.assessment.id, 'course_code': instance.assessment.course.code}
-        )
-        
-        headers = self.get_success_headers(serializer.data)
-        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
-    
-    def update(self, request, *args, **kwargs):
-        """Override update to log activity"""
+        """Override update to log activity. Uses transaction for atomicity."""
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
         serializer = self.get_serializer(instance, data=request.data, partial=partial)

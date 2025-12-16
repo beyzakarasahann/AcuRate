@@ -2,13 +2,20 @@
 AcuRate - Signal Handlers
 
 Automatic calculation of PO/LO achievements when grades are added/updated/deleted.
+All signal handlers use database transactions to ensure data consistency.
 """
 
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from django.db.models import Avg, Count, Q
+from django.db import transaction
 from decimal import Decimal
 from django.core.cache import cache
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .models import User, ProgramOutcome, LearningOutcome
+
 from .models import (
     StudentGrade, StudentPOAchievement, StudentLOAchievement,
     Assessment, ProgramOutcome, LearningOutcome, Enrollment,
@@ -17,9 +24,11 @@ from .models import (
 from .cache_utils import invalidate_dashboard_cache, invalidate_user_cache
 
 
-def calculate_po_achievement(student, program_outcome):
+@transaction.atomic
+def calculate_po_achievement(student: 'User', program_outcome: 'ProgramOutcome') -> None:
     """
     Calculate and update PO achievement for a student.
+    Uses database transaction to ensure atomicity.
     
     Slayttaki mantık: LO'lar → PO'lar
     Algorithm:
@@ -89,9 +98,12 @@ def calculate_po_achievement(student, program_outcome):
     )
 
 
-def calculate_po_achievement_fallback(student, program_outcome):
+@transaction.atomic
+def calculate_po_achievement_fallback(student: 'User', program_outcome: 'ProgramOutcome') -> None:
     """
     Fallback method: When no LO-PO mappings exist.
+    Uses database transaction to ensure atomicity.
+    
     NOTE: The old related_pos field on Assessment has been removed.
     This fallback now just sets achievement to 0 since the proper way
     is through LO -> PO mappings.
@@ -109,9 +121,11 @@ def calculate_po_achievement_fallback(student, program_outcome):
     )
 
 
-def calculate_lo_achievement(student, learning_outcome):
+@transaction.atomic
+def calculate_lo_achievement(student: 'User', learning_outcome: 'LearningOutcome') -> None:
     """
     Calculate and update LO achievement for a student.
+    Uses database transaction to ensure atomicity.
     
     Algorithm:
     1. Find all assessments related to this LO in the LO's course
@@ -228,143 +242,141 @@ def calculate_lo_achievement(student, learning_outcome):
 
 
 @receiver(post_save, sender=StudentGrade)
-def update_achievements_on_grade_save(sender, instance, created, **kwargs):
+def update_achievements_on_grade_save(sender, instance: StudentGrade, created: bool, **kwargs) -> None:
     """
     Update PO and LO achievements when a grade is saved.
+    Uses database transaction to ensure all calculations are atomic.
     LO'lar önce hesaplanır (assessment'lerden), sonra PO'lar (LO'lardan).
     """
-    student = instance.student
-    assessment = instance.assessment
-    
-    # Update LO achievements first (LOs are calculated from assessments)
-    for lo in assessment.related_los.all():
-        calculate_lo_achievement(student, lo)
-    
-    # Then update PO achievements (POs are calculated from LOs)
-    # Get all POs that are related to LOs affected by this assessment
-    affected_los = assessment.related_los.all()
-    affected_pos = set()
-    for lo in affected_los:
-        # Get POs via LOPO mappings
-        pos_from_lo = ProgramOutcome.objects.filter(lo_pos__learning_outcome=lo).distinct()
-        affected_pos.update(pos_from_lo)
-    
-    # Update all affected POs
-    for po in affected_pos:
-        calculate_po_achievement(student, po)
-    
-    # Invalidate cache for this student
-    invalidate_user_cache(student.id)
-    invalidate_dashboard_cache(user_id=student.id)
+    with transaction.atomic():
+        student = instance.student
+        assessment = instance.assessment
+        
+        # Update LO achievements first (LOs are calculated from assessments)
+        for lo in assessment.related_los.all():
+            calculate_lo_achievement(student, lo)
+        
+        # Then update PO achievements (POs are calculated from LOs)
+        # Get all POs that are related to LOs affected by this assessment
+        affected_los = assessment.related_los.all()
+        affected_pos = set()
+        for lo in affected_los:
+            # Get POs via LOPO mappings
+            pos_from_lo = ProgramOutcome.objects.filter(lo_pos__learning_outcome=lo).distinct()
+            affected_pos.update(pos_from_lo)
+        
+        # Update all affected POs
+        for po in affected_pos:
+            calculate_po_achievement(student, po)
+        
+        # Invalidate cache for this student (outside transaction)
+        invalidate_user_cache(student.id)
+        invalidate_dashboard_cache(user_id=student.id)
 
 
 @receiver(post_delete, sender=StudentGrade)
-def update_achievements_on_grade_delete(sender, instance, **kwargs):
+def update_achievements_on_grade_delete(sender, instance: StudentGrade, **kwargs) -> None:
     """
     Update PO and LO achievements when a grade is deleted.
+    Uses database transaction to ensure all calculations are atomic.
     LO'lar önce hesaplanır, sonra PO'lar.
     """
-    student = instance.student
-    assessment = instance.assessment
-    
-    # Update LO achievements first
-    for lo in assessment.related_los.all():
-        calculate_lo_achievement(student, lo)
-    
-    # Then update PO achievements (from LOs)
-    affected_los = assessment.related_los.all()
-    affected_pos = set()
-    for lo in affected_los:
-        pos_from_lo = ProgramOutcome.objects.filter(lo_pos__learning_outcome=lo).distinct()
-        affected_pos.update(pos_from_lo)
-    
-    for po in affected_pos:
-        calculate_po_achievement(student, po)
-    
-    # Invalidate cache for this student
-    invalidate_user_cache(student.id)
-    invalidate_dashboard_cache(user_id=student.id)
-    
-    # Invalidate cache for this student
-    invalidate_user_cache(student.id)
-    invalidate_dashboard_cache(user_id=student.id)
+    with transaction.atomic():
+        student = instance.student
+        assessment = instance.assessment
+        
+        # Update LO achievements first
+        for lo in assessment.related_los.all():
+            calculate_lo_achievement(student, lo)
+        
+        # Then update PO achievements (from LOs)
+        affected_los = assessment.related_los.all()
+        affected_pos = set()
+        for lo in affected_los:
+            pos_from_lo = ProgramOutcome.objects.filter(lo_pos__learning_outcome=lo).distinct()
+            affected_pos.update(pos_from_lo)
+        
+        for po in affected_pos:
+            calculate_po_achievement(student, po)
+        
+        # Invalidate cache for this student (outside transaction)
+        invalidate_user_cache(student.id)
+        invalidate_dashboard_cache(user_id=student.id)
 
 
 @receiver(post_save, sender=Assessment)
-def update_achievements_on_assessment_change(sender, instance, created, **kwargs):
+def update_achievements_on_assessment_change(sender, instance: Assessment, created: bool, **kwargs) -> None:
     """
     Update achievements when an assessment is created or updated
     (e.g., when related_los change).
+    Uses database transaction to ensure all calculations are atomic.
     """
     if not instance.is_active:
         return
     
-    # Get all students enrolled in this course
-    enrollments = Enrollment.objects.filter(
-        course=instance.course,
-        is_active=True
-    )
-    
-    students = [enrollment.student for enrollment in enrollments]
-    
-    # Update LO achievements first (from assessments)
-    for lo in instance.related_los.all():
-        for student in students:
-            calculate_lo_achievement(student, lo)
-    
-    # Then update PO achievements (from LOs)
-    affected_pos = set()
-    for lo in instance.related_los.all():
-        pos_from_lo = ProgramOutcome.objects.filter(lo_pos__learning_outcome=lo).distinct()
-        affected_pos.update(pos_from_lo)
-    
-    for po in affected_pos:
-        for student in students:
-            calculate_po_achievement(student, po)
-            # Invalidate cache for affected students
-            invalidate_user_cache(student.id)
-            invalidate_dashboard_cache(user_id=student.id)
-            # Invalidate cache for affected students
-            invalidate_user_cache(student.id)
-            invalidate_dashboard_cache(user_id=student.id)
+    with transaction.atomic():
+        # Get all students enrolled in this course
+        enrollments = Enrollment.objects.filter(
+            course=instance.course,
+            is_active=True
+        ).select_related('student')
+        
+        students = [enrollment.student for enrollment in enrollments]
+        
+        # Update LO achievements first (from assessments)
+        for lo in instance.related_los.all():
+            for student in students:
+                calculate_lo_achievement(student, lo)
+        
+        # Then update PO achievements (from LOs)
+        affected_pos = set()
+        for lo in instance.related_los.all():
+            pos_from_lo = ProgramOutcome.objects.filter(lo_pos__learning_outcome=lo).distinct()
+            affected_pos.update(pos_from_lo)
+        
+        for po in affected_pos:
+            for student in students:
+                calculate_po_achievement(student, po)
+        
+        # Invalidate cache for affected students (outside transaction)
+        student_ids = {student.id for student in students}
+        for student_id in student_ids:
+            invalidate_user_cache(student_id)
+            invalidate_dashboard_cache(user_id=student_id)
 
 
 @receiver(post_save, sender=Enrollment)
-def update_achievements_on_enrollment(sender, instance, created, **kwargs):
+def update_achievements_on_enrollment(sender, instance: Enrollment, created: bool, **kwargs) -> None:
     """
     Update achievements when a student enrolls in a course.
+    Uses database transaction to ensure all calculations are atomic.
     """
     if not instance.is_active:
         return
     
-    student = instance.student
-    course = instance.course
-    
-    # Get all assessments for this course
-    assessments = Assessment.objects.filter(
-        course=course,
-        is_active=True
-    )
-    
-    # Update LO achievements first (from assessments)
-    learning_outcomes = LearningOutcome.objects.filter(
-        course=course,
-        is_active=True
-    )
-    for lo in learning_outcomes:
-        calculate_lo_achievement(student, lo)
-    
-    # Then update PO achievements (from LOs)
-    # Get all POs related to LOs in this course
-    affected_pos = set()
-    for lo in learning_outcomes:
-        pos_from_lo = ProgramOutcome.objects.filter(lo_pos__learning_outcome=lo).distinct()
-        affected_pos.update(pos_from_lo)
-    
-    for po in affected_pos:
-        calculate_po_achievement(student, po)
-    
-    # Invalidate cache for this student
-    invalidate_user_cache(student.id)
-    invalidate_dashboard_cache(user_id=student.id)
+    with transaction.atomic():
+        student = instance.student
+        course = instance.course
+        
+        # Update LO achievements first (from assessments)
+        learning_outcomes = LearningOutcome.objects.filter(
+            course=course,
+            is_active=True
+        )
+        for lo in learning_outcomes:
+            calculate_lo_achievement(student, lo)
+        
+        # Then update PO achievements (from LOs)
+        # Get all POs related to LOs in this course
+        affected_pos = set()
+        for lo in learning_outcomes:
+            pos_from_lo = ProgramOutcome.objects.filter(lo_pos__learning_outcome=lo).distinct()
+            affected_pos.update(pos_from_lo)
+        
+        for po in affected_pos:
+            calculate_po_achievement(student, po)
+        
+        # Invalidate cache for this student (outside transaction)
+        invalidate_user_cache(student.id)
+        invalidate_dashboard_cache(user_id=student.id)
 

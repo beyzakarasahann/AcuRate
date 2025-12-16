@@ -8,7 +8,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 
 from .views import (
     # Auth views
-    login_view, logout_view, current_user_view, register_view, create_teacher_view, create_student_view, forgot_password_view, forgot_username_view,
+    login_view, logout_view, current_user_view, register_view, create_teacher_view, create_student_view, forgot_password_view, forgot_username_view, reset_password_with_token,
     # Dashboard views
     student_dashboard, teacher_dashboard, institution_dashboard,
     # Super Admin views
@@ -29,6 +29,7 @@ from .views import (
 )
 from .views.file_upload import upload_profile_picture, upload_file
 from .views.bulk_operations import bulk_import_students, bulk_export_grades, bulk_import_grades
+from .views.health import health_check, readiness_check, liveness_check
 
 # Create router for ViewSets
 router = DefaultRouter()
@@ -49,11 +50,17 @@ router.register(r'lo-pos', LOPOViewSet, basename='lopo')
 app_name = 'api'
 
 urlpatterns = [
+    # Health check endpoints (public, no authentication required)
+    path('health/', health_check, name='health'),
+    path('health/ready/', readiness_check, name='readiness'),
+    path('health/live/', liveness_check, name='liveness'),
+    
     # Authentication endpoints
     path('auth/login/', login_view, name='login'),
     path('auth/logout/', logout_view, name='logout'),
     path('auth/register/', register_view, name='register'),
     path('auth/forgot-password/', forgot_password_view, name='forgot-password'),
+    path('auth/reset-password/', reset_password_with_token, name='reset-password'),
     path('auth/forgot-username/', forgot_username_view, name='forgot-username'),
     path('auth/me/', current_user_view, name='current-user'),
     path('auth/token/refresh/', TokenRefreshView.as_view(), name='token-refresh'),
