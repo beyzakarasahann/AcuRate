@@ -23,6 +23,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Load environment variables from backend/.env
 load_dotenv(BASE_DIR / '.env')
 
+# Quick-start development settings - unsuitable for production
+# See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
+
+# SECURITY WARNING: don't run with debug turned on in production!
+# Default to True for development, set DJANGO_DEBUG=False in production
+DEBUG = os.environ.get('DJANGO_DEBUG', 'True').lower() == 'true'
+
 # Optional: disable SSL verification for SendGrid in dev if explicitly requested
 # SECURITY WARNING: This should NEVER be enabled in production
 if os.environ.get("SENDGRID_SKIP_SSL_VERIFY", "").lower() == "true":
@@ -36,14 +43,6 @@ if os.environ.get("SENDGRID_SKIP_SSL_VERIFY", "").lower() == "true":
             "vulnerable to MITM (Man-in-the-Middle) attacks.",
             UserWarning
         )
-
-
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
-
-# SECURITY WARNING: don't run with debug turned on in production!
-# Default to True for development, set DJANGO_DEBUG=False in production
-DEBUG = os.environ.get('DJANGO_DEBUG', 'True').lower() == 'true'
 
 # SECURITY WARNING: keep the secret key used in production secret!
 # In production, SECRET_KEY must be set via environment variable
