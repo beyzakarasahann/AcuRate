@@ -656,9 +656,19 @@ class ApiClient {
           if (typeof error.message === 'string') {
             cleanMessage = error.message;
           } else if (typeof error.message === 'object') {
-            // Try to stringify the message object
+            // Try to extract meaningful error from object
             try {
-              cleanMessage = JSON.stringify(error.message);
+              // Check if it's a structured error object
+              if ('message' in error.message && typeof error.message.message === 'string') {
+                cleanMessage = error.message.message;
+              } else if ('error' in error.message && typeof error.message.error === 'string') {
+                cleanMessage = error.message.error;
+              } else if ('detail' in error.message && typeof error.message.detail === 'string') {
+                cleanMessage = error.message.detail;
+              } else {
+                // Try to stringify the message object
+                cleanMessage = JSON.stringify(error.message);
+              }
             } catch {
               cleanMessage = String(error.message);
             }
@@ -670,7 +680,16 @@ class ApiClient {
         } else if (error && typeof error === 'object') {
           // Try to extract error message from object
           try {
-            cleanMessage = JSON.stringify(error);
+            // Check for common error object structures
+            if ('message' in error && typeof error.message === 'string') {
+              cleanMessage = error.message;
+            } else if ('error' in error && typeof error.error === 'string') {
+              cleanMessage = error.error;
+            } else if ('detail' in error && typeof error.detail === 'string') {
+              cleanMessage = error.detail;
+            } else {
+              cleanMessage = JSON.stringify(error);
+            }
           } catch {
             cleanMessage = 'An unknown error occurred';
           }
@@ -693,16 +712,26 @@ class ApiClient {
         
         // Don't log authentication/permission errors for super admin endpoints (they might be permission issues)
         if (!isAuthError) {
+          // Ensure cleanMessage is a string before logging
+          let logMessage = cleanMessage;
+          if (typeof cleanMessage !== 'string') {
+            try {
+              logMessage = JSON.stringify(cleanMessage);
+            } catch {
+              logMessage = String(cleanMessage);
+            }
+          }
+          
           if (isSuperAdminEndpoint) {
             // For super admin endpoints, only log if it's not a permission/auth issue
-            if (!cleanMessage.toLowerCase().includes('permission') && 
-                !cleanMessage.toLowerCase().includes('authentication') &&
-                !cleanMessage.toLowerCase().includes('unauthorized') &&
-                !cleanMessage.toLowerCase().includes('401')) {
-              console.error('API Error:', cleanMessage);
+            if (!logMessage.toLowerCase().includes('permission') && 
+                !logMessage.toLowerCase().includes('authentication') &&
+                !logMessage.toLowerCase().includes('unauthorized') &&
+                !logMessage.toLowerCase().includes('401')) {
+              console.error('API Error:', logMessage);
             }
           } else {
-            console.error('API Error:', cleanMessage);
+            console.error('API Error:', logMessage);
           }
         }
         

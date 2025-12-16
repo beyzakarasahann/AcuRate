@@ -4,7 +4,7 @@ This package contains all database models organized by functionality.
 """
 
 # User models
-from .user import User
+from .user import User, PasswordResetToken, PasswordHistory
 
 # Department models
 from .department import Department
@@ -30,6 +30,8 @@ from .misc import ContactRequest, ActivityLog
 __all__ = [
     # User
     'User',
+    'PasswordResetToken',
+    'PasswordHistory',
     # Department
     'Department',
     # Outcomes

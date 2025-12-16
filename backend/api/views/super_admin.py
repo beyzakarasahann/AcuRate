@@ -1,4 +1,7 @@
-"""SUPER ADMIN Views Module"""
+"""SUPER ADMIN Views Module
+
+All critical admin operations use transactions to ensure data consistency.
+"""
 
 import os
 import logging
@@ -7,23 +10,19 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 from rest_framework.exceptions import PermissionDenied
-from rest_framework_simplejwt.tokens import RefreshToken
-from django.contrib.auth import authenticate
 from django.db.models import Q, Avg, Count, F, Min, Max, StdDev
-from django.shortcuts import get_object_or_404
+from django.db import transaction
 from django.utils import timezone
 from django.core.mail import send_mail
-from django.core.cache import cache
 from django.conf import settings
 
 from ..models import (
-    User, Department, ProgramOutcome, Course, CoursePO,
+    User, Department, ProgramOutcome, Course,
     Enrollment, Assessment, StudentGrade, StudentPOAchievement,
     ContactRequest, LearningOutcome, StudentLOAchievement, ActivityLog,
     AssessmentLO, LOPO
 )
 from ..utils import log_activity, get_institution_for_user
-from ..cache_utils import cache_response, invalidate_dashboard_cache
 from ..serializers import (
     UserSerializer, UserDetailSerializer, UserCreateSerializer, LoginSerializer,
     TeacherCreateSerializer, InstitutionCreateSerializer,
@@ -381,7 +380,8 @@ def create_institution(request):
     serializer = InstitutionCreateSerializer(data=request.data)
     if serializer.is_valid():
         try:
-            institution = serializer.save()
+            with transaction.atomic():
+                institution = serializer.save()
             
             # Check email sending status
             email_sent = getattr(institution, '_email_sent', False)
@@ -510,55 +510,57 @@ def delete_institution(request, institution_id):
             student_count = students.count()
             student_usernames = list(students.values_list('username', flat=True))
         
-        # Log deletion of related users before deleting
-        for teacher in teachers:
+        # Perform all deletions in a single transaction
+        with transaction.atomic():
+            # Log deletion of related users before deleting
+            for teacher in teachers:
+                log_activity(
+                    action_type=ActivityLog.ActionType.USER_DELETED,
+                    user=user,
+                    institution=None,
+                    department=teacher.department,
+                    description=f"Teacher account deleted (institution deletion): {teacher.get_full_name() or teacher.username}",
+                    related_object_type='User',
+                    related_object_id=teacher.id,
+                    metadata={'role': 'TEACHER', 'deleted_by': user.username, 'institution': institution_username}
+                )
+            
+            for student in students:
+                log_activity(
+                    action_type=ActivityLog.ActionType.USER_DELETED,
+                    user=user,
+                    institution=None,
+                    department=student.department,
+                    description=f"Student account deleted (institution deletion): {student.get_full_name() or student.username}",
+                    related_object_type='User',
+                    related_object_id=student.id,
+                    metadata={'role': 'STUDENT', 'deleted_by': user.username, 'institution': institution_username}
+                )
+            
+            # Delete all related users
+            teachers.delete()
+            students.delete()
+            
+            # Log institution deletion
             log_activity(
                 action_type=ActivityLog.ActionType.USER_DELETED,
                 user=user,
                 institution=None,
-                department=teacher.department,
-                description=f"Teacher account deleted (institution deletion): {teacher.get_full_name() or teacher.username}",
+                department=institution.department,
+                description=f"Institution admin account deleted: {institution_username} (along with {teacher_count} teachers and {student_count} students)",
                 related_object_type='User',
-                related_object_id=teacher.id,
-                metadata={'role': 'TEACHER', 'deleted_by': user.username, 'institution': institution_username}
+                related_object_id=institution.id,
+                metadata={
+                    'role': 'INSTITUTION', 
+                    'deleted_by': user.username, 
+                    'email': institution_email,
+                    'teachers_deleted': teacher_count,
+                    'students_deleted': student_count
+                }
             )
-        
-        for student in students:
-            log_activity(
-                action_type=ActivityLog.ActionType.USER_DELETED,
-                user=user,
-                institution=None,
-                department=student.department,
-                description=f"Student account deleted (institution deletion): {student.get_full_name() or student.username}",
-                related_object_type='User',
-                related_object_id=student.id,
-                metadata={'role': 'STUDENT', 'deleted_by': user.username, 'institution': institution_username}
-            )
-        
-        # Delete all related users
-        teachers.delete()
-        students.delete()
-        
-        # Log institution deletion
-        log_activity(
-            action_type=ActivityLog.ActionType.USER_DELETED,
-            user=user,
-            institution=None,
-            department=institution.department,
-            description=f"Institution admin account deleted: {institution_username} (along with {teacher_count} teachers and {student_count} students)",
-            related_object_type='User',
-            related_object_id=institution.id,
-            metadata={
-                'role': 'INSTITUTION', 
-                'deleted_by': user.username, 
-                'email': institution_email,
-                'teachers_deleted': teacher_count,
-                'students_deleted': student_count
-            }
-        )
-        
-        # Delete the institution
-        institution.delete()
+            
+            # Delete the institution
+            institution.delete()
         
         return Response({
             'success': True,
@@ -800,10 +802,11 @@ def reset_institution_password(request, institution_id):
         temp_password = generate_temp_password()
         
         # Set temporary password and mark user as needing password change
-        institution.set_password(temp_password)
-        if hasattr(institution, "is_temporary_password"):
-            institution.is_temporary_password = True
-        institution.save()
+        with transaction.atomic():
+            institution.set_password(temp_password)
+            if hasattr(institution, "is_temporary_password"):
+                institution.is_temporary_password = True
+            institution.save()
         
         # Build email
         full_name = (institution.get_full_name() or "").strip()

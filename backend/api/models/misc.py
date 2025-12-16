@@ -102,6 +102,11 @@ class ContactRequest(models.Model):
         ordering = ['-created_at']
         verbose_name = 'Contact Request'
         verbose_name_plural = 'Contact Requests'
+        indexes = [
+            models.Index(fields=['status', 'created_at']),
+            models.Index(fields=['institution_type']),
+            models.Index(fields=['request_type']),
+        ]
     
     def __str__(self):
         return f"{self.institution_name} - {self.contact_name} ({self.get_request_type_display()})"
@@ -207,6 +212,8 @@ class ActivityLog(models.Model):
             models.Index(fields=['action_type']),
             models.Index(fields=['institution']),
             models.Index(fields=['department']),
+            models.Index(fields=['user', 'created_at']),
+            models.Index(fields=['related_object_type', 'related_object_id']),
         ]
         verbose_name = 'Activity Log'
         verbose_name_plural = 'Activity Logs'

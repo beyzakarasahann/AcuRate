@@ -1,5 +1,6 @@
 """LEARNING OUTCOME Models Module"""
 
+from decimal import Decimal
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.core.exceptions import ValidationError
@@ -45,7 +46,7 @@ class LearningOutcome(models.Model):
         max_digits=5,
         decimal_places=2,
         default=70.00,
-        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        validators=[MinValueValidator(Decimal('0')), MaxValueValidator(Decimal('100'))],
         help_text="Target achievement percentage (default: 70%)"
     )
     
@@ -104,7 +105,7 @@ class LOPO(models.Model):
         max_digits=5,
         decimal_places=2,
         default=1.00,
-        validators=[MinValueValidator(0.01), MaxValueValidator(10.0)],
+        validators=[MinValueValidator(Decimal('0.01')), MaxValueValidator(Decimal('10.0'))],
         help_text="Weight/contribution of this LO to the PO (0.01-10.0 scale, where 1.0 = 10%, 10.0 = 100%)"
     )
     

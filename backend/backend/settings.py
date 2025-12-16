@@ -92,6 +92,22 @@ if not DEBUG:
     # CSRF cookie settings
     CSRF_COOKIE_HTTPONLY = True
     CSRF_COOKIE_SAMESITE = 'Lax'
+    
+    # CSRF trusted origins (required for production)
+    csrf_trusted_origins = os.environ.get('CSRF_TRUSTED_ORIGINS', '')
+    if csrf_trusted_origins:
+        CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in csrf_trusted_origins.split(',') if origin.strip()]
+    elif CORS_ALLOWED_ORIGINS:
+        # Use CORS origins as CSRF trusted origins if not explicitly set
+        CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS
+else:
+    # Development: Allow localhost for CSRF
+    CSRF_TRUSTED_ORIGINS = [
+        'http://localhost:3000',
+        'http://localhost:3003',
+        'http://127.0.0.1:3000',
+        'http://127.0.0.1:3003',
+    ]
 
 
 # Application definition
@@ -124,6 +140,7 @@ if SPECTACULAR_AVAILABLE:
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'django.middleware.gzip.GZipMiddleware',  # Response compression
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -181,6 +198,12 @@ DATABASES = {
         'PASSWORD': os.environ.get('POSTGRES_PASSWORD', 'acurate_pass_2024'),
         'HOST': POSTGRES_HOST,
         'PORT': os.environ.get('POSTGRES_PORT', '5432'),
+        'OPTIONS': {
+            'connect_timeout': 10,
+            'options': '-c statement_timeout=30000',  # 30 seconds query timeout
+        },
+        # Connection pooling for production
+        'CONN_MAX_AGE': 600 if not DEBUG else 0,  # 10 minutes in production, 0 in dev
     }
 }
 
@@ -248,7 +271,17 @@ AUTH_USER_MODEL = 'api.User'
 EMAIL_BACKEND = 'sendgrid_backend.SendgridBackend'
 SENDGRID_API_KEY = os.environ.get('SENDGRID_API_KEY', '')
 SENDGRID_SANDBOX_MODE_IN_DEBUG = False
-DEFAULT_FROM_EMAIL = 'beyza.karasahan@live.acibadem.edu.tr'
+# DEFAULT_FROM_EMAIL should be set via environment variable in production
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'beyza.karasahan@live.acibadem.edu.tr')
+
+# Email validation
+if not DEBUG and not DEFAULT_FROM_EMAIL:
+    import warnings
+    warnings.warn(
+        "⚠️  PRODUCTION WARNING: DEFAULT_FROM_EMAIL is not set! "
+        "Set DEFAULT_FROM_EMAIL environment variable for email functionality.",
+        UserWarning
+    )
 
 # --- CORS Ayarları ---
 # Development origins
@@ -341,7 +374,7 @@ API_DOCS_ENABLED = os.environ.get('API_DOCS_ENABLED', 'True' if DEBUG else 'Fals
 
 # --- Caching Configuration ---
 # Use local memory cache for development, Redis for production
-CACHE_BACKEND = os.environ.get('CACHE_BACKEND', 'local')  # 'local' or 'redis'
+CACHE_BACKEND = os.environ.get('CACHE_BACKEND', 'local' if DEBUG else 'redis')
 
 if CACHE_BACKEND == 'redis':
     # Redis cache for production
@@ -351,6 +384,12 @@ if CACHE_BACKEND == 'redis':
             'LOCATION': os.environ.get('REDIS_URL', 'redis://127.0.0.1:6379/1'),
             'OPTIONS': {
                 'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+                'CONNECTION_POOL_KWARGS': {
+                    'max_connections': 50,
+                    'retry_on_timeout': True,
+                },
+                'COMPRESSOR': 'django_redis.compressors.zlib.ZlibCompressor',
+                'IGNORE_EXCEPTIONS': True,  # Don't crash if cache fails
             },
             'KEY_PREFIX': 'acurate',
             'TIMEOUT': 300,  # Default timeout: 5 minutes
@@ -375,6 +414,8 @@ CACHE_TIMEOUT_SHORT = 60  # 1 minute - for frequently changing data
 CACHE_TIMEOUT_MEDIUM = 300  # 5 minutes - default
 CACHE_TIMEOUT_LONG = 3600  # 1 hour - for relatively static data
 CACHE_TIMEOUT_ANALYTICS = 600  # 10 minutes - for analytics/dashboard data
+CACHE_TIMEOUT_DASHBOARD = 600  # 10 minutes - for dashboard data
+CACHE_TIMEOUT_STATIC_DATA = 3600  # 1 hour - for static data (departments, etc.)
 
 # --- Rate Limiting ---
 RATELIMIT_ENABLE = not DEBUG  # Enable in production
@@ -387,6 +428,53 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 # --- Static Files ---
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# --- Celery Configuration (Optional - for background tasks) ---
+try:
+    import celery
+    CELERY_AVAILABLE = True
+except ImportError:
+    CELERY_AVAILABLE = False
+
+if CELERY_AVAILABLE:
+    CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://127.0.0.1:6379/0')
+    CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', 'redis://127.0.0.1:6379/0')
+    CELERY_ACCEPT_CONTENT = ['json']
+    CELERY_TASK_SERIALIZER = 'json'
+    CELERY_RESULT_SERIALIZER = 'json'
+    CELERY_TIMEZONE = 'UTC'
+    CELERY_TASK_TRACK_STARTED = True
+    CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
+    CELERY_TASK_SOFT_TIME_LIMIT = 25 * 60  # 25 minutes
+    CELERY_TASK_ALWAYS_EAGER = DEBUG  # Run tasks synchronously in DEBUG mode
+    CELERY_TASK_EAGER_PROPAGATES = True
+
+# --- Sentry Integration (Optional - for error tracking) ---
+if not DEBUG:
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.django import DjangoIntegration
+        from sentry_sdk.integrations.celery import CeleryIntegration
+        
+        SENTRY_DSN = os.environ.get('SENTRY_DSN')
+        if SENTRY_DSN:
+            sentry_sdk.init(
+                dsn=SENTRY_DSN,
+                integrations=[
+                    DjangoIntegration(
+                        transaction_style='url',
+                        middleware_spans=True,
+                        signals_spans=True,
+                    ),
+                    CeleryIntegration(),
+                ],
+                traces_sample_rate=float(os.environ.get('SENTRY_TRACES_SAMPLE_RATE', '0.1')),  # 10% of transactions
+                send_default_pii=False,  # Don't send PII
+                environment=os.environ.get('ENVIRONMENT', 'production'),
+                release=os.environ.get('APP_VERSION', '1.0.0'),
+            )
+    except ImportError:
+        pass  # Sentry not installed
 
 # --- Logging Configuration ---
 # Check if python-json-logger is available
@@ -415,7 +503,7 @@ if JSON_LOGGER_AVAILABLE:
 handlers = {
     'console': {
         'class': 'logging.StreamHandler',
-        'formatter': 'verbose',
+        'formatter': 'json' if JSON_LOGGER_AVAILABLE else 'verbose',
     },
 }
 
@@ -423,16 +511,17 @@ handlers = {
 logs_dir = BASE_DIR / 'logs'
 os.makedirs(logs_dir, exist_ok=True)
 
-# Add file handler - use json formatter if available, otherwise verbose
+# Add file handler with rotation
 file_formatter = 'json' if JSON_LOGGER_AVAILABLE else 'verbose'
 handlers['file'] = {
-    'class': 'logging.FileHandler',
+    'class': 'logging.handlers.RotatingFileHandler',
     'filename': BASE_DIR / 'logs' / 'acurate.log',
+    'maxBytes': 10 * 1024 * 1024,  # 10MB
+    'backupCount': 5,
     'formatter': file_formatter,
 }
 
 # Determine which handlers to use
-# Use file handler only if logs directory exists and is writable
 log_handlers = ['console', 'file']
 loggers_handlers = ['console', 'file']
 
@@ -442,7 +531,7 @@ LOGGING = {
     'formatters': formatters,
     'handlers': handlers,
     'root': {
-        'handlers': ['console'],
+        'handlers': log_handlers,
         'level': 'INFO',
     },
     'loggers': {
@@ -454,6 +543,11 @@ LOGGING = {
         'api': {
             'handlers': loggers_handlers,
             'level': 'DEBUG' if DEBUG else 'INFO',
+            'propagate': False,
+        },
+        'celery': {
+            'handlers': loggers_handlers,
+            'level': 'INFO',
             'propagate': False,
         },
     },

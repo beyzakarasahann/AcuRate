@@ -49,3 +49,16 @@ python-json-logger==2.0.7
 # Redis Cache (Optional - for production caching)
 django-redis==5.4.0
 
+# Background Tasks (Optional - for async operations)
+celery==5.3.4
+celery[redis]==5.3.4
+
+# Error Tracking (Optional - for production monitoring)
+sentry-sdk==2.15.0
+
+# Production Server
+gunicorn==23.0.0
+
+# Static Files (Optional - for production static file serving)
+whitenoise==6.8.2
+

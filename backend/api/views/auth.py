@@ -1,13 +1,18 @@
-"""AUTH Views Module"""
+"""AUTH Views Module
+
+All user creation and update operations use transactions to ensure data consistency.
+"""
 
 from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 from rest_framework.exceptions import PermissionDenied
+from ..permissions import IsInstitutionAdmin
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from django.db.models import Q, Avg, Count, F, Min, Max, StdDev
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.core.mail import send_mail
@@ -18,9 +23,9 @@ from ..models import (
     User, Department, ProgramOutcome, Course, CoursePO,
     Enrollment, Assessment, StudentGrade, StudentPOAchievement,
     ContactRequest, LearningOutcome, StudentLOAchievement, ActivityLog,
-    AssessmentLO, LOPO
+    AssessmentLO, LOPO, PasswordResetToken
 )
-from ..utils import log_activity, get_institution_for_user
+from ..utils import log_activity, get_institution_for_user, log_security_event, get_client_ip
 from ..cache_utils import cache_response, invalidate_dashboard_cache
 from ..middleware import rate_limit
 from ..serializers import (
@@ -198,21 +203,14 @@ def forgot_password_view(request):
                 status=status.HTTP_429_TOO_MANY_REQUESTS,
             )
 
-    # Generate temporary password and set it
-    temp_password = generate_temp_password()
-    # Ensure password is clean (no whitespace issues)
-    temp_password = temp_password.strip()
-    user.set_password(temp_password)
-    if hasattr(user, "is_temporary_password"):
-        user.is_temporary_password = True
-    user.save()
+    # SECURITY: Create password reset token instead of plain text password
+    ip_address = get_client_ip(request)
+    reset_token = PasswordResetToken.create_token(user, ip_address=ip_address)
     
-    # Verify password was set correctly (for debugging)
-    if not user.check_password(temp_password):
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.error(f"Password verification failed for user {user.username} after setting temporary password")
-
+    # Build reset link (frontend URL should be in settings)
+    frontend_url = getattr(settings, 'FRONTEND_URL', 'https://acurate.com')
+    reset_link = f"{frontend_url}/reset-password?token={reset_token.token}"
+    
     # Build email
     full_name = (user.get_full_name() or "").strip()
     if full_name:
@@ -224,16 +222,16 @@ def forgot_password_view(request):
         greeting_line
         + "You requested to reset your AcuRate account password.\n\n"
         + f"Username: {user.username}\n"
-        + f"Email address: {user.email}\n"
-        + f"Temporary password: {temp_password}\n\n"
-        + "Please log in using your EMAIL ADDRESS or USERNAME and this temporary password.\n"
-        + "After logging in, change your password immediately from your profile settings.\n\n"
-        + "If you did not request this, please contact your administrator."
+        + f"Email address: {user.email}\n\n"
+        + f"Click the link below to reset your password:\n{reset_link}\n\n"
+        + "This link will expire in 15 minutes.\n"
+        + "If you did not request this, please ignore this email or contact your administrator.\n\n"
+        + "For security reasons, do not share this link with anyone."
     )
 
     try:
         send_mail(
-            subject="AcuRate - Temporary Password",
+            subject="AcuRate - Password Reset",
             message=message,
             from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
             recipient_list=[user.email],
@@ -242,7 +240,18 @@ def forgot_password_view(request):
         
         # SECURITY: Set cache to prevent spam (15 minutes = 900 seconds)
         cache.set(cache_key, timezone.now(), 900)
+        
+        # SECURITY: Log password reset request
+        log_security_event(
+            event_type='password_reset_requested',
+            user=user,
+            ip_address=ip_address,
+            details={'token_id': reset_token.id},
+            severity='INFO'
+        )
     except Exception as e:
+        # Delete token if email failed
+        reset_token.delete()
         return Response(
             {
                 'success': False,
@@ -266,8 +275,143 @@ def forgot_password_view(request):
     return Response(
         {
             'success': True,
-            'message': 'If an account with this username/email exists, a temporary password has been sent.'
+            'message': 'If an account with this username/email exists, a password reset link has been sent to your email.'
         }
+    )
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@rate_limit(requests_per_minute=5, key_prefix='reset_password')  # SECURITY: 5 attempts/min per IP
+def reset_password_with_token(request):
+    """
+    Reset password using token from email link.
+    
+    POST /api/auth/reset-password/
+    Body: {"token": "...", "password": "...", "password_confirm": "..."}
+    """
+    token = request.data.get('token')
+    new_password = request.data.get('password')
+    password_confirm = request.data.get('password_confirm')
+    
+    if not token:
+        return Response(
+            {
+                'success': False,
+                'error': 'Token is required'
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    
+    if not new_password:
+        return Response(
+            {
+                'success': False,
+                'error': 'Password is required'
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    
+    if new_password != password_confirm:
+        return Response(
+            {
+                'success': False,
+                'error': 'Passwords do not match'
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    
+    # Validate password length
+    if len(new_password) < 10:
+        return Response(
+            {
+                'success': False,
+                'error': 'Password must be at least 10 characters long'
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    
+    # Find token
+    reset_token = PasswordResetToken.objects.filter(
+        token=token,
+        used=False
+    ).first()
+    
+    if not reset_token:
+        log_security_event(
+            event_type='invalid_token',
+            user=None,
+            ip_address=get_client_ip(request),
+            details={'token_prefix': token[:8] if token else None},
+            severity='WARNING'
+        )
+        return Response(
+            {
+                'success': False,
+                'error': 'Invalid or expired token'
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    
+    if not reset_token.is_valid():
+        reset_token.mark_as_used()  # Mark as used to prevent reuse
+        return Response(
+            {
+                'success': False,
+                'error': 'Token has expired. Please request a new password reset.'
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    
+    user = reset_token.user
+    ip_address = get_client_ip(request)
+    
+    # SECURITY: Check password history (prevent reuse of last 5 passwords)
+    if user.check_password_history(new_password):
+        return Response(
+            {
+                'success': False,
+                'error': 'You cannot reuse a recently used password. Please choose a different password.'
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    
+    # Set new password
+    with transaction.atomic():
+        user.set_password(new_password)
+        user.is_temporary_password = False
+        user.save()
+        
+        # Mark token as used
+        reset_token.mark_as_used()
+    
+    # SECURITY: Log password reset completion
+    log_security_event(
+        event_type='password_reset_completed',
+        user=user,
+        ip_address=ip_address,
+        details={'token_id': reset_token.id},
+        severity='INFO'
+    )
+    
+    # Log activity
+    institution = get_institution_for_user(user)
+    log_activity(
+        action_type=ActivityLog.ActionType.PASSWORD_RESET,
+        user=user,
+        institution=institution,
+        department=user.department,
+        description=f"{user.get_full_name() or user.username} reset their password",
+        related_object_type='User',
+        related_object_id=user.id
+    )
+    
+    return Response(
+        {
+            'success': True,
+            'message': 'Password has been reset successfully. You can now log in with your new password.'
+        },
+        status=status.HTTP_200_OK
     )
 
 
@@ -388,24 +532,20 @@ def forgot_username_view(request):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsInstitutionAdmin])
 def create_teacher_view(request):
     """
     Admin/Institution creates a teacher with a backend-generated temporary password.
 
     POST /api/teachers/
     Body: { "email", "first_name", "last_name", "department" }
+    SECURITY: Uses IsInstitutionAdmin permission class for consistent authorization
     """
-    user = request.user
-    if not hasattr(user, 'role') or (user.role != User.Role.INSTITUTION and not user.is_staff):
-        return Response(
-            {"detail": "Only institution admins can create teachers."},
-            status=status.HTTP_403_FORBIDDEN,
-        )
 
     serializer = TeacherCreateSerializer(data=request.data, context={"request": request})
     if serializer.is_valid():
-        teacher = serializer.save()
+        with transaction.atomic():
+            teacher = serializer.save()
         
         # Check email sending status
         email_sent = getattr(teacher, '_email_sent', False)
@@ -461,24 +601,20 @@ def create_teacher_view(request):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsInstitutionAdmin])
 def create_student_view(request):
     """
     Admin/Institution creates a student with a backend-generated temporary password.
 
     POST /api/students/
     Body: { "email", "first_name", "last_name", "department", "student_id", "year_of_study" }
+    SECURITY: Uses IsInstitutionAdmin permission class for consistent authorization
     """
-    user = request.user
-    if not hasattr(user, 'role') or (user.role != User.Role.INSTITUTION and not user.is_staff):
-        return Response(
-            {"detail": "Only institution admins can create students."},
-            status=status.HTTP_403_FORBIDDEN,
-        )
 
     serializer = StudentCreateSerializer(data=request.data, context={"request": request})
     if serializer.is_valid():
-        student = serializer.save()
+        with transaction.atomic():
+            student = serializer.save()
         
         # Check email sending status
         email_sent = getattr(student, '_email_sent', False)
@@ -585,7 +721,8 @@ def register_view(request):
     """
     serializer = UserCreateSerializer(data=request.data)
     if serializer.is_valid():
-        user = serializer.save()
+        with transaction.atomic():
+            user = serializer.save()
         
         # Generate JWT tokens
         refresh = RefreshToken.for_user(user)

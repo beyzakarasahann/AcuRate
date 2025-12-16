@@ -1,5 +1,6 @@
 """ACHIEVEMENT Models Module"""
 
+from decimal import Decimal
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
@@ -36,7 +37,7 @@ class StudentPOAchievement(models.Model):
     current_percentage = models.DecimalField(
         max_digits=5,
         decimal_places=2,
-        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        validators=[MinValueValidator(Decimal('0')), MaxValueValidator(Decimal('100'))],
         help_text="Current achievement percentage"
     )
     
@@ -64,6 +65,12 @@ class StudentPOAchievement(models.Model):
         ordering = ['student', 'program_outcome']
         verbose_name = 'Student PO Achievement'
         verbose_name_plural = 'Student PO Achievements'
+        indexes = [
+            models.Index(fields=['student', 'program_outcome']),
+            models.Index(fields=['student', 'current_percentage']),
+            models.Index(fields=['program_outcome', 'current_percentage']),
+            models.Index(fields=['last_calculated']),
+        ]
     
     def __str__(self):
         return f"{self.student.username} - {self.program_outcome.code}: {self.current_percentage}%"
@@ -114,7 +121,7 @@ class StudentLOAchievement(models.Model):
     current_percentage = models.DecimalField(
         max_digits=5,
         decimal_places=2,
-        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        validators=[MinValueValidator(Decimal('0')), MaxValueValidator(Decimal('100'))],
         help_text="Current achievement percentage"
     )
     
@@ -142,6 +149,12 @@ class StudentLOAchievement(models.Model):
         ordering = ['student', 'learning_outcome']
         verbose_name = 'Student LO Achievement'
         verbose_name_plural = 'Student LO Achievements'
+        indexes = [
+            models.Index(fields=['student', 'learning_outcome']),
+            models.Index(fields=['student', 'current_percentage']),
+            models.Index(fields=['learning_outcome', 'current_percentage']),
+            models.Index(fields=['last_calculated']),
+        ]
     
     def __str__(self):
         return f"{self.student.username} - {self.learning_outcome.code}: {self.current_percentage}%"

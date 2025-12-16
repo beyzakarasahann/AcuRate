@@ -1,5 +1,6 @@
 """ASSESSMENT Models Module"""
 
+from decimal import Decimal
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.core.exceptions import ValidationError
@@ -51,7 +52,7 @@ class Assessment(models.Model):
     weight = models.DecimalField(
         max_digits=5,
         decimal_places=2,
-        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        validators=[MinValueValidator(Decimal('0')), MaxValueValidator(Decimal('100'))],
         help_text="Weight in final grade (%)"
     )
     
@@ -59,7 +60,7 @@ class Assessment(models.Model):
         max_digits=6,
         decimal_places=2,
         default=100.00,
-        validators=[MinValueValidator(0)],
+        validators=[MinValueValidator(Decimal('0'))],
         help_text="Maximum possible score"
     )
     
@@ -101,6 +102,12 @@ class Assessment(models.Model):
         ordering = ['course', 'due_date']
         verbose_name = 'Assessment'
         verbose_name_plural = 'Assessments'
+        indexes = [
+            models.Index(fields=['course', 'is_active']),
+            models.Index(fields=['due_date']),
+            models.Index(fields=['assessment_type']),
+            models.Index(fields=['created_at']),
+        ]
     
     def __str__(self):
         return f"{self.course.code}: {self.title} ({self.get_assessment_type_display()})"
@@ -151,7 +158,7 @@ class AssessmentLO(models.Model):
         max_digits=5,
         decimal_places=2,
         default=1.00,
-        validators=[MinValueValidator(0.01), MaxValueValidator(10.0)],
+        validators=[MinValueValidator(Decimal('0.01')), MaxValueValidator(Decimal('10.0'))],
         help_text="Weight/contribution of this assessment to the LO (0.01-10.0 scale, where 1.0 = 10%, 10.0 = 100%)"
     )
     
@@ -195,7 +202,7 @@ class StudentGrade(models.Model):
     score = models.DecimalField(
         max_digits=6,
         decimal_places=2,
-        validators=[MinValueValidator(0)],
+        validators=[MinValueValidator(Decimal('0'))],
         help_text="Score received"
     )
     
@@ -218,6 +225,12 @@ class StudentGrade(models.Model):
         ordering = ['-graded_at']
         verbose_name = 'Student Grade'
         verbose_name_plural = 'Student Grades'
+        indexes = [
+            models.Index(fields=['student', 'assessment']),
+            models.Index(fields=['assessment', 'graded_at']),
+            models.Index(fields=['student', 'graded_at']),
+            models.Index(fields=['score']),
+        ]
     
     def __str__(self):
         return f"{self.student.username} - {self.assessment.title}: {self.score}/{self.assessment.max_score}"

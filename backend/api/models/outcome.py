@@ -1,5 +1,6 @@
 """OUTCOME Models Module"""
 
+from decimal import Decimal
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
@@ -46,7 +47,7 @@ class ProgramOutcome(models.Model):
         max_digits=5,
         decimal_places=2,
         default=70.00,
-        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        validators=[MinValueValidator(Decimal('0')), MaxValueValidator(Decimal('100'))],
         help_text="Target achievement percentage (default: 70%)"
     )
     
