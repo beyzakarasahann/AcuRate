@@ -1,7 +1,7 @@
 'use client';
 
-import { motion, AnimatePresence } from 'framer-motion';
-import { Building2, Users, BookOpen, TrendingUp, Filter, AlertTriangle, CheckCircle2, Trophy, ArrowUpRight, ArrowDownRight, Moon, Sun, Loader2, BarChart3, X } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Building2, Users, BookOpen, TrendingUp, AlertTriangle, CheckCircle2, Trophy, ArrowUpRight, ArrowDownRight, Moon, Sun, Loader2, BarChart3 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
@@ -62,14 +62,11 @@ interface InstitutionDashboardData extends DashboardData {
 }
 
 export default function InstitutionDashboard() {
-  const [selectedDepartment, setSelectedDepartment] = useState('all');
-  const [selectedSemester, setSelectedSemester] = useState('fall-2024');
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dashboardData, setDashboardData] = useState<InstitutionDashboardData | null>(null);
   const [alerts, setAlerts] = useState<any[]>([]);
-  const [showFilterModal, setShowFilterModal] = useState(false);
   const [previousData, setPreviousData] = useState<any>(null); // For trend calculation
 
   useEffect(() => {
@@ -223,12 +220,6 @@ export default function InstitutionDashboard() {
     }
   ];
 
-
-  // Get available departments for filter (remove duplicates)
-  const availableDepartments = Array.from(
-    new Set(departments.map(d => d.name.trim()))
-  ).filter(name => name).sort();
-
   // 1. Kancadan Dinamik Tema Değerlerini Alma
   const { 
     isDark, 
@@ -300,28 +291,6 @@ export default function InstitutionDashboard() {
   return (
     // 2. ANA ARKA PLAN: Dinamik Sınıf Kullanımı
     <div className={`min-h-screen bg-gradient-to-br ${themeClasses.background} relative overflow-hidden`}>
-      {/* Animated Background Orbs (Dinamik Renk Kullanımı) */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <motion.div
-          className={`absolute top-0 left-0 w-96 h-96 rounded-full blur-3xl`}
-          style={{ backgroundColor: `${accentStart}20` }}
-          animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.5, 0.3] }}
-          transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-        />
-        <motion.div
-          className={`absolute bottom-0 right-0 w-96 h-96 rounded-full blur-3xl`}
-          style={{ backgroundColor: `${accentEnd}30` }}
-          animate={{ scale: [1.2, 1, 1.2], opacity: [0.4, 0.6, 0.4] }}
-          transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
-        />
-        <motion.div
-          className={`absolute top-1/2 left-1/2 w-96 h-96 rounded-full blur-3xl`}
-          style={{ backgroundColor: `${accentStart}20` }}
-          animate={{ scale: [1, 1.3, 1], opacity: [0.2, 0.4, 0.2] }}
-          transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
-        />
-      </div>
-
       {/* Content */}
       <div className="relative z-10 container mx-auto px-4 py-8">
         {/* Header */}
@@ -368,17 +337,6 @@ export default function InstitutionDashboard() {
                 {isDark ? <Sun className="w-4 h-4 text-yellow-400" /> : <Moon className="w-4 h-4 text-gray-700" />}
               </motion.button>
 
-              <motion.button
-                onClick={() => setShowFilterModal(true)}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                // Filtre Butonu: Dinamik Sınıf Kullanımı (Temel kart stiline uyumlu)
-                className={`px-4 py-2 rounded-xl ${themeClasses.card.replace('shadow-2xl', '').replace('rounded-2xl', 'rounded-xl')} ${isDark ? 'hover:bg-white/10 text-white' : 'hover:bg-gray-100 text-gray-700'} flex items-center gap-2 transition-all backdrop-blur-xl`}
-              >
-                <Filter className="w-4 h-4" />
-                Filters
-              </motion.button>
-              
               {/* Analytics Butonu (Dinamik Gradient) */}
               <Link href="/institution/analytics">
                 <motion.button
@@ -655,139 +613,12 @@ export default function InstitutionDashboard() {
                     View Analytics
                   </motion.button>
                 </Link>
-                {['Generate Report', 'Schedule Meeting'].map((action, index) => (
-                  <motion.button
-                    key={index}
-                    whileHover={{ scale: 1.05, x: 5 }}
-                    whileTap={{ scale: 0.95 }}
-                    // Quick Actions Butonları: Dinamik Sınıf Kullanımı
-                    className={`w-full px-4 py-3 rounded-xl ${themeClasses.card.replace('shadow-2xl', '').replace('rounded-2xl', 'rounded-xl')} ${isDark ? 'hover:bg-white/10 text-white' : 'hover:bg-gray-100 text-gray-700'} text-left transition-all`}
-                  >
-                    {action}
-                  </motion.button>
-                ))}
-              </div>
-            </motion.div>
-
-            {/* Accreditation Status */}
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.6 }}
-              // 11. AKREDİTASYON KARTI: Inline Style ile Dinamiklik
-              style={{
-                  // Yeşil gradientin opaklığını temaya göre ayarla
-                  backgroundImage: isDark ? 'linear-gradient(to bottom right, rgba(16, 185, 107, 0.2), rgba(5, 150, 105, 0.2))' : 'linear-gradient(to bottom right, rgba(16, 185, 107, 0.05), rgba(5, 150, 105, 0.05))',
-                  borderColor: isDark ? 'rgba(16, 185, 107, 0.3)' : 'rgba(5, 150, 105, 0.2)',
-              }}
-              className="rounded-2xl border p-6 shadow-2xl"
-            >
-              <h2 className={`text-xl font-bold ${whiteTextClass} mb-2 flex items-center gap-2`}>
-                <CheckCircle2 className="w-5 h-5 text-green-500" />
-                Accreditation Status
-              </h2>
-              <p className="text-green-500 text-sm mb-3">All criteria met for ABET 2024</p>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className={`${secondaryTextClass}`}>PO Achievement</span>
-                  <span className="text-green-500 font-semibold">✓ 95%</span>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className={`${secondaryTextClass}`}>Documentation</span>
-                  <span className="text-green-500 font-semibold">✓ Complete</span>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className={`${secondaryTextClass}`}>Student Feedback</span>
-                  <span className="text-green-500 font-semibold">✓ 4.2/5.0</span>
-                </div>
               </div>
             </motion.div>
           </div>
         </div>
       </div>
 
-      {/* Filter Modal */}
-      <AnimatePresence>
-        {showFilterModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-            onClick={() => setShowFilterModal(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              onClick={(e) => e.stopPropagation()}
-              className={`${themeClasses.card} rounded-2xl p-6 max-w-md w-full shadow-2xl`}
-            >
-              <div className="flex items-center justify-between mb-4">
-                <h2 className={`text-xl font-bold ${whiteTextClass} flex items-center gap-2`}>
-                  <Filter className="w-5 h-5" style={{ color: accentStart }} />
-                  Filters
-                </h2>
-                <motion.button
-                  onClick={() => setShowFilterModal(false)}
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.9 }}
-                  className={`${secondaryTextClass} hover:${whiteTextClass} transition-colors`}
-                >
-                  <X className="w-5 h-5" />
-                </motion.button>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className={`text-sm font-medium ${secondaryTextClass} mb-2 block`}>
-                    Department
-                  </label>
-                  <select
-                    value={selectedDepartment}
-                    onChange={(e) => setSelectedDepartment(e.target.value)}
-                    className={`w-full px-4 py-2 rounded-xl ${themeClasses.card.replace('shadow-2xl', '').replace('rounded-2xl', 'rounded-xl')} ${isDark ? 'bg-white/5 text-white border border-white/10' : 'bg-white text-gray-700 border border-gray-200'} focus:outline-none focus:ring-2 focus:ring-indigo-500`}
-                  >
-                    <option value="all">All Departments</option>
-                    {availableDepartments.map((dept, index) => (
-                      <option key={`${dept}-${index}`} value={dept}>{dept}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className={`text-sm font-medium ${secondaryTextClass} mb-2 block`}>
-                    Semester
-                  </label>
-                  <select
-                    value={selectedSemester}
-                    onChange={(e) => setSelectedSemester(e.target.value)}
-                    className={`w-full px-4 py-2 rounded-xl ${themeClasses.card.replace('shadow-2xl', '').replace('rounded-2xl', 'rounded-xl')} ${isDark ? 'bg-white/5 text-white border border-white/10' : 'bg-white text-gray-700 border border-gray-200'} focus:outline-none focus:ring-2 focus:ring-indigo-500`}
-                  >
-                    <option value="all">All Semesters</option>
-                    <option value="fall-2024">Fall 2024</option>
-                    <option value="spring-2024">Spring 2024</option>
-                    <option value="summer-2024">Summer 2024</option>
-                  </select>
-                </div>
-
-                <motion.button
-                  onClick={() => {
-                    setShowFilterModal(false);
-                    fetchDashboardData();
-                  }}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  style={{ backgroundImage: `linear-gradient(to right, ${accentStart}, ${accentEnd})` }}
-                  className="w-full px-4 py-2 rounded-xl text-white font-medium"
-                >
-                  Apply Filters
-                </motion.button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
