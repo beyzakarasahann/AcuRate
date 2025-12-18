@@ -1,7 +1,5 @@
-// app/student/relationships/page.tsx
 'use client';
 
-import { motion } from 'framer-motion';
 import { Network, Award, BookOpen, Target, TrendingUp, Loader2, AlertTriangle, BarChart3 } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import { useThemeColors } from '@/hooks/useThemeColors'; 
@@ -16,7 +14,6 @@ import {
   type StudentGrade
 } from '@/lib/api';
 
-// Interfaces
 interface CoursePOData {
   courseId: number;
   courseCode: string;
@@ -47,22 +44,8 @@ interface CourseAssessmentSummary {
   midtermWeight: number;
   pretermScore: number | null;
   pretermWeight: number;
-  finalScore: number | null; // CATO / overall
+  finalScore: number | null;
 }
-
-// --- YARDIMCI FONKSİYONLAR ve Sabitler ---
-
-const container = {
-    hidden: { opacity: 0 },
-    show: { opacity: 1, transition: { staggerChildren: 0.1 } }
-};
-
-const item = {
-    hidden: { opacity: 0, y: 20 },
-    show: { opacity: 1, y: 0 }
-};
-
-// --- ANA BİLEŞEN: RELATIONSHIPS PAGE ---
 
 export default function RelationshipsPage() {
   const [mounted, setMounted] = useState(false);
@@ -87,7 +70,6 @@ export default function RelationshipsPage() {
       setLoading(true);
       setError(null);
       
-      // Check authentication
       const isAuthenticated = TokenManager.isAuthenticated();
       if (!isAuthenticated) {
         setError('Please log in to view relationships.');
@@ -98,7 +80,6 @@ export default function RelationshipsPage() {
         return;
       }
 
-      // Fetch all required data
       let programOutcomesData: ProgramOutcome[] = [];
       let poAchievementsData: StudentPOAchievement[] = [];
       let coursesData: Course[] = [];
@@ -129,7 +110,6 @@ export default function RelationshipsPage() {
         return;
       }
 
-      // Ensure arrays
       programOutcomesData = Array.isArray(programOutcomesData) ? programOutcomesData : [];
       poAchievementsData = Array.isArray(poAchievementsData) ? poAchievementsData : [];
       coursesData = Array.isArray(coursesData) ? coursesData : [];
@@ -144,9 +124,7 @@ export default function RelationshipsPage() {
       setAssessments(assessmentsData);
       setGrades(gradesData);
 
-      // Fetch detailed course information with PO relationships
-      const enrolledCourseIds = enrollmentsData
-        .map(e => e.course);
+      const enrolledCourseIds = enrollmentsData.map(e => e.course);
 
       const courseDetailsPromises = enrolledCourseIds.map(async (courseId) => {
         try {
@@ -161,10 +139,8 @@ export default function RelationshipsPage() {
       const courseDetailsResults = await Promise.all(courseDetailsPromises);
       const validCourseDetails = courseDetailsResults.filter(c => c !== null) as any[];
 
-      // Transform course details to include PO relationships
       const coursesWithPOs: CourseWithPOs[] = validCourseDetails.map(course => {
         const pos = (course.program_outcomes || []).map((po: any) => {
-          // Handle both string and number weights
           const weightValue = typeof po.weight === 'string' ? parseFloat(po.weight) : (po.weight || 1.0);
           return {
             poCode: po.po_code || po.program_outcome?.code || '',
@@ -181,7 +157,6 @@ export default function RelationshipsPage() {
 
       setCourseDetails(coursesWithPOs);
 
-      // Varsayılan seçili dersi belirle (önce CSE311, yoksa ilk ders)
       const preferred = coursesWithPOs.find(c => c.course.code === 'CSE311');
       const firstCourse = preferred || coursesWithPOs[0];
       if (firstCourse) {
@@ -197,7 +172,6 @@ export default function RelationshipsPage() {
 
   const { isDark, themeClasses, text, mutedText } = useThemeColors();
 
-  // Seçili ders
   const selectedCourse = useMemo(
     () => {
       if (!courseDetails || courseDetails.length === 0) return null;
@@ -206,7 +180,6 @@ export default function RelationshipsPage() {
     [courseDetails, selectedCourseCode]
   );
 
-  // Belirli bir ders için midterm / preterm / final özetini hesapla
   const selectedCourseSummary: CourseAssessmentSummary | null = useMemo(() => {
     if (!selectedCourse || !assessments || !grades || !enrollments) return null;
 
@@ -236,7 +209,6 @@ export default function RelationshipsPage() {
       return { score: totalWeighted / totalWeight, weight: totalWeight };
     };
 
-    // Slayta yakın bir yapı: MIDTERM'ler = Midterm I & II, PRETERM = Attendance + Project
     const midtermItems = courseAssessments.filter(a => a.assessment_type === 'MIDTERM');
     const pretermItems = courseAssessments.filter(a => a.assessment_type !== 'MIDTERM');
 
@@ -261,14 +233,12 @@ export default function RelationshipsPage() {
     return null;
   }
 
-  // Combine PO data with achievements
   const poWithScores: POWithScore[] = programOutcomes.map(po => {
     const achievement = poAchievements.find(a => a.program_outcome === po.id);
     const score = achievement ? Math.round(achievement.current_percentage) : 0;
     return { po, score, achievement };
   });
 
-  // Create course-PO matrix
   const coursePOMatrix: CoursePOData[] = [];
   courseDetails.forEach(courseWithPOs => {
     courseWithPOs.pos.forEach(po => {
@@ -283,11 +253,9 @@ export default function RelationshipsPage() {
     });
   });
 
-  // Get unique courses and POs for matrix
   const uniqueCourses = Array.from(new Set(coursePOMatrix.map(c => c.courseCode))).sort();
   const uniquePOs = Array.from(new Set(coursePOMatrix.map(c => c.poCode))).sort();
 
-  // Loading state
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -299,7 +267,6 @@ export default function RelationshipsPage() {
     );
   }
 
-  // Error state
   if (error) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -319,12 +286,8 @@ export default function RelationshipsPage() {
 
   return (
     <div className={`container mx-auto py-0`}>
-      {/* Başlık */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6 border-b pb-4 border-gray-500/20"
-      >
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6 border-b pb-4 border-gray-500/20">
         <div className="flex items-center gap-3">
           <h1 className={`text-3xl font-bold ${text} flex items-center gap-3`}>
             <Network className="w-7 h-7 text-indigo-500" />
@@ -332,7 +295,6 @@ export default function RelationshipsPage() {
           </h1>
         </div>
 
-        {/* Ders seçimi (özellikle CSE311 odağı için) */}
         {courseDetails.length > 0 && (
           <div className="flex items-center gap-3">
             <span className={`text-sm ${mutedText}`}>Course:</span>
@@ -349,148 +311,93 @@ export default function RelationshipsPage() {
             </select>
           </div>
         )}
-      </motion.div>
+      </div>
 
-      {/* Seçili ders için slayta benzer CSE311 yapısı */}
+      {/* KPI Summary Cards */}
       {selectedCourse && selectedCourseSummary && (
-        <motion.div
-          variants={container}
-          initial="hidden"
-          animate="show"
-          className="mb-8 grid grid-cols-1 lg:grid-cols-3 gap-6"
-        >
-          {/* Course & CATO */}
-          <motion.div
-            variants={item}
-            className={`${themeClasses.card} p-6 rounded-xl border ${isDark ? 'border-white/10' : 'border-gray-200'} shadow-lg lg:col-span-1`}
-          >
-            <p className={`text-xs uppercase tracking-wide ${mutedText} mb-1`}>Selected Course</p>
-            <h2 className={`text-xl font-bold ${text}`}>
-              {selectedCourseSummary.course.code} - {selectedCourseSummary.course.name}
-            </h2>
-            <div className="mt-4 flex items-baseline justify-between">
-              <div>
-                <p className={`text-sm ${mutedText}`}>Final Score (CATO)</p>
-                <p className="text-4xl font-extrabold text-indigo-500">
-                  {selectedCourseSummary.finalScore != null ? selectedCourseSummary.finalScore.toFixed(1) : '-'}
-                </p>
-              </div>
-              <div className="text-right">
-                <p className={`text-xs ${mutedText}`}>[0-100]</p>
-                <p className={`text-sm ${mutedText} mt-1`}>
-                  Based on weighted Midterm & Preterm
-                </p>
-              </div>
-            </div>
-          </motion.div>
-
-          {/* Midterm / Preterm kartları (slayttaki %60 / %40 yapısına benzer) */}
-          <motion.div
-            variants={item}
-            className={`${themeClasses.card} p-6 rounded-xl border ${isDark ? 'border-white/10' : 'border-gray-200'} shadow-lg`}
-          >
-            <h3 className={`text-lg font-semibold ${text} flex items-center gap-2 mb-3`}>
-              <Target className="w-5 h-5 text-indigo-400" />
-              Midterm Model
-            </h3>
-            <div className="space-y-3 text-sm">
-              <div className="flex items-center justify-between">
-                <span className={mutedText}>Weight</span>
-                <span className={`${text} font-semibold`}>
-                  {selectedCourseSummary.midtermWeight.toFixed(0)}%
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className={mutedText}>Score</span>
-                <span className={`${text} font-semibold`}>
-                  {selectedCourseSummary.midtermScore != null ? selectedCourseSummary.midtermScore.toFixed(1) : '-'}
-                </span>
-              </div>
-            </div>
-          </motion.div>
-
-          <motion.div
-            variants={item}
-            className={`${themeClasses.card} p-6 rounded-xl border ${isDark ? 'border-white/10' : 'border-gray-200'} shadow-lg`}
-          >
-            <h3 className={`text-lg font-semibold ${text} flex items-center gap-2 mb-3`}>
-              <TrendingUp className="w-5 h-5 text-emerald-400" />
-              Preterm / Project Model
-            </h3>
-            <div className="space-y-3 text-sm">
-              <div className="flex items-center justify-between">
-                <span className={mutedText}>Weight</span>
-                <span className={`${text} font-semibold`}>
-                  {selectedCourseSummary.pretermWeight.toFixed(0)}%
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className={mutedText}>Score</span>
-                <span className={`${text} font-semibold`}>
-                  {selectedCourseSummary.pretermScore != null ? selectedCourseSummary.pretermScore.toFixed(1) : '-'}
-                </span>
-              </div>
-            </div>
-          </motion.div>
-        </motion.div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div className={`${themeClasses.card} p-4 rounded-xl shadow-lg`}>
+            <p className={`text-sm ${mutedText} mb-1`}>Selected Course</p>
+            <p className={`text-lg font-bold ${text}`}>
+              {selectedCourseSummary.course.code}
+            </p>
+          </div>
+          <div className={`${themeClasses.card} p-4 rounded-xl shadow-lg`}>
+            <p className={`text-sm ${mutedText} mb-1`}>Final Score</p>
+            <p className={`text-2xl font-bold text-indigo-500`}>
+              {selectedCourseSummary.finalScore != null ? selectedCourseSummary.finalScore.toFixed(1) : '-'}
+            </p>
+          </div>
+          <div className={`${themeClasses.card} p-4 rounded-xl shadow-lg`}>
+            <p className={`text-sm ${mutedText} mb-1`}>Midterm Score</p>
+            <p className={`text-2xl font-bold ${text}`}>
+              {selectedCourseSummary.midtermScore != null ? selectedCourseSummary.midtermScore.toFixed(1) : '-'}
+            </p>
+          </div>
+          <div className={`${themeClasses.card} p-4 rounded-xl shadow-lg`}>
+            <p className={`text-sm ${mutedText} mb-1`}>Preterm Score</p>
+            <p className={`text-2xl font-bold ${text}`}>
+              {selectedCourseSummary.pretermScore != null ? selectedCourseSummary.pretermScore.toFixed(1) : '-'}
+            </p>
+          </div>
+        </div>
       )}
 
-      {/* Program Outcomes Scores (Program Outcome #1, #2 vb. slayttaki yapı) */}
-      <motion.div
-        variants={container}
-        initial="hidden"
-        animate="show"
-        className="mb-8"
-      >
+      {/* Program Outcomes Summary */}
+      <div className="mb-8">
         <h2 className={`text-2xl font-bold ${text} mb-4 flex items-center gap-2`}>
           <Award className="w-6 h-6 text-indigo-500" />
           Program Outcomes Achievement
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {poWithScores.map((poData, index) => (
-            <motion.div
-              key={poData.po.id}
-              variants={item}
-              className={`${themeClasses.card} p-6 rounded-xl border ${isDark ? 'border-white/10' : 'border-gray-200'} shadow-lg`}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <h3 className={`font-bold ${text} text-lg`}>
-                  {poData.po.code}
-                </h3>
-                <div className={`text-3xl font-extrabold ${
-                  poData.score >= 90 ? 'text-green-500' :
-                  poData.score >= 70 ? 'text-yellow-500' :
-                  'text-red-500'
-                }`}>
-                  {poData.score}
-                </div>
-              </div>
-              <p className={`text-sm ${mutedText} mb-2`}>
-                {poData.po.title}
-              </p>
-              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mt-3">
-                <div
-                  className={`h-2 rounded-full ${
-                    poData.score >= 90 ? 'bg-green-500' :
-                    poData.score >= 70 ? 'bg-yellow-500' :
-                    'bg-red-500'
-                  }`}
-                  style={{ width: `${Math.min(poData.score, 100)}%` }}
-                />
-              </div>
-            </motion.div>
-          ))}
+        <div className={`${themeClasses.card} rounded-xl shadow-xl p-6`}>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className={`border-b ${isDark ? 'border-white/10' : 'border-gray-200'}`}>
+                  <th className={`text-left py-3 px-4 font-semibold ${text}`}>Code</th>
+                  <th className={`text-left py-3 px-4 font-semibold ${text}`}>Title</th>
+                  <th className={`text-center py-3 px-4 font-semibold ${text}`}>Score</th>
+                  <th className={`text-center py-3 px-4 font-semibold ${text}`}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {poWithScores.map((poData) => {
+                  const statusColor = 
+                    poData.score >= 90 ? 'text-green-500' :
+                    poData.score >= 70 ? 'text-yellow-500' :
+                    'text-red-500';
+                  
+                  return (
+                    <tr key={poData.po.id} className={`border-b ${isDark ? 'border-white/5' : 'border-gray-100'} hover:${isDark ? 'bg-white/5' : 'bg-gray-50'}`}>
+                      <td className={`py-3 px-4 font-medium ${text}`}>{poData.po.code}</td>
+                      <td className={`py-3 px-4 ${text}`}>{poData.po.title}</td>
+                      <td className={`py-3 px-4 text-center font-bold ${statusColor}`}>
+                        {poData.score}%
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <div className={`w-full ${isDark ? 'bg-gray-700' : 'bg-gray-200'} rounded-full h-2`}>
+                          <div
+                            className={`h-2 rounded-full ${
+                              poData.score >= 90 ? 'bg-green-500' :
+                              poData.score >= 70 ? 'bg-yellow-500' :
+                              'bg-red-500'
+                            }`}
+                            style={{ width: `${Math.min(poData.score, 100)}%` }}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </motion.div>
+      </div>
 
       {/* Course-PO Relationship Matrix */}
       {coursePOMatrix.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="mb-8"
-        >
+        <div className="mb-8">
           <h2 className={`text-2xl font-bold ${text} mb-4 flex items-center gap-2`}>
             <BarChart3 className="w-6 h-6 text-indigo-500" />
             Course-Program Outcome Relationship Matrix
@@ -543,18 +450,13 @@ export default function RelationshipsPage() {
                               className={`p-3 text-center border-b ${isDark ? 'border-white/10' : 'border-gray-200'}`}
                             >
                               {weight > 0 ? (
-                                <div className="flex flex-col items-center">
-                                  <span className={`text-lg font-bold ${
-                                    weight >= 1.5 ? 'text-green-500' :
-                                    weight >= 1.0 ? 'text-yellow-500' :
-                                    'text-blue-500'
-                                  }`}>
-                                    {weight.toFixed(1)}
-                                  </span>
-                                  <span className={`text-xs ${mutedText}`}>
-                                    {weight >= 1.5 ? 'High' : weight >= 1.0 ? 'Medium' : 'Low'}
-                                  </span>
-                                </div>
+                                <span className={`text-sm font-semibold ${
+                                  weight >= 1.5 ? 'text-green-500' :
+                                  weight >= 1.0 ? 'text-yellow-500' :
+                                  'text-blue-500'
+                                }`}>
+                                  {weight.toFixed(1)}
+                                </span>
                               ) : (
                                 <span className={mutedText}>-</span>
                               )}
@@ -568,25 +470,20 @@ export default function RelationshipsPage() {
               </table>
             </div>
           </div>
-        </motion.div>
+        </div>
       )}
 
       {/* Course Details with PO Contributions */}
       {courseDetails.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-        >
+        <div>
           <h2 className={`text-2xl font-bold ${text} mb-4 flex items-center gap-2`}>
             <BookOpen className="w-6 h-6 text-indigo-500" />
             Course Contributions to Program Outcomes
           </h2>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {courseDetails.map((courseWithPOs) => (
-              <motion.div
+              <div
                 key={courseWithPOs.course.id}
-                variants={item}
                 className={`${themeClasses.card} p-6 rounded-xl border ${isDark ? 'border-white/10' : 'border-gray-200'} shadow-lg`}
               >
                 <div className="mb-4">
@@ -638,10 +535,10 @@ export default function RelationshipsPage() {
                 ) : (
                   <p className={mutedText}>No program outcomes mapped to this course.</p>
                 )}
-              </motion.div>
+              </div>
             ))}
           </div>
-        </motion.div>
+        </div>
       )}
 
       {/* Empty State */}
@@ -659,4 +556,3 @@ export default function RelationshipsPage() {
     </div>
   );
 }
-

@@ -121,14 +121,3 @@
     @apply bg-background text-foreground;
   }
 }
-
-/* Remove React Flow node borders */
-.react-flow__node {
-  border: none !important;
-  background: transparent !important;
-}
-
-.react-flow__node-default {
-  border: none !important;
-  background: transparent !important;
-}

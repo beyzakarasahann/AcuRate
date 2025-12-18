@@ -1,15 +1,9 @@
-// app/student/lo-outcomes/page.tsx
 'use client';
 
-import { motion } from 'framer-motion';
 import { ListOrdered, Target, CheckCircle2, XCircle, TrendingUp, BookOpen, Loader2, AlertTriangle } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import { useThemeColors } from '@/hooks/useThemeColors'; 
-import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
-import { Doughnut } from 'react-chartjs-2';
 import { api, TokenManager, type StudentLOAchievement, type LearningOutcome, type Enrollment } from '@/lib/api';
-
-ChartJS.register(ArcElement, Tooltip, Legend);
 
 interface LOData {
     code: string;
@@ -23,39 +17,12 @@ interface LOData {
     loId: number;
 }
 
-const container = {
-    hidden: { opacity: 0 },
-    show: { opacity: 1, transition: { staggerChildren: 0.08 } }
-};
-
-const item = {
-    hidden: { opacity: 0, y: 20 },
-    show: { opacity: 1, y: 0, transition: { duration: 0.3 } }
-};
-
-const doughnutOptions = (isDark: boolean) => ({
-    responsive: true,
-    maintainAspectRatio: false,
-    cutout: '75%',
-    plugins: {
-        legend: { display: false },
-        tooltip: {
-            bodyColor: isDark ? '#FFF' : '#000',
-            titleColor: isDark ? '#FFF' : '#000',
-            backgroundColor: isDark ? 'rgba(0,0,0,0.9)' : 'rgba(255,255,255,0.95)',
-            padding: 12,
-            cornerRadius: 8,
-        }
-    }
-});
-
 export default function LOOutcomesPage() {
     const [mounted, setMounted] = useState(false);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [learningOutcomesData, setLearningOutcomesData] = useState<LOData[]>([]);
     const { isDark, themeClasses, text, mutedText } = useThemeColors();
-    const whiteText = text;
 
     useEffect(() => {
         setMounted(true);
@@ -76,17 +43,12 @@ export default function LOOutcomesPage() {
                 return;
             }
 
-            const startTime = performance.now();
-
-            // Fetch only LO-related data in parallel
             const [loAchievementsResult, learningOutcomesResult, enrollmentsResult] = 
                 await Promise.allSettled([
                     api.getLOAchievements(),
                     api.getLearningOutcomes(),
                     api.getEnrollments()
                 ]);
-
-            const fetchTime = performance.now() - startTime;
 
             let learningOutcomes: LearningOutcome[] = [];
             let loAchievements: StudentLOAchievement[] = [];
@@ -116,9 +78,6 @@ export default function LOOutcomesPage() {
                 enrollments = Array.isArray(enrollmentsResult.value) ? enrollmentsResult.value : [];
             }
 
-            const processStartTime = performance.now();
-
-            // Build maps for O(1) lookups
             const loAchievementMap = new Map<number, StudentLOAchievement>();
             loAchievements.forEach(a => {
                 const loId = typeof a.learning_outcome === 'string' ? parseInt(a.learning_outcome) : a.learning_outcome;
@@ -138,7 +97,6 @@ export default function LOOutcomesPage() {
                 if (courseId) enrollmentMap.set(courseId, e);
             });
 
-            // Process LO data
             const loDataList: LOData[] = learningOutcomes.map(lo => {
                 const loId = typeof lo.id === 'string' ? parseInt(lo.id) : lo.id;
                 const achievement = loAchievementMap.get(loId);
@@ -171,9 +129,6 @@ export default function LOOutcomesPage() {
                     loId: lo.id
                 };
             });
-
-            const processTime = performance.now() - processStartTime;
-            const totalTime = performance.now() - startTime;
 
             setLearningOutcomesData(loDataList);
             setLoading(false);
@@ -225,18 +180,14 @@ export default function LOOutcomesPage() {
     return (
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6">
             {/* Header */}
-            <motion.div
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="mb-8"
-            >
+            <div className="mb-8">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                     <div className="flex items-center gap-4">
                         <div className={`p-3 rounded-xl ${isDark ? 'bg-purple-500/20' : 'bg-purple-100'}`}>
                             <ListOrdered className="w-8 h-8 text-purple-500" />
                         </div>
                         <div>
-                            <h1 className={`text-3xl sm:text-4xl font-bold ${whiteText} mb-1`}>Learning Outcomes</h1>
+                            <h1 className={`text-3xl sm:text-4xl font-bold ${text} mb-1`}>Learning Outcomes</h1>
                             <p className={`${mutedText} text-sm sm:text-base`}>Track your progress across all learning outcomes</p>
                         </div>
                     </div>
@@ -249,125 +200,117 @@ export default function LOOutcomesPage() {
                         </div>
                     )}
                 </div>
-            </motion.div>
+            </div>
 
-            {/* LO Cards */}
+            {/* KPI Summary Cards */}
+            {learningOutcomesData.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    <div className={`${themeClasses.card} p-4 rounded-xl shadow-lg`}>
+                        <p className={`text-sm ${mutedText} mb-1`}>Total LOs</p>
+                        <p className={`text-2xl font-bold ${text}`}>{learningOutcomesData.length}</p>
+                    </div>
+                    <div className={`${themeClasses.card} p-4 rounded-xl shadow-lg`}>
+                        <p className={`text-sm ${mutedText} mb-1`}>Achieved</p>
+                        <p className={`text-2xl font-bold text-green-500`}>
+                            {learningOutcomesData.filter(lo => lo.status === 'Achieved' || lo.status === 'Excellent').length}
+                        </p>
+                    </div>
+                    <div className={`${themeClasses.card} p-4 rounded-xl shadow-lg`}>
+                        <p className={`text-sm ${mutedText} mb-1`}>Needs Attention</p>
+                        <p className={`text-2xl font-bold text-red-500`}>
+                            {learningOutcomesData.filter(lo => lo.status === 'Needs Attention').length}
+                        </p>
+                    </div>
+                    <div className={`${themeClasses.card} p-4 rounded-xl shadow-lg`}>
+                        <p className={`text-sm ${mutedText} mb-1`}>Excellent</p>
+                        <p className={`text-2xl font-bold text-green-600`}>
+                            {learningOutcomesData.filter(lo => lo.status === 'Excellent').length}
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            {/* LO Table */}
             {learningOutcomesData.length === 0 ? (
-                <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className={`p-12 rounded-2xl ${themeClasses.card} border ${isDark ? 'border-white/10' : 'border-gray-200'} text-center`}
-                >
+                <div className={`p-12 rounded-2xl ${themeClasses.card} border ${isDark ? 'border-white/10' : 'border-gray-200'} text-center`}>
                     <Target className={`w-16 h-16 mx-auto mb-4 ${mutedText} opacity-50`} />
-                    <h2 className={`text-2xl font-bold ${whiteText} mb-2`}>No Learning Outcomes Available</h2>
+                    <h2 className={`text-2xl font-bold ${text} mb-2`}>No Learning Outcomes Available</h2>
                     <p className={mutedText}>Learning outcomes data is not available at this time.</p>
-                </motion.div>
+                </div>
             ) : (
-                <motion.div
-                    variants={container}
-                    initial="hidden"
-                    animate="show"
-                    className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch"
-                >
-                    {learningOutcomesData.map((lo) => {
-                        const isTargetAchieved = lo.current >= lo.target;
-                        
-                        const data = {
-                            labels: ['Achieved', 'Remaining'],
-                            datasets: [{
-                                data: [lo.current, Math.max(0, 100 - lo.current)],
-                                backgroundColor: [
-                                    isTargetAchieved ? '#10B981' : '#A855F7',
-                                    isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)',
-                                ],
-                                borderColor: 'transparent',
-                            }]
-                        };
-
-                        return (
-                            <motion.div
-                                key={`${lo.loId}-${lo.code}`}
-                                variants={item}
-                                whileHover={{ y: -8, scale: 1.02 }}
-                                className={`h-full p-6 rounded-2xl ${themeClasses.card} shadow-lg transition-all border ${isDark ? 'border-white/10' : 'border-gray-200'} flex flex-col group hover:shadow-2xl overflow-hidden relative`}
-                            >
-                                {/* Hover Tooltip for Description */}
-                                <div className="absolute inset-0 z-10 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                                    <div className={`absolute top-0 left-0 right-0 p-4 rounded-t-2xl ${isDark ? 'bg-gray-900/95 backdrop-blur-sm border-b border-white/10' : 'bg-white/95 backdrop-blur-sm border-b border-gray-200'} shadow-2xl max-h-[60%] overflow-y-auto`}>
-                                        <h3 className={`text-sm font-bold ${whiteText} mb-2 flex items-center gap-2`}>
-                                            <Target className="w-4 h-4 text-purple-500" />
-                                            {lo.code} - {lo.title}
-                                        </h3>
-                                        <p className={`text-xs sm:text-sm ${mutedText} leading-relaxed whitespace-pre-wrap`}>
-                                            {lo.description || 'No description available'}
-                                        </p>
-                                    </div>
-                                </div>
-                                <div className="flex justify-between items-start mb-4 flex-shrink-0 min-w-0">
-                                    <div className="flex items-start gap-3 flex-1 min-w-0 overflow-hidden">
-                                        <div className={`p-2 rounded-lg flex-shrink-0 ${isTargetAchieved ? 'bg-green-500/20' : 'bg-purple-500/20'}`}>
-                                            <Target className={`w-5 h-5 ${isTargetAchieved ? 'text-green-500' : 'text-purple-500'}`} />
-                                        </div>
-                                        <div className="flex-1 min-w-0 overflow-hidden">
-                                            <h2 className={`text-lg font-bold ${whiteText} mb-1 truncate`}>{lo.code}</h2>
-                                            <p className={`text-sm ${mutedText} line-clamp-2 overflow-hidden`}>{lo.title}</p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center gap-4 sm:gap-6 py-6 border-y border-gray-500/20 my-4 flex-shrink-0 min-w-0">
-                                    <div className="w-28 h-28 sm:w-32 sm:h-32 relative flex-shrink-0">
-                                        <Doughnut data={data} options={doughnutOptions(isDark)} />
-                                        <div className="absolute inset-0 flex items-center justify-center">
-                                            <div className="text-center">
-                                                <span className={`text-xl sm:text-2xl font-extrabold ${whiteText} block`}>{lo.current}%</span>
-                                            </div>
-                                        </div>
-                                    </div>
+                <div className={`${themeClasses.card} rounded-xl shadow-xl p-6`}>
+                    <h2 className={`text-xl font-bold ${text} mb-4`}>Learning Outcomes List</h2>
+                    <div className="overflow-x-auto">
+                        <table className="w-full">
+                            <thead>
+                                <tr className={`border-b ${isDark ? 'border-white/10' : 'border-gray-200'}`}>
+                                    <th className={`text-left py-3 px-4 font-semibold ${text}`}>Code</th>
+                                    <th className={`text-left py-3 px-4 font-semibold ${text}`}>Title</th>
+                                    <th className={`text-center py-3 px-4 font-semibold ${text}`}>Current</th>
+                                    <th className={`text-center py-3 px-4 font-semibold ${text}`}>Target</th>
+                                    <th className={`text-center py-3 px-4 font-semibold ${text}`}>Status</th>
+                                    <th className={`text-center py-3 px-4 font-semibold ${text}`}>Progress</th>
+                                    <th className={`text-left py-3 px-4 font-semibold ${text}`}>Course</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {learningOutcomesData.map((lo) => {
+                                    const isTargetAchieved = lo.current >= lo.target;
+                                    const statusColor = 
+                                        lo.status === 'Excellent' ? 'text-green-500' :
+                                        lo.status === 'Achieved' ? 'text-purple-500' :
+                                        'text-red-500';
                                     
-                                    <div className="flex-1 space-y-2.5 sm:space-y-3 text-xs sm:text-sm min-w-0 overflow-hidden">
-                                        <div className="flex justify-between items-center gap-2 min-w-0">
-                                            <span className={`${mutedText} truncate`}>Target:</span>
-                                            <span className={`font-bold ${whiteText} whitespace-nowrap flex-shrink-0`}>{lo.target}%</span>
-                                        </div>
-                                        <div className="flex justify-between items-center gap-2 min-w-0">
-                                            <span className={`${mutedText} truncate`}>Status:</span>
-                                            <span className={`font-semibold flex items-center gap-1 whitespace-nowrap flex-shrink-0 ${
-                                                lo.status === 'Excellent' ? 'text-green-500' :
-                                                lo.status === 'Achieved' ? 'text-purple-500' :
-                                                'text-red-500'
-                                            }`}>
-                                                {lo.status === 'Achieved' && <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />}
-                                                {lo.status === 'Needs Attention' && <XCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />}
-                                                {lo.status === 'Excellent' && <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />}
-                                                <span className="truncate">{lo.status}</span>
-                                            </span>
-                                        </div>
-                                        <div className="flex justify-between items-center gap-2 min-w-0">
-                                            <span className={`${mutedText} truncate`}>Gap:</span>
-                                            <span className={`font-bold whitespace-nowrap flex-shrink-0 ${isTargetAchieved ? 'text-green-500' : 'text-red-500'}`}>
-                                                {isTargetAchieved 
-                                                    ? `+${(lo.current - lo.target).toFixed(1)}%` 
-                                                    : `-${(lo.target - lo.current).toFixed(1)}%`}
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <div className="mt-auto pt-4 flex-shrink-0 min-w-0 overflow-hidden">
-                                    <h3 className={`text-xs font-semibold ${mutedText} flex items-center gap-2 mb-3 uppercase tracking-wide`}>
-                                        <BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" /> Course
-                                    </h3>
-                                    <span className={`inline-block px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium rounded-lg truncate max-w-full ${isDark ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' : 'bg-purple-100 text-purple-700 border border-purple-200'}`}>
-                                        {lo.courseCode || lo.course}
-                                    </span>
-                                </div>
-                            </motion.div>
-                        );
-                    })}
-                </motion.div>
+                                    return (
+                                        <tr key={`${lo.loId}-${lo.code}`} className={`border-b ${isDark ? 'border-white/5' : 'border-gray-100'} hover:${isDark ? 'bg-white/5' : 'bg-gray-50'}`}>
+                                            <td className={`py-3 px-4 font-medium ${text}`}>{lo.code}</td>
+                                            <td className={`py-3 px-4 ${text}`}>
+                                                <div>
+                                                    <div className="font-medium">{lo.title}</div>
+                                                    {lo.description && (
+                                                        <div className={`text-xs ${mutedText} mt-1 line-clamp-1`}>
+                                                            {lo.description}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td className={`py-3 px-4 text-center font-bold ${statusColor}`}>
+                                                {lo.current}%
+                                            </td>
+                                            <td className={`py-3 px-4 text-center ${text}`}>{lo.target}%</td>
+                                            <td className="py-3 px-4 text-center">
+                                                <div className="flex items-center justify-center gap-1">
+                                                    {lo.status === 'Achieved' && <CheckCircle2 className="w-4 h-4 text-purple-500" />}
+                                                    {lo.status === 'Needs Attention' && <XCircle className="w-4 h-4 text-red-500" />}
+                                                    {lo.status === 'Excellent' && <TrendingUp className="w-4 h-4 text-green-500" />}
+                                                    <span className={`text-xs font-medium ${statusColor}`}>
+                                                        {lo.status}
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td className="py-3 px-4">
+                                                <div className={`w-full ${isDark ? 'bg-gray-700' : 'bg-gray-200'} rounded-full h-2`}>
+                                                    <div
+                                                        className={`h-2 rounded-full ${
+                                                            lo.status === 'Excellent' || lo.status === 'Achieved' ? 'bg-green-500' : 'bg-red-500'
+                                                        }`}
+                                                        style={{ width: `${Math.min(lo.current, 100)}%` }}
+                                                    />
+                                                </div>
+                                            </td>
+                                            <td className="py-3 px-4">
+                                                <span className={`px-2 py-1 text-xs rounded ${isDark ? 'bg-purple-500/20 text-purple-300' : 'bg-purple-100 text-purple-700'}`}>
+                                                    {lo.courseCode || lo.course}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             )}
         </div>
     );
 }
-

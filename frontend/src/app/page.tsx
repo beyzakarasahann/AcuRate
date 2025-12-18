@@ -8,8 +8,6 @@ import { GraduationCap, BarChart3, Building2 } from "lucide-react";
 import Link from "next/link";
 import { ReactLenis } from "@studio-freight/react-lenis";
 import { useRef, useState, useEffect } from "react"; // <-- 1. useState ve useEffect eklendi
-import ParticlesContainer from "@/components/layout/ParticlesContainer";
-import { ChartIllustration3D as ChartIllustration } from "@/components/ui/charts";
 
 // ✨ YENİ: Merkezi tema renkleri hook'unu import ediyoruz
 import { useThemeColors } from "@/hooks/useThemeColors"; 
@@ -85,7 +83,6 @@ export default function HomePage() {
                    text-center selection:bg-indigo-600/10 dark:selection:text-indigo-300 dark:text-white`}
       >
         {/* === BACKGROUND LAYERS === */}
-        <ParticlesContainer />
 
         {/* Blur Circle (Parallax) */}
         <motion.div
@@ -164,8 +161,10 @@ export default function HomePage() {
             transition={{ delay: 0.4, duration: 0.8, ease: "easeOut" }}
             className="flex-1 flex justify-center md:justify-end max-w-lg w-full"
           >
-            <div className="relative w-full max-w-[600px] h-[500px] overflow-hidden">
-              <ChartIllustration />
+            <div className="relative w-full max-w-[600px] h-[500px] flex items-center justify-center">
+              <div className={`w-full h-full rounded-2xl ${isDark ? 'bg-indigo-500/10' : 'bg-indigo-50'} flex items-center justify-center border ${isDark ? 'border-indigo-500/20' : 'border-indigo-200'}`}>
+                <BarChart3 className="w-32 h-32 text-indigo-500 opacity-50" />
+              </div>
             </div>
           </motion.div>
         </section>
