@@ -218,8 +218,23 @@ export default function TeacherHomePage() {
 
   // Extract data
   const teacher = dashboardData.teacher;
-  const courses = dashboardData.courses || [];
+  const allCourses = dashboardData.courses || [];
   const totalStudents = dashboardData.total_students || 0;
+
+  // Remove duplicate courses by course ID AND course name (keep first occurrence)
+  const courses = allCourses.filter((course: any, index: number, self: any[]) => {
+    const courseId = typeof course.id === 'string' ? parseInt(course.id) : course.id;
+    const courseName = (course.name || '').toLowerCase().trim();
+    
+    // Keep only first occurrence of each course (by ID OR by name if names match)
+    return index === self.findIndex((c: any) => {
+      const cCourseId = typeof c.id === 'string' ? parseInt(c.id) : c.id;
+      const cCourseName = (c.name || '').toLowerCase().trim();
+      
+      // Match by course ID OR by course name (if names are the same, treat as duplicate)
+      return cCourseId === courseId || (courseName && cCourseName && courseName === cCourseName);
+    });
+  });
 
   // Calculate stats
   const totalCourses = courses.length;

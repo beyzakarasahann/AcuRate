@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { Award, BookOpen, Trophy, ArrowUpRight, ArrowDownRight, TrendingUp, AlertTriangle, Loader2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useThemeColors } from '@/hooks/useThemeColors';
-import { api, type DashboardData, type Enrollment, type StudentPOAchievement } from '@/lib/api';
+import { api, type DashboardData, type Enrollment, type StudentPOAchievement, type StudentLOAchievement } from '@/lib/api';
 import Link from 'next/link'; 
 import { 
     Chart as ChartJS, 
@@ -103,6 +103,8 @@ export default function StudentHomePage() {
   const [assessments, setAssessments] = useState<any[]>([]);
   const [allAssessments, setAllAssessments] = useState<any[]>([]);
   const [programOutcomes, setProgramOutcomes] = useState<any[]>([]);
+  const [loAchievements, setLOAchievements] = useState<StudentLOAchievement[]>([]);
+  const [learningOutcomes, setLearningOutcomes] = useState<any[]>([]);
   
   useEffect(() => {
     setMounted(true);
@@ -121,6 +123,11 @@ export default function StudentHomePage() {
       fetchPOData();
     }
   }, [dashboardData]);
+
+  useEffect(() => {
+    // Fetch LO achievements data
+    fetchLOData();
+  }, []);
 
   const fetchAssessmentsForGrades = async () => {
     try {
@@ -158,6 +165,26 @@ export default function StudentHomePage() {
       }
     } catch (err) {
       console.error('Failed to fetch PO data:', err);
+    }
+  };
+
+  const fetchLOData = async () => {
+    try {
+      // Fetch LO achievements and learning outcomes
+      const [loAchievementsData, learningOutcomesData] = await Promise.allSettled([
+        api.getLOAchievements(),
+        api.getLearningOutcomes()
+      ]);
+
+      if (loAchievementsData.status === 'fulfilled') {
+        setLOAchievements(Array.isArray(loAchievementsData.value) ? loAchievementsData.value : []);
+      }
+
+      if (learningOutcomesData.status === 'fulfilled') {
+        setLearningOutcomes(Array.isArray(learningOutcomesData.value) ? learningOutcomesData.value : []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch LO data:', err);
     }
   };
 
@@ -226,8 +253,32 @@ export default function StudentHomePage() {
   const recentGrades = dashboardData.recent_grades || [];
   const completedCourses = dashboardData.completed_courses || 0;
 
-  // Calculate active courses
-  const activeCourses = enrollments.filter(e => e.is_active);
+  // Calculate active courses - remove duplicates by course ID AND course name
+  const activeCourses = enrollments
+    .filter(e => e.is_active)
+    .filter((enrollment, index, self) => {
+      // Get course ID and name from enrollment
+      const courseId = typeof enrollment.course === 'object' && enrollment.course !== null
+        ? (enrollment.course as any).id
+        : typeof enrollment.course === 'string'
+        ? parseInt(enrollment.course)
+        : enrollment.course;
+      
+      const courseName = enrollment.course_name || '';
+      
+      // Keep only first occurrence of each course (by ID OR by name if names match)
+      return index === self.findIndex(e => {
+        const eCourseId = typeof e.course === 'object' && e.course !== null
+          ? (e.course as any).id
+          : typeof e.course === 'string'
+          ? parseInt(e.course)
+          : e.course;
+        const eCourseName = e.course_name || '';
+        
+        // Match by course ID OR by course name (if names are the same, treat as duplicate)
+        return eCourseId === courseId || (courseName && eCourseName && courseName.toLowerCase().trim() === eCourseName.toLowerCase().trim());
+      });
+    });
 
   // Calculate total PO achievement (same logic as PO outcomes page)
   // Build achievement map (same as PO outcomes page)
@@ -280,16 +331,91 @@ export default function StudentHomePage() {
       }, 0) / posWithData.length)
     : 0;
 
-  // Calculate PO status summary
-  const poStatusSummary = {
-    achieved: poAchievements.filter(po => (po.achievement_percentage || 0) >= (po.target_percentage || 0)).length,
-    needsAttention: poAchievements.filter(po => {
-      const achievement = po.achievement_percentage || 0;
-      const target = po.target_percentage || 0;
-      return achievement > 0 && achievement < target;
-    }).length,
-    noData: poAchievements.filter(po => !po.achievement_percentage || po.achievement_percentage === 0).length
-  };
+
+  // Calculate total LO achievement (similar to PO achievement)
+  const loAchievementMap = new Map<number, StudentLOAchievement>();
+  loAchievements.forEach(a => {
+    const loId = typeof a.learning_outcome === 'string' ? parseInt(a.learning_outcome) : 
+                 (typeof a.learning_outcome === 'object' && a.learning_outcome?.id) ? 
+                 (typeof a.learning_outcome.id === 'string' ? parseInt(a.learning_outcome.id) : a.learning_outcome.id) :
+                 a.learning_outcome;
+    if (loId) loAchievementMap.set(loId, a);
+  });
+
+  // Filter active LOs
+  const activeLOs = learningOutcomes && learningOutcomes.length > 0 ? learningOutcomes.filter(lo => {
+    if (lo.is_active === undefined || lo.is_active === null) return true;
+    if (typeof lo.is_active === 'string') {
+      return lo.is_active.toLowerCase() === 'true';
+    }
+    return lo.is_active === true;
+  }) : [];
+
+  const LOsToShow = activeLOs.length > 0 ? activeLOs : (learningOutcomes || []);
+
+  // Calculate hasData for each LO
+  const losWithData = LOsToShow.filter(lo => {
+    const loId = typeof lo.id === 'string' ? parseInt(lo.id) : lo.id;
+    const achievement = loAchievementMap.get(loId);
+    const hasAchievement = !!achievement && achievement.current_percentage !== null && achievement.current_percentage !== undefined;
+    return hasAchievement;
+  });
+
+  // Calculate average LO achievement
+  const totalLOAchievement = losWithData.length > 0
+    ? Math.round(losWithData.reduce((sum, lo) => {
+        const loId = typeof lo.id === 'string' ? parseInt(lo.id) : lo.id;
+        const achievement = loAchievementMap.get(loId);
+        const achievementValue = achievement?.current_percentage ?? achievement?.achievement_percentage ?? 0;
+        const current = achievement ? Number(achievementValue) : 0;
+        return sum + current;
+      }, 0) / losWithData.length)
+    : 0;
+
+  // Find top PO (highest achievement)
+  const topPO = poAchievements.length > 0
+    ? poAchievements.reduce((top, current) => {
+        const topAchievement = top.achievement_percentage || top.current_percentage || 0;
+        const currentAchievement = current.achievement_percentage || current.current_percentage || 0;
+        return currentAchievement > topAchievement ? current : top;
+      })
+    : null;
+
+  // Get PO code and title from top PO achievement
+  let topPODisplay = '-';
+  if (topPO) {
+    let poCode = topPO.po_code || topPO.program_outcome?.code || '';
+    let poTitle = topPO.po_title || topPO.program_outcome?.title || '';
+    
+    // If not found, try to find it from programOutcomes list
+    if ((!poCode || !poTitle) && programOutcomes.length > 0) {
+      const poId = typeof topPO.program_outcome === 'string' 
+        ? parseInt(topPO.program_outcome) 
+        : (typeof topPO.program_outcome === 'object' && topPO.program_outcome?.id)
+        ? (typeof topPO.program_outcome.id === 'string' ? parseInt(topPO.program_outcome.id) : topPO.program_outcome.id)
+        : topPO.program_outcome;
+      
+      if (poId) {
+        const po = programOutcomes.find(p => {
+          const pId = typeof p.id === 'string' ? parseInt(p.id) : p.id;
+          return pId === poId;
+        });
+        if (po) {
+          poCode = poCode || po.code || '';
+          poTitle = poTitle || po.title || '';
+        }
+      }
+    }
+    
+    // Format: Just show title (remove code)
+    if (poTitle) {
+      topPODisplay = poTitle;
+    } else if (poCode) {
+      topPODisplay = poCode;
+    } else {
+      topPODisplay = '-';
+    }
+  }
 
   // Student info
   const studentInfo = {
@@ -308,7 +434,8 @@ export default function StudentHomePage() {
   }> = [
     { title: 'Courses in Progress', value: activeCourses.length > 0 ? activeCourses.length.toString() : '0', change: '', trend: 'stable', icon: BookOpen, color: 'from-blue-500 to-cyan-500' },
     { title: 'Total PO Achievement', value: totalPOAchievement > 0 ? `${totalPOAchievement}%` : '-', change: '', trend: 'up', icon: Award, color: 'from-purple-500 to-pink-500' },
-    { title: 'PO Status', value: `${poStatusSummary.achieved}/${poAchievements.length}`, change: '', trend: 'stable', icon: Trophy, color: 'from-orange-500 to-red-500' }
+    { title: 'Total LO Achievement', value: totalLOAchievement > 0 ? `${totalLOAchievement}%` : '-', change: '', trend: 'up', icon: Award, color: 'from-green-500 to-emerald-500' },
+    { title: 'Top Area', value: topPODisplay, change: '', trend: 'up', icon: Trophy, color: 'from-orange-500 to-red-500' }
   ];
 
   // Get course information for each grade using assessments and enrollments
@@ -397,44 +524,93 @@ export default function StudentHomePage() {
 
   if (hasRecentGrades) {
     if (selectedCourse === 'all') {
-      // Show course averages as a bar chart - cleaner view
-      const courseAverages = new Map<number, { courseCode: string; courseName: string; grades: number[] }>();
+      // Calculate weighted average for each course based on assessment weights
+      // Use Map to ensure unique courses by course ID
+      const courseWeightedScores = new Map<number, { 
+        courseCode: string; 
+        courseName: string; 
+        totalWeightedScore: number;
+        totalWeight: number;
+        count: number;
+      }>();
+      
+      // Track processed courses by ID and name to avoid duplicates
+      const processedCoursesById = new Set<number>();
+      const processedCoursesByName = new Set<string>();
       
       filteredGrades.forEach((g) => {
         const course = getCourseForGrade(g);
         if (!course) return;
         
-        if (!courseAverages.has(course.id)) {
-          courseAverages.set(course.id, {
-            courseCode: course.code,
-            courseName: course.name,
-            grades: []
-          });
+        // Check if already processed by ID or by name
+        const courseNameKey = (course.name || '').toLowerCase().trim();
+        if (processedCoursesById.has(course.id) || processedCoursesByName.has(courseNameKey)) {
+          return;
         }
         
-        const courseData = courseAverages.get(course.id)!;
-        courseData.grades.push(Number(g.score) || 0);
+        // Find assessment to get weight - check both assessments and allAssessments
+        let assessment = assessments.find(a => a.id === g.assessment);
+        if (!assessment) {
+          assessment = allAssessments.find(a => a.id === g.assessment);
+        }
+        if (!assessment) return;
+        
+        if (!courseWeightedScores.has(course.id)) {
+          courseWeightedScores.set(course.id, {
+            courseCode: course.code,
+            courseName: course.name,
+            totalWeightedScore: 0,
+            totalWeight: 0,
+            count: 0
+          });
+          processedCoursesById.add(course.id);
+          if (courseNameKey) {
+            processedCoursesByName.add(courseNameKey);
+          }
+        }
+        
+        const courseData = courseWeightedScores.get(course.id)!;
+        const weight = Number(assessment.weight || 0);
+        const score = Number(g.score) || 0;
+        const maxScore = Number(g.max_score) || Number(assessment.max_score) || 100;
+        const percentage = maxScore > 0 ? (score / maxScore) * 100 : 0;
+        
+        courseData.totalWeightedScore += percentage * weight;
+        courseData.totalWeight += weight;
+        courseData.count += 1;
       });
 
-      // Calculate average for each course
-      const courseStats = Array.from(courseAverages.entries()).map(([courseId, courseData]) => {
-        const average = courseData.grades.length > 0
-          ? courseData.grades.reduce((sum, score) => sum + score, 0) / courseData.grades.length
+      // Calculate weighted average for each course
+      // Remove duplicates by course name (keep first occurrence)
+      const allCourseStats = Array.from(courseWeightedScores.entries()).map(([courseId, courseData]) => {
+        const weightedAverage = courseData.totalWeight > 0
+          ? courseData.totalWeightedScore / courseData.totalWeight
           : 0;
         
         return {
           courseId,
           courseCode: courseData.courseCode,
           courseName: courseData.courseName,
-          average: Math.round(average * 10) / 10,
-          count: courseData.grades.length
+          average: Math.round(weightedAverage * 10) / 10,
+          count: courseData.count
         };
-      }).sort((a, b) => b.average - a.average); // Sort by average descending
+      });
+      
+      // Filter duplicates by course name
+      const courseStats = allCourseStats.filter((stat, index, self) => {
+        const courseNameKey = (stat.courseName || '').toLowerCase().trim();
+        return index === self.findIndex(s => 
+          (s.courseName || '').toLowerCase().trim() === courseNameKey
+        );
+      }).sort((a, b) => b.average - a.average); // Sort by weighted average descending
 
       recentGradesData = {
-        labels: courseStats.map(stat => `${stat.courseCode}\n(${stat.count})`),
+        labels: courseStats.map(stat => {
+          const name = stat.courseName.length > 20 ? stat.courseName.substring(0, 20) + '...' : stat.courseName;
+          return `${stat.courseCode}\n${name}\n(${stat.count})`;
+        }),
         datasets: [{
-          label: 'Course Average Score',
+          label: 'Weighted Course Score',
           data: courseStats.map(stat => stat.average),
           backgroundColor: courseStats.map((_, index) => {
             const colors = [
@@ -579,6 +755,10 @@ export default function StudentHomePage() {
             {performanceStats.map((stat, index) => {
                 const { start, end } = getGradientColors(stat.color); 
                 const isPOCard = stat.title === 'Total PO Achievement';
+                const isLOCard = stat.title === 'Total LO Achievement';
+                const isTopAreaCard = stat.title === 'Top Area';
+                const isCoursesCard = stat.title === 'Courses in Progress';
+                const isClickable = isPOCard || isLOCard || isTopAreaCard || isCoursesCard;
                 
                 const cardContent = (
                     <>
@@ -608,10 +788,22 @@ export default function StudentHomePage() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: index * 0.1 + 0.2 }}
                         whileHover={{ scale: 1.05, y: -5 }}
-                        className={`backdrop-blur-xl ${themeClasses.card} p-6 shadow-2xl hover:shadow-indigo-500/20 transition-all ${isPOCard ? 'cursor-pointer' : ''}`}
+                        className={`backdrop-blur-xl ${themeClasses.card} p-6 shadow-2xl hover:shadow-indigo-500/20 transition-all ${isClickable ? 'cursor-pointer' : ''}`}
                     >
                         {isPOCard ? (
                             <Link href="/student/po-outcomes" className="block">
+                                {cardContent}
+                            </Link>
+                        ) : isLOCard ? (
+                            <Link href="/student/lo-outcomes" className="block">
+                                {cardContent}
+                            </Link>
+                        ) : isTopAreaCard ? (
+                            <Link href="/student/strengths" className="block">
+                                {cardContent}
+                            </Link>
+                        ) : isCoursesCard ? (
+                            <Link href="/student/courses" className="block">
                                 {cardContent}
                             </Link>
                         ) : (
@@ -705,81 +897,6 @@ export default function StudentHomePage() {
             {/* Sağ Sütun (My Courses & Grades ve Alerts) */}
             <div className="space-y-6">
 
-                 {/* My Courses & Grades */}
-                 <motion.div
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.4 }}
-                    className={`backdrop-blur-xl ${themeClasses.card} p-6 shadow-2xl`}
-                >
-                    <div className="flex items-center justify-between mb-4">
-                        <h2 className={`text-xl font-bold ${whiteTextClass} flex items-center gap-2`}>
-                            <BookOpen className={`w-5 h-5 ${accentIconClass}`} />
-                            My Courses & Grades
-                        </h2>
-                        <Link 
-                            href="/student/courses"
-                            className={`text-sm ${accentIconClass} hover:underline flex items-center gap-1`}
-                        >
-                            View All
-                            <ArrowUpRight className="w-4 h-4" />
-                        </Link>
-                    </div>
-                    <div className="space-y-3">
-                        {activeCourses.length > 0 ? (
-                            activeCourses.slice(0, 5).map((enrollment, index) => {
-                                // Find grades for this course
-                                const courseGrades = dashboardData.recent_grades?.filter(g => {
-                                    // We need to check if grade's assessment belongs to this course
-                                    // For now, we'll show enrollment info
-                                    return true; // Simplified for now
-                                }) || [];
-                                
-                                const finalGrade = enrollment.final_grade !== null && enrollment.final_grade !== undefined
-                                    ? enrollment.final_grade
-                                    : '-';
-                                
-                                return (
-                                    <motion.div
-                                        key={enrollment.id || index}
-                                        initial={{ opacity: 0, y: 10 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        transition={{ delay: 0.5 + index * 0.1 }}
-                                        className={`p-4 rounded-xl border ${isDark ? 'bg-white/5 border-white/10 hover:bg-white/10' : 'bg-gray-50 border-gray-200 hover:bg-gray-100'} transition-all`}
-                                    >
-                                        <div className="flex items-start justify-between">
-                                            <div className="flex-1">
-                                                <h3 className={`font-semibold ${whiteTextClass} mb-1`}>
-                                                    {enrollment.course_code || 'N/A'}
-                                                </h3>
-                                                <p className={`text-sm ${secondaryTextClass} mb-2`}>
-                                                    {enrollment.course_name || 'Unknown Course'}
-                                                </p>
-                                                <div className="flex items-center gap-4 text-sm">
-                                                    <span className={secondaryTextClass}>
-                                                        Status: <span className={enrollment.is_active ? 'text-green-500' : 'text-gray-500'}>
-                                                            {enrollment.is_active ? 'In Progress' : 'Completed'}
-                                                        </span>
-                                                    </span>
-                                                    <span className={secondaryTextClass}>
-                                                        Grade: <span className={`font-semibold ${whiteTextClass}`}>
-                                                            {typeof finalGrade === 'number' ? finalGrade.toFixed(1) : finalGrade}
-                                                        </span>
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </motion.div>
-                                );
-                            })
-                        ) : (
-                            <div className="flex items-center justify-center py-8">
-                                <p className={secondaryTextClass}>No courses enrolled</p>
-                            </div>
-                        )}
-                    </div>
-                </motion.div>
-                
                 {/* Notifications/Alerts */}
                 <motion.div
                     initial={{ opacity: 0, x: 20 }}

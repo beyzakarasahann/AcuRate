@@ -88,8 +88,32 @@ export default function CoursesPage() {
       poAchievements = Array.isArray(poAchievements) ? poAchievements : [];
       allAssessments = Array.isArray(allAssessments) ? allAssessments : [];
 
+      // Remove duplicate enrollments by course ID AND course name (keep first occurrence)
+      const uniqueEnrollments = enrollments.filter((enrollment, index, self) => {
+        const courseId = typeof enrollment.course === 'object' && enrollment.course !== null
+          ? (enrollment.course as any).id
+          : typeof enrollment.course === 'string'
+          ? parseInt(enrollment.course)
+          : enrollment.course;
+        
+        const courseName = enrollment.course_name || '';
+        
+        // Check both course ID and course name to avoid duplicates
+        return index === self.findIndex(e => {
+          const eCourseId = typeof e.course === 'object' && e.course !== null
+            ? (e.course as any).id
+            : typeof e.course === 'string'
+            ? parseInt(e.course)
+            : e.course;
+          const eCourseName = e.course_name || '';
+          
+          // Match by course ID OR by course name (if names are the same, treat as duplicate)
+          return eCourseId === courseId || (courseName && eCourseName && courseName.toLowerCase().trim() === eCourseName.toLowerCase().trim());
+        });
+      });
+
       // Transform enrollments to course data
-      const courses: CourseData[] = enrollments.map((enrollment) => {
+      const courses: CourseData[] = uniqueEnrollments.map((enrollment) => {
         // Get grades for this course
         const courseGrades = allGrades.filter(grade => {
           const assessment = allAssessments.find(a => a.id === grade.assessment);

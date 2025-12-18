@@ -77,9 +77,22 @@ export default function MappingsPage() {
     try {
       setLoading(true);
       const coursesData = await api.getCourses();
-      setCourses(coursesData);
-      if (coursesData.length > 0 && !selectedCourse) {
-        setSelectedCourse(coursesData[0].id);
+      // Remove duplicate courses by course ID AND course name (keep first occurrence)
+      const uniqueCourses = Array.isArray(coursesData) ? coursesData.filter((course, index, self) => {
+        const courseId = typeof course.id === 'string' ? parseInt(course.id) : course.id;
+        const courseName = (course.name || '').toLowerCase().trim();
+        
+        return index === self.findIndex((c) => {
+          const cCourseId = typeof c.id === 'string' ? parseInt(c.id) : c.id;
+          const cCourseName = (c.name || '').toLowerCase().trim();
+          
+          // Match by course ID OR by course name (if names are the same, treat as duplicate)
+          return cCourseId === courseId || (courseName && cCourseName && courseName === cCourseName);
+        });
+      }) : [];
+      setCourses(uniqueCourses);
+      if (uniqueCourses.length > 0 && !selectedCourse) {
+        setSelectedCourse(uniqueCourses[0].id);
       }
     } catch (err: any) {
       console.error('Error loading courses:', err);

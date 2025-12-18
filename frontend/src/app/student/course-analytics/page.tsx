@@ -55,7 +55,7 @@ export default function CourseAnalyticsPage() {
             const response = await api.getCourseAnalytics();
 
             if (response.success && response.courses) {
-                const courseAnalytics: CourseAnalyticsCard[] = response.courses.map(course => ({
+                const allCourseAnalytics: CourseAnalyticsCard[] = response.courses.map(course => ({
                     courseId: course.course_id,
                     courseCode: course.course_code,
                     courseName: course.course_name,
@@ -66,7 +66,15 @@ export default function CourseAnalyticsPage() {
                     trend: course.trend
                 }));
 
-                setCourses(courseAnalytics);
+                // Remove duplicates by course name (keep first occurrence)
+                const uniqueCourseAnalytics = allCourseAnalytics.filter((course, index, self) => {
+                    const courseName = (course.courseName || '').toLowerCase().trim();
+                    return index === self.findIndex(c => 
+                        (c.courseName || '').toLowerCase().trim() === courseName
+                    );
+                });
+
+                setCourses(uniqueCourseAnalytics);
             } else {
                 setCourses([]);
             }

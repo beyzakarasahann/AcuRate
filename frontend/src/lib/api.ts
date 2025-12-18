@@ -147,6 +147,7 @@ export interface Assessment {
   type_display?: string;
   weight: number;
   max_score: number;
+  feedback_ranges?: FeedbackRange[];
 }
 
 export interface AssessmentLO {

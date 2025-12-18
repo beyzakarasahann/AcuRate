@@ -16,7 +16,7 @@ const baseNavItems = [
     { name: 'Scores', icon: GitBranch, slug: 'scores' },
     { name: 'PO Outcomes', icon: Award, slug: 'po-outcomes' },
     { name: 'LO Outcomes', icon: ListOrdered, slug: 'lo-outcomes' },
-    { name: 'Course Analytics', icon: TrendingUp, slug: 'course-analytics' },
+    { name: 'Grades', icon: TrendingUp, slug: 'course-analytics' },
     { name: 'Settings', icon: Settings, slug: 'settings' },
 ];
 

@@ -153,6 +153,14 @@ export default function CourseDetailAnalyticsPage() {
             let assessmentsArray: Assessment[] = [];
             if (assessmentsData.status === 'fulfilled') {
                 assessmentsArray = Array.isArray(assessmentsData.value) ? assessmentsData.value : [];
+                // Debug: Check if feedback_ranges are included
+                assessmentsArray.forEach(assessment => {
+                    if (!assessment.feedback_ranges || assessment.feedback_ranges.length === 0) {
+                        console.log(`⚠️ Assessment "${assessment.title}" has no feedback_ranges`);
+                    } else {
+                        console.log(`✅ Assessment "${assessment.title}" has ${assessment.feedback_ranges.length} feedback ranges:`, assessment.feedback_ranges);
+                    }
+                });
                 setAssessments(assessmentsArray);
             }
 
@@ -282,6 +290,35 @@ export default function CourseDetailAnalyticsPage() {
                                     {assessments.map((assessment) => {
                                         const grade = grades.find(g => g.assessment === assessment.id);
                                         
+                                        // Get feedback from teacher's autofeedback (feedback_ranges)
+                                        // Always use feedback_ranges if available, ignore grade.feedback (which might be mock data)
+                                        let feedback = '-';
+                                        
+                                        if (grade) {
+                                            const scoreNum = Number(grade.score || 0);
+                                            const maxScore = Number(assessment.max_score || 100);
+                                            
+                                            if (scoreNum > 0 && maxScore > 0) {
+                                                // Calculate automatic feedback from assessment's feedback_ranges (teacher's autofeedback)
+                                                if (assessment.feedback_ranges && assessment.feedback_ranges.length > 0) {
+                                                    // Calculate percentage
+                                                    const percentage = (scoreNum / maxScore) * 100;
+                                                    
+                                                    // Find matching range
+                                                    for (const range of assessment.feedback_ranges) {
+                                                        if (percentage >= range.min_score && percentage <= range.max_score) {
+                                                            feedback = range.feedback;
+                                                            break;
+                                                        }
+                                                    }
+                                                } else {
+                                                    // Debug: Log when feedback_ranges is missing
+                                                    console.log(`⚠️ No feedback_ranges for assessment "${assessment.title}" (ID: ${assessment.id})`);
+                                                }
+                                                // If no feedback_ranges or no match found, feedback stays '-'
+                                            }
+                                        }
+                                        
                                         return (
                                             <tr key={assessment.id} className="hover:bg-white/5 transition-colors">
                                                 <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${whiteText}`}>
@@ -297,7 +334,7 @@ export default function CourseDetailAnalyticsPage() {
                                                     {assessment.weight}%
                                                 </td>
                                                 <td className={`px-6 py-4 text-sm ${mutedText} max-w-xs truncate`}>
-                                                    {grade?.feedback || '-'}
+                                                    {feedback}
                                                 </td>
                                             </tr>
                                         );

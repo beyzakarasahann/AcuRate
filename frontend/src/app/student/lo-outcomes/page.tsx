@@ -125,6 +125,7 @@ export default function LOOutcomesPage() {
                 if (loId) loAchievementMap.set(loId, a);
             });
 
+            // Build enrollment map - also handle course object format
             const enrollmentMap = new Map<number, Enrollment>();
             enrollments.forEach(e => {
                 let courseId: number | null = null;
@@ -136,6 +137,21 @@ export default function LOOutcomesPage() {
                     courseId = e.course;
                 }
                 if (courseId) enrollmentMap.set(courseId, e);
+            });
+            
+            // Also build a course map from LO's course objects if available
+            const courseMap = new Map<number, { code: string; name: string }>();
+            learningOutcomes.forEach(lo => {
+                if (typeof lo.course === 'object' && lo.course !== null) {
+                    const courseObj = lo.course as any;
+                    const courseId = courseObj.id;
+                    if (courseId && !courseMap.has(courseId)) {
+                        courseMap.set(courseId, {
+                            code: courseObj.code || '',
+                            name: courseObj.name || ''
+                        });
+                    }
+                }
             });
 
             // Process LO data
@@ -156,8 +172,23 @@ export default function LOOutcomesPage() {
                     status = 'Needs Attention';
                 }
 
-                const courseId = typeof lo.course === 'string' ? parseInt(lo.course) : lo.course;
+                const courseId = typeof lo.course === 'string' ? parseInt(lo.course) : 
+                                 (typeof lo.course === 'object' && lo.course !== null) ? (lo.course as any).id : 
+                                 lo.course;
                 const enrollment = courseId ? enrollmentMap.get(courseId) : null;
+                const courseFromMap = courseId ? courseMap.get(courseId) : null;
+
+                // Get course info - prioritize enrollment, then course map, then LO's course info, then fallback
+                const courseName = enrollment?.course_name || 
+                                  courseFromMap?.name ||
+                                  lo.course_name || 
+                                  (typeof lo.course === 'object' && lo.course !== null ? (lo.course as any).name : null) ||
+                                  'Unknown Course';
+                const courseCode = enrollment?.course_code || 
+                                   courseFromMap?.code ||
+                                   lo.course_code || 
+                                   (typeof lo.course === 'object' && lo.course !== null ? (lo.course as any).code : null) ||
+                                   '';
 
                 return {
                     code: lo.code,
@@ -166,8 +197,8 @@ export default function LOOutcomesPage() {
                     target: target,
                     current: Math.round(current * 10) / 10,
                     status: status,
-                    course: enrollment?.course_name || lo.course_name || 'Unknown Course',
-                    courseCode: enrollment?.course_code || lo.course_code || '',
+                    course: courseName,
+                    courseCode: courseCode,
                     loId: lo.id
                 };
             });
@@ -358,9 +389,18 @@ export default function LOOutcomesPage() {
                                     <h3 className={`text-xs font-semibold ${mutedText} flex items-center gap-2 mb-3 uppercase tracking-wide`}>
                                         <BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" /> Course
                                     </h3>
-                                    <span className={`inline-block px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium rounded-lg truncate max-w-full ${isDark ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' : 'bg-purple-100 text-purple-700 border border-purple-200'}`}>
-                                        {lo.courseCode || lo.course}
-                                    </span>
+                                    <div className="space-y-1.5">
+                                        {lo.courseCode && (
+                                            <span className={`inline-block px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium rounded-lg truncate max-w-full ${isDark ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' : 'bg-purple-100 text-purple-700 border border-purple-200'}`}>
+                                                {lo.courseCode}
+                                            </span>
+                                        )}
+                                        {lo.course && lo.course !== 'Unknown Course' && (
+                                            <p className={`text-xs ${mutedText} truncate`}>
+                                                {lo.course}
+                                            </p>
+                                        )}
+                                    </div>
                                 </div>
                             </motion.div>
                         );

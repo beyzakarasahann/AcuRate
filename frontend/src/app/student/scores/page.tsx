@@ -49,6 +49,7 @@ interface CourseScoreData {
     maxScore: number;
     percentage: number;
     weights: Record<string, number>; // LO ID -> weight
+    feedback?: string; // Feedback from grade or auto-generated from feedback_ranges
   }>;
   los: Array<{
     id: string;
@@ -440,6 +441,34 @@ export default function ScoresPage() {
         console.warn(`⚠️  No LO mappings found for assessment: ${assessment.title} (ID: ${assessmentId})`);
       }
 
+      // Get automatic feedback from assessment's feedback_ranges if grade doesn't have feedback
+      const getAutomaticFeedback = (score: number, assessment: Assessment): string => {
+        // If grade already has feedback, use it
+        if (grade?.feedback) {
+          return grade.feedback;
+        }
+        
+        // If no feedback_ranges, return empty
+        if (!assessment.feedback_ranges || assessment.feedback_ranges.length === 0) {
+          return '';
+        }
+        
+        // Calculate percentage
+        const maxScore = Number(assessment.max_score || 100);
+        const percentage = maxScore > 0 ? (score / maxScore) * 100 : 0;
+        
+        // Find matching range
+        for (const range of assessment.feedback_ranges) {
+          if (percentage >= range.min_score && percentage <= range.max_score) {
+            return range.feedback;
+          }
+        }
+        
+        return '';
+      };
+
+      const feedback = score > 0 ? getAutomaticFeedback(score, assessment) : (grade?.feedback || '');
+
       return {
         id: `assessment-${assessment.id}`,
         label: assessment.title,
@@ -447,6 +476,7 @@ export default function ScoresPage() {
         maxScore: Number(maxScore),
         percentage: Number(percentage),
         weights,
+        feedback: feedback || undefined,
       };
     });
 
@@ -750,6 +780,11 @@ export default function ScoresPage() {
               <p className={`text-xs font-bold ${isDark ? 'text-blue-300' : 'text-blue-600'}`}>
                 {Number(assessment.percentage || 0).toFixed(1)}%
               </p>
+              {assessment.feedback && (
+                <p className={`text-xs mt-1 ${isDark ? 'text-blue-200' : 'text-blue-700'} line-clamp-2`}>
+                  {assessment.feedback}
+                </p>
+              )}
             </div>
           ),
         },
@@ -843,6 +878,7 @@ export default function ScoresPage() {
           title: assessment.label,
           score: `${Number(assessment.score || 0).toFixed(1)} / ${Number(assessment.maxScore || 100).toFixed(0)}`,
           percentage: `${Number(assessment.percentage || 0).toFixed(1)}%`,
+          feedback: assessment.feedback || undefined,
           contributions: Object.entries(assessment.weights || {}).map(([loId, weight]) => ({
             target: courseData?.los.find(lo => lo.id === loId)?.label || loId,
             weight: `${(weight * 100).toFixed(0)}%`,
@@ -1089,6 +1125,16 @@ export default function ScoresPage() {
                       {tooltipData.score}
                       {tooltipData.percentage && ` (${tooltipData.percentage})`}
                     </span>
+                  </div>
+                )}
+
+                {/* Feedback for Assessment */}
+                {tooltipData.type === 'assessment' && tooltipData.feedback && (
+                  <div className="pt-2 border-t border-gray-500/20">
+                    <span className={`text-xs font-semibold ${mutedText} mb-1 block`}>Feedback:</span>
+                    <p className={`text-xs ${isDark ? 'text-blue-200' : 'text-blue-700'}`}>
+                      {tooltipData.feedback}
+                    </p>
                   </div>
                 )}
 
