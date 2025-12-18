@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { Building2, Users, GraduationCap, BookOpen, Calendar, Mail, Phone, Search, Loader2, RefreshCw, TrendingUp, TrendingDown, Minus, Plus, X, AlertCircle, CheckCircle2, Trash2, AlertTriangle, KeyRound } from 'lucide-react';
 import { api, Institution } from '@/lib/api';
 import { useThemeColors } from '@/hooks/useThemeColors';
+import toast from 'react-hot-toast';
 
 export default function SuperAdminInstitutionsPage() {
   const { isDark, mounted, themeClasses, accentGradientClass } = useThemeColors();
@@ -202,7 +203,9 @@ export default function SuperAdminInstitutionsPage() {
           setResetPasswordSuccess(result.message || 'Password reset link generated');
           if (result.credentials) {
             // Show credentials if email failed
-            alert(`Password reset link could not be sent. Credentials:\nUsername: ${result.credentials.username}\nPassword: ${result.credentials.password}`);
+            toast.error(`Password reset link could not be sent. Credentials:\nUsername: ${result.credentials.username}\nPassword: ${result.credentials.password}`, {
+              duration: 10000,
+            });
           }
         }
         // Clear success message after 5 seconds

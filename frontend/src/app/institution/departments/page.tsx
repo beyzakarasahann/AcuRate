@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { Inter } from 'next/font/google';
 import toast from 'react-hot-toast';
+import { handleApiError } from '@/lib/errorHandler';
 import { ConfirmationModal } from '@/components/ui/ConfirmationModal';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
@@ -328,7 +329,9 @@ export default function DepartmentsPage() {
       }
     } catch (error: any) {
       console.error('Failed to delete department', error);
-      alert(`Failed to delete department: ${error.message || 'Unknown error'}`);
+      handleApiError(error, {
+        toastMessage: 'Failed to delete department. Please try again.'
+      });
     }
   };
 
@@ -516,7 +519,9 @@ export default function DepartmentsPage() {
       setEditingCourse(null);
     } catch (error: any) {
       console.error('Failed to save course', error);
-      alert(error.message || 'Failed to save course');
+      handleApiError(error, {
+        toastMessage: 'Failed to save course. Please try again.'
+      });
     } finally {
       setSavingCourse(false);
     }
@@ -533,7 +538,9 @@ export default function DepartmentsPage() {
       setCurriculumData(data);
     } catch (error: any) {
       console.error('Failed to delete course', error);
-      alert(error.message || 'Failed to delete course');
+      handleApiError(error, {
+        toastMessage: 'Failed to delete course. Please try again.'
+      });
     }
   };
 

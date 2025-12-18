@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { FileText, Search, Save, Filter, CheckCircle2, AlertCircle, User, BookOpen, Plus, X, Edit, TrendingUp, Info, Loader2, Trash2 } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import { useThemeColors } from '@/hooks/useThemeColors';
+import toast from 'react-hot-toast';
+import { handleApiError } from '@/lib/errorHandler';
 import { api, type Course, type Assessment, type Enrollment, type StudentGrade, type LearningOutcome, type AssessmentLO } from '@/lib/api';
 
 // Assessment type seçenekleri (backend'deki AssessmentType ile uyumlu)
@@ -332,7 +334,7 @@ export default function TeacherGradesPage() {
   // Not kaydetme
   const handleSaveGrades = async () => {
     if (!selectedCourse || !selectedAssessment) {
-      alert('Please select a course and assessment first.');
+      toast.error('Please select a course and assessment first.');
       return;
     }
 
@@ -398,7 +400,7 @@ export default function TeacherGradesPage() {
   // Edit Grades modal'dan kaydetme
   const handleSaveEditingGrades = async () => {
     if (!selectedCourse || !selectedAssessment) {
-      alert('Please select a course and assessment first.');
+      toast.error('Please select a course and assessment first.');
       return;
     }
 
@@ -472,7 +474,7 @@ export default function TeacherGradesPage() {
   // Feedback aralıklarını kaydetme
   const handleSaveFeedbackRanges = async () => {
     if (!selectedAssessment) {
-      alert('Please select an assessment first.');
+      toast.error('Please select an assessment first.');
       return;
     }
 
@@ -487,14 +489,14 @@ export default function TeacherGradesPage() {
     });
 
     if (validRanges.length === 0) {
-      alert('Please add at least one valid feedback range with a non-empty feedback message.');
+      toast.error('Please add at least one valid feedback range with a non-empty feedback message.');
       return;
     }
 
     // Check for empty feedback messages
     const emptyFeedback = feedbackRanges.find(range => !range.feedback || range.feedback.trim() === '');
     if (emptyFeedback) {
-      alert('All feedback ranges must have a feedback message. Please fill in all feedback fields.');
+      toast.error('All feedback ranges must have a feedback message. Please fill in all feedback fields.');
       return;
     }
 
@@ -511,10 +513,13 @@ export default function TeacherGradesPage() {
       await fetchAssessments(selectedCourse!);
       setShowFeedbackRanges(false);
       setSaveStatus('success');
+      toast.success('Feedback ranges saved successfully.');
       setTimeout(() => setSaveStatus(null), 3000);
     } catch (err: any) {
       console.error('Failed to save feedback ranges:', err);
-      alert(`Failed to save feedback ranges: ${err.message || 'Please try again.'}`);
+      handleApiError(err, {
+        toastMessage: 'Failed to save feedback ranges. Please try again.'
+      });
     }
   };
 
@@ -538,18 +543,18 @@ export default function TeacherGradesPage() {
   // Yeni assessment oluşturma
   const handleCreateAssessment = async () => {
     if (!selectedCourse) {
-      alert('Please select a course first.');
+      toast.error('Please select a course first.');
       return;
     }
 
     if (!newAssessment.title || !newAssessment.type) {
-      alert('Please fill in all required fields (Title, Type).');
+      toast.error('Please fill in all required fields (Title, Type).');
       return;
     }
 
     // Max score validation
     if (newAssessment.maxScore < 0 || newAssessment.maxScore > 100) {
-      alert('Maximum score must be between 0 and 100.');
+      toast.error('Maximum score must be between 0 and 100.');
       return;
     }
 
@@ -558,7 +563,7 @@ export default function TeacherGradesPage() {
     const newTotalWeight = currentTotalWeight + newAssessment.weight;
 
     if (newTotalWeight > 100) {
-      alert(`Cannot create assessment: Total weight would be ${newTotalWeight.toFixed(1)}%, which exceeds 100%. Please reduce the weight to ${(100 - currentTotalWeight).toFixed(1)}% or less.`);
+      toast.error(`Cannot create assessment: Total weight would be ${newTotalWeight.toFixed(1)}%, which exceeds 100%. Please reduce the weight to ${(100 - currentTotalWeight).toFixed(1)}% or less.`);
       return;
     }
 
@@ -599,9 +604,12 @@ export default function TeacherGradesPage() {
       setNewAssessment({ title: '', type: 'MIDTERM', maxScore: 100, weight: 30, description: '' });
       setNewAssessmentLOs([]);
       setShowCreateAssessment(false);
+      toast.success('Assessment created successfully.');
     } catch (err: any) {
       console.error('Failed to create assessment:', err);
-      alert('Failed to create assessment. Please try again.');
+      handleApiError(err, {
+        toastMessage: 'Failed to create assessment. Please try again.'
+      });
     }
   };
 
@@ -632,7 +640,9 @@ export default function TeacherGradesPage() {
     } catch (err: any) {
       console.error('Failed to delete assessment:', err);
       setSaveStatus('error');
-      alert(err.message || 'Failed to delete assessment. Please try again.');
+      handleApiError(err, {
+        toastMessage: 'Failed to delete assessment. Please try again.'
+      });
       setTimeout(() => setSaveStatus(null), 3000);
     }
   };
@@ -644,7 +654,7 @@ export default function TeacherGradesPage() {
     }
 
     if (!editingAssessment.title || !editingAssessment.assessment_type) {
-      alert('Please fill in all required fields (Title, Type).');
+      toast.error('Please fill in all required fields (Title, Type).');
       return;
     }
 
@@ -657,7 +667,7 @@ export default function TeacherGradesPage() {
 
     if (newTotalWeight > 100) {
       const maxAllowed = 100 - otherAssessmentsWeight;
-      alert(`Total weight cannot exceed 100%. Maximum allowed weight for this assessment: ${maxAllowed.toFixed(1)}%`);
+      toast.error(`Total weight cannot exceed 100%. Maximum allowed weight for this assessment: ${maxAllowed.toFixed(1)}%`);
       return;
     }
 
@@ -676,9 +686,12 @@ export default function TeacherGradesPage() {
       setEditingAssessment(null);
       setSaveStatus('success');
       setTimeout(() => setSaveStatus(null), 3000);
+      toast.success('Assessment updated successfully.');
     } catch (err: any) {
       console.error('Failed to update assessment:', err);
-      alert(`Failed to update assessment: ${err.message || 'Please try again.'}`);
+      handleApiError(err, {
+        toastMessage: 'Failed to update assessment. Please try again.'
+      });
     }
   };
 
@@ -690,7 +703,7 @@ export default function TeacherGradesPage() {
     if (newTotalWeight > 100) {
       const maxAllowed = 100 - currentTotalWeight;
       setNewAssessment({ ...newAssessment, weight: Math.max(0, maxAllowed) });
-      alert(`Total weight cannot exceed 100%. Maximum allowed weight for this assessment: ${maxAllowed.toFixed(1)}%`);
+      toast.error(`Total weight cannot exceed 100%. Maximum allowed weight for this assessment: ${maxAllowed.toFixed(1)}%`);
       return;
     }
     
@@ -708,7 +721,7 @@ export default function TeacherGradesPage() {
     
     if (newTotalWeight > 100) {
       const maxAllowed = 100 - otherAssessmentsWeight;
-      alert(`Total weight cannot exceed 100%. Maximum allowed weight for this assessment: ${maxAllowed.toFixed(1)}%`);
+      toast.error(`Total weight cannot exceed 100%. Maximum allowed weight for this assessment: ${maxAllowed.toFixed(1)}%`);
       setEditingAssessment({ ...editingAssessment, weight: Math.max(0, maxAllowed) });
       return;
     }
@@ -1584,7 +1597,7 @@ export default function TeacherGradesPage() {
                         whileTap={{ scale: 0.95 }}
                         onClick={() => {
                           if (learningOutcomes.length === 0) {
-                            alert('No learning outcomes found for this course. Please create learning outcomes first.');
+                            toast.error('No learning outcomes found for this course. Please create learning outcomes first.');
                             return;
                           }
                           setNewAssessmentLOs([...newAssessmentLOs, { learning_outcome: learningOutcomes[0].id, weight: 1.0 }]);

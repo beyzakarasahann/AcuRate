@@ -6,6 +6,8 @@ import { BookOpen, Search, Building2, Loader2, Users, TrendingUp, Award, Refresh
 import { api } from '@/lib/api';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { Inter } from 'next/font/google';
+import toast from 'react-hot-toast';
+import { handleApiError } from '@/lib/errorHandler';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
@@ -161,7 +163,7 @@ export default function LessonsPage() {
 
   const handleAddCourse = () => {
     if (!selectedDepartment) {
-      alert('Please select a department first');
+      toast.error('Please select a department first');
       return;
     }
     setEditingCourse(null);
@@ -202,7 +204,7 @@ export default function LessonsPage() {
     e.preventDefault();
     
     if (!selectedDepartment) {
-      alert('Please select a department first');
+      toast.error('Please select a department first');
       return;
     }
 
@@ -231,7 +233,9 @@ export default function LessonsPage() {
       setEditingCourse(null);
     } catch (error: any) {
       console.error('Failed to save course', error);
-      alert(error.message || 'Failed to save course');
+      handleApiError(error, {
+        toastMessage: 'Failed to save course. Please try again.'
+      });
     } finally {
       setSavingCourse(false);
     }
@@ -246,7 +250,9 @@ export default function LessonsPage() {
       await fetchCourses();
     } catch (error: any) {
       console.error('Failed to delete course', error);
-      alert(error.message || 'Failed to delete course');
+      handleApiError(error, {
+        toastMessage: 'Failed to delete course. Please try again.'
+      });
     }
   };
 

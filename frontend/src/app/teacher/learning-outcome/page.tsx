@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Target, Plus, X, Save, BookOpen, AlertCircle, CheckCircle2, Trash2, Edit2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useThemeColors } from '@/hooks/useThemeColors';
+import toast from 'react-hot-toast';
+import { handleApiError } from '@/lib/errorHandler';
 import { api, LearningOutcome, Course, ProgramOutcome, LOPO } from '@/lib/api';
 
 // --- TİPLER ---
@@ -137,12 +139,12 @@ export default function LearningOutcomePage() {
   // Yeni Learning Outcome oluşturma
   const handleCreateLO = async () => {
     if (!newLO.code || !newLO.title || !newLO.description) {
-      alert('Please fill in all required fields (Code, Title, Description).');
+      toast.error('Please fill in all required fields (Code, Title, Description).');
       return;
     }
 
     if (!selectedCourse) {
-      alert('Please select a course first.');
+      toast.error('Please select a course first.');
       return;
     }
 
@@ -186,7 +188,9 @@ export default function LearningOutcomePage() {
     } catch (error: any) {
       console.error('Error creating learning outcome:', error);
       setSaveStatus('error');
-      alert(error?.error || 'Error creating Learning Outcome. Please try again.');
+      handleApiError(error, {
+        toastMessage: 'Error creating Learning Outcome. Please try again.'
+      });
     } finally {
       setIsSaving(false);
     }
@@ -241,7 +245,9 @@ export default function LearningOutcomePage() {
     } catch (error: any) {
       console.error('Error updating learning outcome:', error);
       setSaveStatus('error');
-      alert(error?.error || 'Error updating Learning Outcome. Please try again.');
+      handleApiError(error, {
+        toastMessage: 'Error updating Learning Outcome. Please try again.'
+      });
     }
   };
 

@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import { useThemeColors } from '@/hooks/useThemeColors';
+import toast from 'react-hot-toast';
+import { handleApiError } from '@/lib/errorHandler';
 import { 
   api, 
   type Course, 
@@ -202,17 +204,17 @@ export default function MappingsPage() {
   // Assessment-LO Mapping handlers
   const handleCreateAssessmentLO = async () => {
     if (!newAssessmentLO.assessment || newAssessmentLO.assessment === 0) {
-      alert('Please select an assessment.');
+      toast.error('Please select an assessment.');
       return;
     }
     
     if (!newAssessmentLO.learning_outcome || newAssessmentLO.learning_outcome === 0) {
-      alert('Please select a learning outcome.');
+      toast.error('Please select a learning outcome.');
       return;
     }
     
     if (!newAssessmentLO.percentage || newAssessmentLO.percentage < 1 || newAssessmentLO.percentage > 100) {
-      alert('Contribution must be between 1 and 100.');
+      toast.error('Contribution must be between 1 and 100.');
       return;
     }
     
@@ -282,7 +284,9 @@ export default function MappingsPage() {
       }
       
       setSaveStatus('error');
-      alert(`Failed to create mapping:\n\n${errorMessage}\n\nPlease check:\n- You selected an assessment and learning outcome\n- The assessment belongs to the selected course\n- Weight is between 0.1 and 10.0\n- This mapping doesn't already exist`);
+      handleApiError(err, {
+        toastMessage: `Failed to create mapping. Please check:\n- You selected an assessment and learning outcome\n- The assessment belongs to the selected course\n- Weight is between 0.1 and 10.0\n- This mapping doesn't already exist`
+      });
     } finally {
       setIsSaving(false);
     }
@@ -290,7 +294,7 @@ export default function MappingsPage() {
   
   const handleUpdateAssessmentLO = async (id: number, weight: number) => {
     if (weight < 0.01 || weight > 10.0) {
-      alert('Weight must be between 0.01 and 10.0');
+      toast.error('Weight must be between 0.01 and 10.0');
       return;
     }
     
@@ -305,7 +309,7 @@ export default function MappingsPage() {
     } catch (err: any) {
       console.error('Error updating assessment-LO mapping:', err);
       setSaveStatus('error');
-      alert(err?.error || 'Failed to update mapping');
+      handleApiError(err);
     } finally {
       setIsSaving(false);
     }
@@ -324,7 +328,7 @@ export default function MappingsPage() {
     } catch (err: any) {
       console.error('Error deleting assessment-LO mapping:', err);
       setSaveStatus('error');
-      alert(err?.error || 'Failed to delete mapping');
+      handleApiError(err);
     } finally {
       setIsSaving(false);
     }
@@ -333,17 +337,17 @@ export default function MappingsPage() {
   // LO-PO Mapping handlers
   const handleCreateLOPO = async () => {
     if (!newLOPO.learning_outcome || newLOPO.learning_outcome === 0) {
-      alert('Please select a learning outcome.');
+      toast.error('Please select a learning outcome.');
       return;
     }
     
     if (!newLOPO.program_outcome || newLOPO.program_outcome === 0) {
-      alert('Please select a program outcome.');
+      toast.error('Please select a program outcome.');
       return;
     }
     
     if (!newLOPO.percentage || newLOPO.percentage < 1 || newLOPO.percentage > 100) {
-      alert('Contribution must be between 1 and 100.');
+      toast.error('Contribution must be between 1 and 100.');
       return;
     }
     
@@ -413,7 +417,9 @@ export default function MappingsPage() {
       }
       
       setSaveStatus('error');
-      alert(`Failed to create mapping:\n\n${errorMessage}\n\nPlease check:\n- You selected a learning outcome and program outcome\n- The learning outcome belongs to the selected course\n- Weight is between 0.1 and 10.0\n- This mapping doesn't already exist`);
+      handleApiError(err, {
+        toastMessage: `Failed to create mapping. Please check:\n- You selected a learning outcome and program outcome\n- The learning outcome belongs to the selected course\n- Weight is between 0.1 and 10.0\n- This mapping doesn't already exist`
+      });
     } finally {
       setIsSaving(false);
     }
@@ -421,7 +427,7 @@ export default function MappingsPage() {
   
   const handleUpdateLOPO = async (id: number, weight: number) => {
     if (weight < 0.01 || weight > 10.0) {
-      alert('Weight must be between 0.01 and 10.0');
+      toast.error('Weight must be between 0.01 and 10.0');
       return;
     }
     
@@ -436,7 +442,7 @@ export default function MappingsPage() {
     } catch (err: any) {
       console.error('Error updating LO-PO mapping:', err);
       setSaveStatus('error');
-      alert(err?.error || 'Failed to update mapping');
+      handleApiError(err);
     } finally {
       setIsSaving(false);
     }
@@ -455,7 +461,7 @@ export default function MappingsPage() {
     } catch (err: any) {
       console.error('Error deleting LO-PO mapping:', err);
       setSaveStatus('error');
-      alert(err?.error || 'Failed to delete mapping');
+      handleApiError(err);
     } finally {
       setIsSaving(false);
     }

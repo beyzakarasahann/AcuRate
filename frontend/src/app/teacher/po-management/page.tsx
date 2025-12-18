@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Target, Plus, X, Save, BookOpen, AlertCircle, CheckCircle2, Info, Trash2, Edit2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useThemeColors } from '@/hooks/useThemeColors';
+import toast from 'react-hot-toast';
 
 // --- MOCK VERİLER ---
 
@@ -145,12 +146,12 @@ export default function POManagementPage() {
   // Kaydetme
   const handleSave = async () => {
     if (!selectedCourse) {
-      alert('Please select a course first.');
+      toast.error('Please select a course first.');
       return;
     }
 
     if (coursePOs.length === 0) {
-      alert('Please add at least one Program Outcome to the course.');
+      toast.error('Please add at least one Program Outcome to the course.');
       return;
     }
 
@@ -179,7 +180,7 @@ export default function POManagementPage() {
   // Yeni PO oluşturma
   const handleCreatePO = () => {
     if (!newPO.code || !newPO.title || !newPO.description) {
-      alert('Please fill in all required fields (Code, Title, Description).');
+      toast.error('Please fill in all required fields (Code, Title, Description).');
       return;
     }
 
