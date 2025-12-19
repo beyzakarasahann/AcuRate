@@ -94,11 +94,11 @@ if not DEBUG:
     CSRF_COOKIE_SAMESITE = 'Lax'
     
     # CSRF trusted origins (required for production)
+    # Initialize as empty list, will be set later from CORS_ALLOWED_ORIGINS if needed
+    CSRF_TRUSTED_ORIGINS = []
     csrf_trusted_origins = os.environ.get('CSRF_TRUSTED_ORIGINS', '')
     if csrf_trusted_origins:
         CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in csrf_trusted_origins.split(',') if origin.strip()]
-    # Note: CORS_ALLOWED_ORIGINS will be set later, so we can't use it here
-    # If CSRF_TRUSTED_ORIGINS is not set, it will be set after CORS_ALLOWED_ORIGINS is defined
 else:
     # Development: Allow localhost for CSRF
     CSRF_TRUSTED_ORIGINS = [
@@ -302,7 +302,7 @@ else:
     CORS_ALLOWED_ORIGINS = CORS_ALLOWED_ORIGINS_PROD or CORS_ALLOWED_ORIGINS_DEV
 
 # Set CSRF_TRUSTED_ORIGINS from CORS_ALLOWED_ORIGINS if not already set in production
-if not DEBUG and not CSRF_TRUSTED_ORIGINS:
+if not DEBUG and len(CSRF_TRUSTED_ORIGINS) == 0:
     CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS
 
 CORS_ALLOW_CREDENTIALS = True
