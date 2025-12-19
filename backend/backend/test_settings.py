@@ -4,6 +4,10 @@ Uses PostgreSQL for testing (same as production).
 """
 
 import os
+
+# Set DEBUG before importing settings to ensure CORS_ALLOWED_ORIGINS is defined correctly
+os.environ.setdefault('DJANGO_DEBUG', 'True')
+
 from .settings import *  # noqa
 
 # Use PostgreSQL for testing (same as production)

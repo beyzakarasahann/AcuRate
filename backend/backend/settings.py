@@ -97,9 +97,8 @@ if not DEBUG:
     csrf_trusted_origins = os.environ.get('CSRF_TRUSTED_ORIGINS', '')
     if csrf_trusted_origins:
         CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in csrf_trusted_origins.split(',') if origin.strip()]
-    elif CORS_ALLOWED_ORIGINS:
-        # Use CORS origins as CSRF trusted origins if not explicitly set
-        CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS
+    # Note: CORS_ALLOWED_ORIGINS will be set later, so we can't use it here
+    # If CSRF_TRUSTED_ORIGINS is not set, it will be set after CORS_ALLOWED_ORIGINS is defined
 else:
     # Development: Allow localhost for CSRF
     CSRF_TRUSTED_ORIGINS = [
@@ -301,6 +300,10 @@ if DEBUG:
     CORS_ALLOWED_ORIGINS = CORS_ALLOWED_ORIGINS_DEV
 else:
     CORS_ALLOWED_ORIGINS = CORS_ALLOWED_ORIGINS_PROD or CORS_ALLOWED_ORIGINS_DEV
+
+# Set CSRF_TRUSTED_ORIGINS from CORS_ALLOWED_ORIGINS if not already set in production
+if not DEBUG and not CSRF_TRUSTED_ORIGINS:
+    CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS
 
 CORS_ALLOW_CREDENTIALS = True
 
