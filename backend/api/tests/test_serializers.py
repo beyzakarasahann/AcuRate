@@ -42,6 +42,10 @@ class SerializerValidationTest(TestCase):
             teacher=self.teacher
         )
     
+    # -------------------------------------------------------------------------
+    # UserCreateSerializer tests
+    # -------------------------------------------------------------------------
+    
     def test_user_create_serializer_password_mismatch(self):
         """Test password confirmation validation"""
         from ..serializers import UserCreateSerializer
@@ -72,3 +76,52 @@ class SerializerValidationTest(TestCase):
         })
         self.assertFalse(serializer.is_valid())
         self.assertIn('role', serializer.errors)
+
+    # -------------------------------------------------------------------------
+    # AssessmentSerializer feedback_ranges interval tests
+    # -------------------------------------------------------------------------
+    
+    def test_assessment_serializer_feedback_ranges_valid_intervals(self):
+        """feedback_ranges aralıkları çakışmadan tanımlanabilmeli"""
+        from ..serializers import AssessmentSerializer
+        
+        data = {
+            'course': self.course.id,
+            'title': 'Midterm Exam',
+            'assessment_type': 'MIDTERM',
+            'weight': '30.00',
+            'max_score': '100.00',
+            'is_active': True,
+            # Geçerli, çakışmayan aralıklar
+            'feedback_ranges': [
+                {'min_score': 0, 'max_score': 49, 'feedback': 'Yetersiz'},
+                {'min_score': 50, 'max_score': 74, 'feedback': 'Geliştirilmeli'},
+                {'min_score': 75, 'max_score': 100, 'feedback': 'Başarılı'},
+            ],
+        }
+        
+        serializer = AssessmentSerializer(data=data)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+    
+    def test_assessment_serializer_feedback_ranges_overlapping_intervals(self):
+        """feedback_ranges aralıkları çakışıyorsa hata dönmeli"""
+        from ..serializers import AssessmentSerializer
+        
+        data = {
+            'course': self.course.id,
+            'title': 'Midterm Exam',
+            'assessment_type': 'MIDTERM',
+            'weight': '30.00',
+            'max_score': '100.00',
+            'is_active': True,
+            # Çakışan aralıklar: 40-70 ile 60-90 kesişiyor
+            'feedback_ranges': [
+                {'min_score': 0, 'max_score': 39, 'feedback': 'Yetersiz'},
+                {'min_score': 40, 'max_score': 70, 'feedback': 'Orta'},
+                {'min_score': 60, 'max_score': 90, 'feedback': 'İyi'},
+            ],
+        }
+        
+        serializer = AssessmentSerializer(data=data)
+        self.assertFalse(serializer.is_valid())
+        self.assertIn('feedback_ranges', serializer.errors)

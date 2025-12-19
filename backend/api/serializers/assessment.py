@@ -71,6 +71,25 @@ class AssessmentSerializer(serializers.ModelSerializer):
             if min_score > max_score:
                 raise serializers.ValidationError(f"feedback_ranges[{i}] min_score cannot be greater than max_score")
         
+        # Additional validation: ranges must be proper non-overlapping intervals
+        # Sort by min_score to make interval checking order-independent
+        sorted_ranges = sorted(value, key=lambda r: r.get('min_score', 0))
+        prev_max = None
+        for i, range_item in enumerate(sorted_ranges):
+            min_score = range_item.get('min_score', 0)
+            max_score = range_item.get('max_score', 100)
+            
+            # Ensure that ranges do not overlap:
+            # current min must be strictly greater than previous max
+            # (e.g. [0, 49], [50, 74], [75, 100] is valid;
+            #  [0, 50], [50, 100] would be ambiguous and is rejected)
+            if prev_max is not None and min_score <= prev_max:
+                raise serializers.ValidationError(
+                    "feedback_ranges must define non-overlapping intervals. "
+                    "Each range's min_score must be greater than the previous range's max_score."
+                )
+            prev_max = max_score
+        
         return value
     
     def update(self, instance, validated_data):

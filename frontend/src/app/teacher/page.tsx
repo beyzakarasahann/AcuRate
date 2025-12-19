@@ -40,30 +40,6 @@ interface CourseWithStats extends Course {
   status?: 'excellent' | 'good' | 'average';
 }
 
-const gradeDistributionData = {
-  labels: ['A (90-100)', 'B (80-89)', 'C (70-79)', 'D (60-69)', 'F (<60)'],
-  datasets: [
-    {
-      label: 'Students',
-      data: [45, 52, 20, 6, 2],
-      backgroundColor: [
-        'rgba(16, 185, 129, 0.8)',
-        'rgba(59, 130, 246, 0.8)',
-        'rgba(251, 191, 36, 0.8)',
-        'rgba(249, 115, 22, 0.8)',
-        'rgba(239, 68, 68, 0.8)',
-      ],
-      borderColor: [
-        'rgb(16, 185, 129)',
-        'rgb(59, 130, 246)',
-        'rgb(251, 191, 36)',
-        'rgb(249, 115, 22)',
-        'rgb(239, 68, 68)',
-      ],
-      borderWidth: 2
-    }
-  ]
-};
 
 // Chart data will be generated dynamically in the component
 
@@ -152,6 +128,7 @@ export default function TeacherHomePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [loAchievements, setLoAchievements] = useState<any[]>([]);
   
   useEffect(() => {
     setMounted(true);
@@ -164,6 +141,39 @@ export default function TeacherHomePage() {
       setError(null);
       const data = await api.getTeacherDashboard();
       setDashboardData(data);
+      
+      // Fetch LO achievements for all courses
+      const allCourses = data.courses || [];
+      const courseIds = allCourses.map((c: any) => c.id);
+      
+      console.log('📊 Fetching LO achievements for courses:', courseIds);
+      
+      // Fetch LO achievements for each course
+      // If no courses, try fetching all LO achievements
+      let allLoAchievements: any[] = [];
+      
+      if (courseIds.length > 0) {
+        const loAchievementPromises = courseIds.map((courseId: number) => 
+          api.getLOAchievements({ course: courseId }).catch(err => {
+            console.warn(`⚠️ Failed to fetch LO achievements for course ${courseId}:`, err);
+            return []; // Return empty array on error
+          })
+        );
+        
+        const loAchievementResults = await Promise.all(loAchievementPromises);
+        allLoAchievements = loAchievementResults.flat();
+      } else {
+        // If no courses, try fetching all LO achievements
+        try {
+          allLoAchievements = await api.getLOAchievements();
+        } catch (err) {
+          console.warn('⚠️ Failed to fetch LO achievements:', err);
+          allLoAchievements = [];
+        }
+      }
+      
+      console.log('✅ LO Achievements fetched:', allLoAchievements.length, allLoAchievements);
+      setLoAchievements(allLoAchievements);
     } catch (err: any) {
       console.error('Failed to fetch dashboard data:', err);
       setError(err.message || 'Failed to load dashboard data');
@@ -297,8 +307,7 @@ export default function TeacherHomePage() {
     color: string;
   }> = [
     { title: 'Active Courses', value: totalCourses > 0 ? totalCourses.toString() : '-', change: '', trend: 'up', icon: BookOpen, color: 'from-blue-500 to-cyan-500' },
-    { title: 'Total Students', value: totalStudents > 0 ? totalStudents.toString() : '-', change: '', trend: 'up', icon: Users, color: 'from-purple-500 to-pink-500' },
-    { title: 'Avg Grade', value: avgGrade > 0 ? `${Math.round(avgGrade * 10) / 10}%` : '-', change: '', trend: 'up', icon: Award, color: 'from-green-500 to-emerald-500' }
+    { title: 'Total Students', value: totalStudents > 0 ? totalStudents.toString() : '-', change: '', trend: 'up', icon: Users, color: 'from-purple-500 to-pink-500' }
   ];
 
   // Recent activities from recent submissions (if available)
@@ -312,54 +321,100 @@ export default function TeacherHomePage() {
   }));
 
 
-  // Calculate grade distribution from actual grades
-  const gradeDistribution = {
-    A: 0, // 90-100
-    B: 0, // 80-89
-    C: 0, // 70-79
-    D: 0, // 60-69
-    F: 0  // <60
-  };
-
-  // Calculate from enrollments' final grades
-  courses.forEach((course: any) => {
-    const enrollments = course.enrollments || [];
-    enrollments.forEach((enrollment: any) => {
-      if (enrollment.final_grade !== null && enrollment.final_grade !== undefined) {
-        const grade = enrollment.final_grade;
-        if (grade >= 90) gradeDistribution.A++;
-        else if (grade >= 80) gradeDistribution.B++;
-        else if (grade >= 70) gradeDistribution.C++;
-        else if (grade >= 60) gradeDistribution.D++;
-        else gradeDistribution.F++;
+  // Calculate Average LO Outcomes
+  // Group LO achievements by LO code and calculate average
+  const loAchievementMap = new Map<string, { total: number; count: number; title: string }>();
+  
+  if (loAchievements && loAchievements.length > 0) {
+    loAchievements.forEach((achievement: any) => {
+      // Handle both number and object types for learning_outcome
+      const loCode = achievement.lo_code || (achievement.learning_outcome?.code) || `LO-${achievement.learning_outcome}`;
+      const loTitle = achievement.lo_title || (achievement.learning_outcome?.title) || loCode;
+      // current_percentage might be a Decimal or number
+      const currentPercentage = typeof achievement.current_percentage === 'number' 
+        ? achievement.current_percentage 
+        : (achievement.current_percentage ? parseFloat(achievement.current_percentage) : 0);
+      
+      if (loCode && !isNaN(currentPercentage)) {
+        if (loAchievementMap.has(loCode)) {
+          const existing = loAchievementMap.get(loCode)!;
+          existing.total += currentPercentage;
+          existing.count += 1;
+        } else {
+          loAchievementMap.set(loCode, {
+            total: currentPercentage,
+            count: 1,
+            title: loTitle
+          });
+        }
       }
     });
+  }
+  
+  // Calculate average for each LO
+  const averageLOOutcomes: Array<{ code: string; title: string; average: number }> = [];
+  loAchievementMap.forEach((value, code) => {
+    if (value.count > 0) {
+      averageLOOutcomes.push({
+        code,
+        title: value.title,
+        average: value.total / value.count
+      });
+    }
   });
-
-  const hasGradeData = gradeDistribution.A + gradeDistribution.B + gradeDistribution.C + gradeDistribution.D + gradeDistribution.F > 0;
-
-  const gradeDistributionData = {
-    labels: ['A (90-100)', 'B (80-89)', 'C (70-79)', 'D (60-69)', 'F (<60)'],
+  
+  // Sort by code for consistent display
+  averageLOOutcomes.sort((a, b) => a.code.localeCompare(b.code));
+  
+  const hasLOData = averageLOOutcomes.length > 0 && averageLOOutcomes.some(lo => lo.average > 0);
+  
+  // Generate colors dynamically based on number of LOs
+  const generateColors = (count: number) => {
+    const colors = [
+      'rgba(99, 102, 241, 0.8)',   // indigo
+      'rgba(16, 185, 129, 0.8)',   // green
+      'rgba(59, 130, 246, 0.8)',   // blue
+      'rgba(251, 191, 36, 0.8)',   // yellow
+      'rgba(249, 115, 22, 0.8)',   // orange
+      'rgba(236, 72, 153, 0.8)',   // pink
+      'rgba(168, 85, 247, 0.8)',   // purple
+      'rgba(14, 165, 233, 0.8)',   // cyan
+      'rgba(239, 68, 68, 0.8)',    // red
+      'rgba(34, 197, 94, 0.8)',    // emerald
+    ];
+    const borderColors = [
+      'rgb(99, 102, 241)',
+      'rgb(16, 185, 129)',
+      'rgb(59, 130, 246)',
+      'rgb(251, 191, 36)',
+      'rgb(249, 115, 22)',
+      'rgb(236, 72, 153)',
+      'rgb(168, 85, 247)',
+      'rgb(14, 165, 233)',
+      'rgb(239, 68, 68)',
+      'rgb(34, 197, 94)',
+    ];
+    
+    // Repeat colors if needed
+    const result = [];
+    const borderResult = [];
+    for (let i = 0; i < count; i++) {
+      result.push(colors[i % colors.length]);
+      borderResult.push(borderColors[i % borderColors.length]);
+    }
+    return { backgroundColor: result, borderColor: borderResult };
+  };
+  
+  const colors = hasLOData ? generateColors(averageLOOutcomes.length) : { backgroundColor: [], borderColor: [] };
+  
+  const averageLOOutcomesData = {
+    labels: hasLOData ? averageLOOutcomes.map(lo => lo.code) : [],
     datasets: [
       {
-        label: 'Students',
-        data: hasGradeData 
-          ? [gradeDistribution.A, gradeDistribution.B, gradeDistribution.C, gradeDistribution.D, gradeDistribution.F]
-          : [],
-        backgroundColor: [
-          'rgba(16, 185, 129, 0.8)',
-          'rgba(59, 130, 246, 0.8)',
-          'rgba(251, 191, 36, 0.8)',
-          'rgba(249, 115, 22, 0.8)',
-          'rgba(239, 68, 68, 0.8)',
-        ],
-        borderColor: [
-          'rgb(16, 185, 129)',
-          'rgb(59, 130, 246)',
-          'rgb(251, 191, 36)',
-          'rgb(249, 115, 22)',
-          'rgb(239, 68, 68)',
-        ],
+        label: 'Average Achievement (%)',
+        data: hasLOData ? averageLOOutcomes.map(lo => Math.round(lo.average * 10) / 10) : [],
+        backgroundColor: colors.backgroundColor,
+        borderColor: colors.borderColor,
         borderWidth: 2
       }
     ]
@@ -430,7 +485,6 @@ export default function TeacherHomePage() {
   const heroChips = [
     { label: 'Courses', value: totalCourses.toString() },
     { label: 'Students', value: totalStudents.toString() },
-    { label: 'Avg Grade', value: avgGrade > 0 ? `${Math.round(avgGrade * 10) / 10}%` : '-' },
   ];
 
   const quickActions = [
@@ -479,7 +533,7 @@ export default function TeacherHomePage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 {heroChips.map((chip) => (
                   <div key={chip.label} className="rounded-xl bg-white/15 p-3 text-white">
                     <p className="text-xs uppercase tracking-wider text-white/70">{chip.label}</p>
@@ -494,8 +548,8 @@ export default function TeacherHomePage() {
                   Record Grades
                 </Link>
                 <Link href="/teacher/analytics" className="inline-flex items-center gap-2 px-5 py-2 rounded-xl border border-white/40 text-white font-medium backdrop-blur">
-                  <CalendarDays className="w-4 h-4" />
-                  Weekly Insights
+                  <TrendingUp className="w-4 h-4" />
+                  Analytics
                 </Link>
               </div>
             </div>
@@ -519,11 +573,7 @@ export default function TeacherHomePage() {
                 <p className={`${secondaryTextClass} text-sm`}>
                   {bestCourse.name}
                 </p>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className={`${secondaryTextClass}`}>Avg Grade</p>
-                    <p className={`text-xl font-semibold ${whiteTextClass}`}>{bestCourse.avgGrade}%</p>
-                  </div>
+                <div className="text-sm">
                   <div>
                     <p className={`${secondaryTextClass}`}>Students</p>
                     <p className={`text-xl font-semibold ${whiteTextClass}`}>{bestCourse.students}</p>
@@ -533,7 +583,7 @@ export default function TeacherHomePage() {
                   <div className={`mt-3 p-3 rounded-xl border ${isDark ? 'border-orange-500/30 bg-orange-500/10' : 'border-orange-200 bg-orange-50'}`}>
                     <p className="text-xs uppercase tracking-wide text-orange-500">Needs Attention</p>
                     <p className={`font-medium ${whiteTextClass}`}>{attentionCourse.code} - {attentionCourse.name}</p>
-                    <p className="text-xs text-orange-500">Avg grade {attentionCourse.avgGrade}% • {attentionCourse.students} students</p>
+                    <p className="text-xs text-orange-500">{attentionCourse.students} students</p>
                   </div>
                 )}
               </>
@@ -572,7 +622,7 @@ export default function TeacherHomePage() {
 
         {/* Stats Overview */}
         <motion.div
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8"
+            className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.1 }}
@@ -693,8 +743,6 @@ export default function TeacherHomePage() {
                                         </div>
                                         <div className={`flex gap-4 text-sm ${mutedText}`}>
                                             <span>{course.students} students</span>
-                                            <span>•</span>
-                                            <span>Avg Grade: {course.avgGrade !== undefined ? `${course.avgGrade}%` : '-'}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -729,10 +777,10 @@ export default function TeacherHomePage() {
                 </motion.div>
             </div>
 
-            {/* Sağ Sütun (Grade Distribution ve Recent Activities) */}
+            {/* Sağ Sütun (Average LO Outcomes ve Recent Activities) */}
             <div className="space-y-6">
 
-                {/* Grade Distribution Doughnut Chart */}
+                {/* Average LO Outcomes Doughnut Chart */}
                 <motion.div
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
@@ -740,15 +788,26 @@ export default function TeacherHomePage() {
                     className={`backdrop-blur-xl ${themeClasses.card} p-6 shadow-2xl h-96`}
                 >
                     <h2 className={`text-xl font-bold ${whiteTextClass} mb-4 flex items-center gap-2`}>
-                        <Award className={`w-5 h-5 ${accentIconClass}`} />
-                        Grade Distribution
+                        <Target className={`w-5 h-5 ${accentIconClass}`} />
+                        Average LO Outcomes
                     </h2>
-                    <div className="h-72">
-                        {hasGradeData ? (
-                            <Doughnut data={gradeDistributionData} options={dynamicDoughnutOptions} />
+                    <div className="h-72 relative">
+                        {hasLOData && averageLOOutcomesData.labels.length > 0 && averageLOOutcomesData.datasets[0].data.length > 0 ? (
+                            <Doughnut 
+                                data={averageLOOutcomesData} 
+                                options={{
+                                    ...dynamicDoughnutOptions,
+                                    maintainAspectRatio: false,
+                                    responsive: true,
+                                }} 
+                            />
                         ) : (
                             <div className="flex items-center justify-center h-full">
-                                <p className={secondaryTextClass}>No grade data available</p>
+                                <p className={secondaryTextClass}>
+                                    {loAchievements.length === 0 
+                                        ? 'No LO achievement data available' 
+                                        : 'Calculating LO averages...'}
+                                </p>
                             </div>
                         )}
                     </div>

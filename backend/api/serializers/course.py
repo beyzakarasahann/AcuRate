@@ -55,6 +55,7 @@ class CourseDetailSerializer(serializers.ModelSerializer):
     semester_display = serializers.CharField(source='get_semester_display', read_only=True)
     program_outcomes = CoursePOSerializer(source='course_pos', many=True, read_only=True)
     learning_outcomes = serializers.SerializerMethodField()
+    enrollments = serializers.SerializerMethodField()
     enrollment_count = serializers.SerializerMethodField()
     
     class Meta:
@@ -63,7 +64,7 @@ class CourseDetailSerializer(serializers.ModelSerializer):
             'id', 'code', 'name', 'description', 'credits',
             'semester', 'semester_display', 'academic_year',
             'department', 'teacher', 'teacher_name', 'program_outcomes',
-            'learning_outcomes', 'enrollment_count',
+            'learning_outcomes', 'enrollments', 'enrollment_count',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
@@ -82,6 +83,12 @@ class CourseDetailSerializer(serializers.ModelSerializer):
         """Get learning outcomes with serializer"""
         from .outcome import LearningOutcomeSerializer
         return LearningOutcomeSerializer(obj.learning_outcomes.all(), many=True).data
+
+    def get_enrollments(self, obj):
+        """Return active enrollments with final grades for dashboard analytics"""
+        # Use existing EnrollmentSerializer defined below
+        qs = obj.enrollments.filter(is_active=True)
+        return EnrollmentSerializer(qs, many=True).data
 
 
 # =============================================================================

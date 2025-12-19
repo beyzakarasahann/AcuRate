@@ -489,14 +489,16 @@ export default function TeacherGradesPage() {
       return;
     }
 
-    // Validate feedback ranges before sending
-    const validRanges = feedbackRanges.filter(range => {
-      return range.min_score >= 0 && 
-             range.min_score <= 100 && 
-             range.max_score >= 0 && 
-             range.max_score <= 100 && 
-             range.min_score <= range.max_score &&
-             range.feedback.trim() !== '';
+    // 1) Temel validasyon: değer aralıkları ve boş feedback olmamalı
+    const validRanges = feedbackRanges.filter((range) => {
+      return (
+        range.min_score >= 0 &&
+        range.min_score <= 100 &&
+        range.max_score >= 0 &&
+        range.max_score <= 100 &&
+        range.min_score <= range.max_score &&
+        range.feedback.trim() !== ''
+      );
     });
 
     if (validRanges.length === 0) {
@@ -505,19 +507,49 @@ export default function TeacherGradesPage() {
     }
 
     // Check for empty feedback messages
-    const emptyFeedback = feedbackRanges.find(range => !range.feedback || range.feedback.trim() === '');
+    const emptyFeedback = feedbackRanges.find(
+      (range) => !range.feedback || range.feedback.trim() === '',
+    );
     if (emptyFeedback) {
       alert('All feedback ranges must have a feedback message. Please fill in all feedback fields.');
       return;
     }
 
+    // 2) Aralıkların gerçekten "interval" olarak tanımlanması:
+    // min_score değerine göre sırala ve çakışma olup olmadığını kontrol et.
+    const sortedRanges = [...validRanges].sort(
+      (a, b) => a.min_score - b.min_score,
+    );
+
+    let prevMax: number | null = null;
+    for (let i = 0; i < sortedRanges.length; i++) {
+      const current = sortedRanges[i];
+
+      // Backend ile birebir aynı kural:
+      // Her aralığın min_score değeri, bir önceki aralığın max_score değerinden BÜYÜK olmalı
+      // Örnek geçerli: [0-49], [50-74], [75-100]
+      // Örnek geçersiz: [0-50], [50-100] (50 hem önceki hem sonraki aralıkta)
+      if (prevMax !== null && current.min_score <= prevMax) {
+        alert(
+          'Feedback ranges must be non-overlapping intervals.\n' +
+            'Each range’s "Min Score" must be greater than the previous range’s "Max Score".\n\n' +
+            'Örnek geçerli: [0-49], [50-74], [75-100]\n' +
+            'Örnek geçersiz: [0-50], [50-100]',
+        );
+        return;
+      }
+
+      prevMax = current.max_score;
+    }
+
     try {
       await api.updateAssessment(selectedAssessment, {
-        feedback_ranges: validRanges.map(range => ({
+        // Backend'e sıralı ve temizlenmiş aralıkları gönder
+        feedback_ranges: sortedRanges.map((range) => ({
           min_score: Number(range.min_score),
           max_score: Number(range.max_score),
-          feedback: range.feedback.trim()
-        }))
+          feedback: range.feedback.trim(),
+        })),
       });
       
       // Refresh assessments
@@ -1908,7 +1940,9 @@ export default function TeacherGradesPage() {
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.1 }}
-                      className={`p-4 rounded-xl border ${isDark ? 'bg-white/5 border-white/10' : 'bg-gray-50 border-gray-200'}`}
+                      className={`p-4 rounded-xl border ${
+                        isDark ? 'bg-white/5 border-white/10' : 'bg-gray-50 border-gray-200'
+                      }`}
                     >
                       <div className="flex items-center justify-between mb-3">
                         <h3 className={`${whiteText} font-semibold`}>Range {index + 1}</h3>
@@ -1923,7 +1957,7 @@ export default function TeacherGradesPage() {
                           </motion.button>
                         )}
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
                         <div>
                           <label className={`block text-sm font-medium ${mutedText} mb-1`}>
                             Min Score (%)
@@ -1933,8 +1967,41 @@ export default function TeacherGradesPage() {
                             min="0"
                             max="100"
                             value={range.min_score}
-                            onChange={(e) => handleUpdateFeedbackRange(index, 'min_score', Number(e.target.value) || 0)}
-                            className={`w-full p-2 rounded-lg border ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-purple-500`}
+                            onChange={(e) =>
+                              handleUpdateFeedbackRange(
+                                index,
+                                'min_score',
+                                Number(e.target.value) || 0,
+                              )
+                            }
+                            className={`w-full p-2 rounded-lg border ${
+                              isDark
+                                ? 'bg-white/5 border-white/10 text-white'
+                                : 'bg-white border-gray-300 text-gray-900'
+                            } focus:outline-none focus:ring-2 focus:ring-purple-500`}
+                          />
+                        </div>
+                        <div>
+                          <label className={`block text-sm font-medium ${mutedText} mb-1`}>
+                            Max Score (%)
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            value={range.max_score}
+                            onChange={(e) =>
+                              handleUpdateFeedbackRange(
+                                index,
+                                'max_score',
+                                Number(e.target.value) || 0,
+                              )
+                            }
+                            className={`w-full p-2 rounded-lg border ${
+                              isDark
+                                ? 'bg-white/5 border-white/10 text-white'
+                                : 'bg-white border-gray-300 text-gray-900'
+                            } focus:outline-none focus:ring-2 focus:ring-purple-500`}
                           />
                         </div>
                       </div>

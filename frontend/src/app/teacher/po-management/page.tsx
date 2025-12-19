@@ -2,29 +2,10 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { Target, Plus, X, Save, BookOpen, AlertCircle, CheckCircle2, Info, Trash2, Edit2 } from 'lucide-react';
+import { Target, Plus, X, Save, BookOpen, AlertCircle, CheckCircle2, Info, Trash2, Edit2, Loader2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useThemeColors } from '@/hooks/useThemeColors';
-
-// --- MOCK VERİLER ---
-
-const mockCourses = [
-  { id: 1, code: 'CS301', name: 'Data Structures', semester: 'Fall 2025', department: 'Computer Science' },
-  { id: 2, code: 'SE405', name: 'Software Engineering', semester: 'Fall 2025', department: 'Computer Science' },
-  { id: 3, code: 'CS201', name: 'Programming Fundamentals', semester: 'Fall 2025', department: 'Computer Science' },
-  { id: 4, code: 'CS401', name: 'Advanced Algorithms', semester: 'Fall 2025', department: 'Computer Science' },
-];
-
-const mockProgramOutcomes = [
-  { id: 1, code: 'PO1', title: 'Engineering Knowledge', description: 'Apply knowledge of mathematics, science, engineering fundamentals, and an engineering specialization to the solution of complex engineering problems.', target: 70 },
-  { id: 2, code: 'PO2', title: 'Problem Analysis', description: 'Identify, formulate, research literature, and analyze complex engineering problems reaching substantiated conclusions.', target: 75 },
-  { id: 3, code: 'PO3', title: 'Design/Development of Solutions', description: 'Design solutions for complex engineering problems and design system components or processes that meet specified needs.', target: 70 },
-  { id: 4, code: 'PO4', title: 'Investigation', description: 'Conduct investigations of complex problems using research-based knowledge and research methods.', target: 70 },
-  { id: 5, code: 'PO5', title: 'Modern Tool Usage', description: 'Create, select, and apply appropriate techniques, resources, and modern engineering and IT tools.', target: 65 },
-  { id: 6, code: 'PO6', title: 'The Engineer and Society', description: 'Apply reasoning informed by contextual knowledge to assess societal, health, safety, legal, and cultural issues.', target: 70 },
-  { id: 7, code: 'PO7', title: 'Environment and Sustainability', description: 'Understand the impact of professional engineering solutions in societal and environmental contexts.', target: 65 },
-  { id: 8, code: 'PO8', title: 'Ethics', description: 'Apply ethical principles and commit to professional ethics and responsibilities.', target: 70 },
-];
+import { api, type Course, type ProgramOutcome } from '@/lib/api';
 
 // --- TİPLER ---
 
@@ -38,6 +19,10 @@ interface CoursePO {
 
 export default function POManagementPage() {
   const [mounted, setMounted] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [programOutcomes, setProgramOutcomes] = useState<ProgramOutcome[]>([]);
   const [selectedCourse, setSelectedCourse] = useState<number | null>(null);
   const [coursePOs, setCoursePOs] = useState<CoursePO[]>([]);
   const [availablePOs, setAvailablePOs] = useState<number[]>([]);
@@ -46,12 +31,11 @@ export default function POManagementPage() {
   const [editingPO, setEditingPO] = useState<number | null>(null);
   const [showAddPO, setShowAddPO] = useState(false);
   const [showCreatePO, setShowCreatePO] = useState(false);
-  const [customPOs, setCustomPOs] = useState<typeof mockProgramOutcomes>([]);
   const [newPO, setNewPO] = useState({
     code: '',
     title: '',
     description: '',
-    target: 70
+    target_percentage: 70
   });
 
   const { 
@@ -64,40 +48,126 @@ export default function POManagementPage() {
 
   useEffect(() => {
     setMounted(true);
+    fetchData();
   }, []);
 
-  // Ders seçildiğinde mevcut PO'ları yükle (mock data)
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Fetch teacher's courses from dashboard
+      const dashboardData = await api.getTeacherDashboard();
+      const teacherCourses = dashboardData.courses || [];
+      setCourses(Array.isArray(teacherCourses) ? teacherCourses : []);
+      
+      // Fetch program outcomes for teacher's department
+      const teacherDept = dashboardData.teacher?.department;
+      if (teacherDept) {
+        const pos = await api.getProgramOutcomes({ department: teacherDept });
+        setProgramOutcomes(Array.isArray(pos) ? pos : []);
+      } else {
+        // If no department, fetch all active POs
+        const pos = await api.getProgramOutcomes();
+        setProgramOutcomes(Array.isArray(pos) ? pos.filter((po: ProgramOutcome) => po.is_active) : []);
+      }
+    } catch (err: any) {
+      console.error('Failed to fetch data:', err);
+      setError(err.message || 'Failed to load data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Load CoursePOs when course is selected
   useEffect(() => {
     if (selectedCourse) {
-      // Mock: Her ders için farklı PO'lar
-      const mockCoursePOs: CoursePO[] = selectedCourse === 1 
-        ? [{ poId: 1, weight: 1.5 }, { poId: 2, weight: 1.0 }, { poId: 3, weight: 2.0 }]
-        : selectedCourse === 2
-        ? [{ poId: 2, weight: 1.5 }, { poId: 3, weight: 1.8 }, { poId: 5, weight: 1.2 }]
-        : [{ poId: 1, weight: 1.0 }, { poId: 4, weight: 1.5 }];
-      
-      setCoursePOs(mockCoursePOs);
+      loadCoursePOs(selectedCourse);
     } else {
       setCoursePOs([]);
       setAvailablePOs([]);
     }
-  }, [selectedCourse]);
+  }, [selectedCourse, programOutcomes]);
 
-  // Ders seçildiğinde available PO'ları güncelle
+  const loadCoursePOs = async (courseId: number) => {
+    try {
+      // Get course details which should include course_pos
+      const course = courses.find(c => c.id === courseId);
+      if (course && (course as any).course_pos) {
+        const coursePOsData = (course as any).course_pos || [];
+        const mappedPOs: CoursePO[] = coursePOsData.map((cpo: any) => ({
+          poId: typeof cpo.program_outcome === 'object' ? cpo.program_outcome.id : cpo.program_outcome,
+          weight: parseFloat(cpo.weight) || 1.0,
+          isNew: false
+        }));
+        setCoursePOs(mappedPOs);
+      } else {
+        // If course_pos not in course data, fetch course directly
+        try {
+          const courseData = await api.getCourse(courseId);
+          if ((courseData as any).course_pos) {
+            const coursePOsData = (courseData as any).course_pos || [];
+            const mappedPOs: CoursePO[] = coursePOsData.map((cpo: any) => ({
+              poId: typeof cpo.program_outcome === 'object' ? cpo.program_outcome.id : cpo.program_outcome,
+              weight: parseFloat(cpo.weight) || 1.0,
+              isNew: false
+            }));
+            setCoursePOs(mappedPOs);
+          } else {
+            setCoursePOs([]);
+          }
+        } catch (err) {
+          console.warn('Failed to fetch course details:', err);
+          setCoursePOs([]);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load course POs:', err);
+      setCoursePOs([]);
+    }
+  };
+
+  // Update available POs when coursePOs change
   useEffect(() => {
-    if (selectedCourse) {
+    if (selectedCourse && programOutcomes.length > 0) {
       const assignedPOIds = coursePOs.map(cpo => cpo.poId);
-      const allPOs = [...mockProgramOutcomes, ...customPOs];
-      setAvailablePOs(allPOs
+      setAvailablePOs(programOutcomes
         .filter(po => !assignedPOIds.includes(po.id))
         .map(po => po.id)
       );
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCourse]);
+  }, [selectedCourse, coursePOs, programOutcomes]);
 
   if (!mounted || !themeMounted) {
     return null;
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-indigo-500" />
+          <p className={mutedText}>Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className={`text-center p-6 rounded-lg ${isDark ? 'bg-red-500/10 border border-red-500/30' : 'bg-red-50 border border-red-200'}`}>
+          <AlertCircle className="w-8 h-8 mx-auto mb-4 text-red-500" />
+          <p className={isDark ? 'text-red-300' : 'text-red-700'}>{error}</p>
+          <button
+            onClick={fetchData}
+            className="mt-4 px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
   }
 
   const whiteText = text;
@@ -108,15 +178,6 @@ export default function POManagementPage() {
     if (!coursePOs.find(cpo => cpo.poId === poId)) {
       setCoursePOs([...coursePOs, { poId, weight: 1.0, isNew: true }]);
       setShowAddPO(false);
-      // Available PO'ları güncelle
-      setTimeout(() => {
-        const assignedPOIds = [...coursePOs.map(cpo => cpo.poId), poId];
-        const allPOs = [...mockProgramOutcomes, ...customPOs];
-        setAvailablePOs(allPOs
-          .filter(po => !assignedPOIds.includes(po.id))
-          .map(po => po.id)
-        );
-      }, 0);
     }
   };
 
@@ -124,15 +185,6 @@ export default function POManagementPage() {
   const handleRemovePO = (poId: number) => {
     setCoursePOs(coursePOs.filter(cpo => cpo.poId !== poId));
     setEditingPO(null);
-    // Available PO'ları güncelle
-    setTimeout(() => {
-      const assignedPOIds = coursePOs.filter(cpo => cpo.poId !== poId).map(cpo => cpo.poId);
-      const allPOs = [...mockProgramOutcomes, ...customPOs];
-      setAvailablePOs(allPOs
-        .filter(po => !assignedPOIds.includes(po.id))
-        .map(po => po.id)
-      );
-    }, 0);
   };
 
   // Weight güncelleme
@@ -157,65 +209,93 @@ export default function POManagementPage() {
     setIsSaving(true);
     setSaveStatus(null);
 
-    // Simüle edilmiş API çağrısı
-    setTimeout(() => {
+    try {
+      // Update course with new PO mappings
+      // Note: This requires backend support for CoursePO updates
+      // For now, we'll use a workaround by updating the course
+      const course = courses.find(c => c.id === selectedCourse);
+      if (course) {
+        // Map coursePOs to the format expected by backend
+        const poMappings = coursePOs.map(cpo => ({
+          program_outcome: cpo.poId,
+          weight: cpo.weight
+        }));
+        
+        // Update course with PO mappings
+        // This assumes the backend Course serializer accepts course_pos data
+        await api.updateCourse(selectedCourse, {
+          ...course,
+          course_pos: poMappings
+        } as any);
+      }
+
       setIsSaving(false);
       setSaveStatus('success');
-      // isNew flag'lerini kaldır
+      // Remove isNew flags
       setCoursePOs(coursePOs.map(cpo => ({ ...cpo, isNew: false })));
       setTimeout(() => setSaveStatus(null), 3000);
-    }, 1500);
+      
+      // Reload course data
+      await fetchData();
+      if (selectedCourse) {
+        await loadCoursePOs(selectedCourse);
+      }
+    } catch (err: any) {
+      console.error('Failed to save course POs:', err);
+      setIsSaving(false);
+      setSaveStatus('error');
+      alert(err.message || 'Failed to save Program Outcomes. Please try again.');
+      setTimeout(() => setSaveStatus(null), 3000);
+    }
   };
 
   // Seçili ders bilgisi
-  const selectedCourseData = mockCourses.find(c => c.id === selectedCourse);
+  const selectedCourseData = courses.find(c => c.id === selectedCourse);
 
-  // PO detaylarını al (hem mock hem custom PO'ları kontrol et)
+  // PO detaylarını al
   const getPODetails = (poId: number) => {
-    const allPOs = [...mockProgramOutcomes, ...customPOs];
-    return allPOs.find(po => po.id === poId);
+    return programOutcomes.find(po => po.id === poId);
   };
 
   // Yeni PO oluşturma
-  const handleCreatePO = () => {
+  const handleCreatePO = async () => {
     if (!newPO.code || !newPO.title || !newPO.description) {
       alert('Please fill in all required fields (Code, Title, Description).');
       return;
     }
 
-    // Yeni PO ID'si oluştur (mevcut PO'ların max ID'sinden +1)
-    const allPOs = [...mockProgramOutcomes, ...customPOs];
-    const maxId = allPOs.length > 0 ? Math.max(...allPOs.map(po => po.id)) : 0;
-    const newPOId = maxId + 1;
+    setIsSaving(true);
+    try {
+      // Get teacher's department from dashboard
+      const dashboardData = await api.getTeacherDashboard();
+      const teacherDept = dashboardData.teacher?.department || '';
 
-    const createdPO = {
-      id: newPOId,
-      code: newPO.code.toUpperCase(),
-      title: newPO.title,
-      description: newPO.description,
-      target: newPO.target
-    };
+      const createdPO = await api.createProgramOutcome({
+        code: newPO.code.toUpperCase().trim(),
+        title: newPO.title.trim(),
+        description: newPO.description.trim(),
+        target_percentage: newPO.target_percentage,
+        department: teacherDept,
+        is_active: true
+      });
 
-    // Custom PO listesine ekle
-    setCustomPOs([...customPOs, createdPO]);
-    
-    // Yeni oluşturulan PO'yu direkt derse ekle
-    if (!coursePOs.find(cpo => cpo.poId === newPOId)) {
-      setCoursePOs([...coursePOs, { poId: newPOId, weight: 1.0, isNew: true }]);
-      // Available PO'ları güncelle
-      setTimeout(() => {
-        const assignedPOIds = [...coursePOs.map(cpo => cpo.poId), newPOId];
-        const allPOs = [...mockProgramOutcomes, ...customPOs, createdPO];
-        setAvailablePOs(allPOs
-          .filter(po => !assignedPOIds.includes(po.id))
-          .map(po => po.id)
-        );
-      }, 0);
+      // Add to program outcomes list
+      setProgramOutcomes([...programOutcomes, createdPO]);
+      
+      // Add to course immediately
+      if (!coursePOs.find(cpo => cpo.poId === createdPO.id)) {
+        setCoursePOs([...coursePOs, { poId: createdPO.id, weight: 1.0, isNew: true }]);
+      }
+
+      // Clear form and close modal
+      setNewPO({ code: '', title: '', description: '', target_percentage: 70 });
+      setShowCreatePO(false);
+      setIsSaving(false);
+    } catch (err: any) {
+      console.error('Failed to create PO:', err);
+      setIsSaving(false);
+      alert(err.message || 'Failed to create Program Outcome. Please try again.');
     }
-
-    // Form'u temizle ve modal'ı kapat
-    setNewPO({ code: '', title: '', description: '', target: 70 });
-    setShowCreatePO(false);
   };
 
   // Toplam weight hesapla
@@ -249,7 +329,7 @@ export default function POManagementPage() {
         <select
           value={selectedCourse || ''}
           onChange={(e) => {
-            setSelectedCourse(Number(e.target.value));
+            setSelectedCourse(Number(e.target.value) || null);
             setCoursePOs([]);
             setAvailablePOs([]);
             setSaveStatus(null);
@@ -257,9 +337,9 @@ export default function POManagementPage() {
           className={`w-full md:w-1/2 px-4 py-3 rounded-xl ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'} border focus:outline-none focus:ring-2 focus:ring-indigo-500`}
         >
           <option value="">-- Select a course --</option>
-          {mockCourses.map(course => (
+          {courses.map(course => (
             <option key={course.id} value={course.id}>
-              {course.code} - {course.name} ({course.semester})
+              {course.code} - {course.name} {course.semester_display ? `(${course.semester_display})` : ''}
             </option>
           ))}
         </select>
@@ -278,11 +358,11 @@ export default function POManagementPage() {
               </div>
               <div>
                 <span className={mutedText}>Department:</span>
-                <p className={whiteText}>{selectedCourseData.department}</p>
+                <p className={whiteText}>{selectedCourseData.department || '-'}</p>
               </div>
               <div>
                 <span className={mutedText}>Semester:</span>
-                <p className={whiteText}>{selectedCourseData.semester}</p>
+                <p className={whiteText}>{selectedCourseData.semester_display || '-'}</p>
               </div>
             </div>
           </motion.div>
@@ -448,7 +528,7 @@ export default function POManagementPage() {
                               </div>
                             )}
                             <span className={`${mutedText} text-xs`}>
-                              (Target: {po.target}%)
+                              (Target: {po.target_percentage}%)
                             </span>
                           </div>
                         </div>
@@ -591,7 +671,7 @@ export default function POManagementPage() {
                     whileTap={{ scale: 0.9 }}
                     onClick={() => {
                       setShowCreatePO(false);
-                      setNewPO({ code: '', title: '', description: '', target: 70 });
+                      setNewPO({ code: '', title: '', description: '', target_percentage: 70 });
                     }}
                     className={`p-2 rounded-lg ${isDark ? 'hover:bg-white/10' : 'hover:bg-gray-100'} transition-all`}
                   >
@@ -652,8 +732,8 @@ export default function POManagementPage() {
                       type="number"
                       min="0"
                       max="100"
-                      value={newPO.target}
-                      onChange={(e) => setNewPO({ ...newPO, target: Number(e.target.value) || 70 })}
+                      value={newPO.target_percentage}
+                      onChange={(e) => setNewPO({ ...newPO, target_percentage: Number(e.target.value) || 70 })}
                       className={`w-full p-3 rounded-lg ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'} border transition-colors focus:ring-2 focus:ring-indigo-500 outline-none`}
                     />
                     <p className={`${mutedText} text-xs mt-1`}>Default target percentage for this PO (0-100%)</p>
@@ -667,7 +747,7 @@ export default function POManagementPage() {
                     whileTap={{ scale: 0.95 }}
                     onClick={() => {
                       setShowCreatePO(false);
-                      setNewPO({ code: '', title: '', description: '', target: 70 });
+                      setNewPO({ code: '', title: '', description: '', target_percentage: 70 });
                     }}
                     className={`px-6 py-2 rounded-xl ${isDark ? 'bg-white/5 hover:bg-white/10 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'} transition-all`}
                   >
@@ -677,7 +757,7 @@ export default function POManagementPage() {
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={handleCreatePO}
-                    disabled={!newPO.code || !newPO.title || !newPO.description}
+                    disabled={!newPO.code || !newPO.title || !newPO.description || isSaving}
                     className={`px-6 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed`}
                   >
                     <Save className="w-4 h-4" />
@@ -692,4 +772,3 @@ export default function POManagementPage() {
     </div>
   );
 }
-
