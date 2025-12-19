@@ -1,0 +1,162 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  backend:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: acurate_db
+          POSTGRES_USER: acurate_user
+          POSTGRES_PASSWORD: acurate_pass_2024
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        cache: 'pip'
+
+    - name: Install dependencies
+      working-directory: ./backend
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Wait for PostgreSQL
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y postgresql-client
+        until pg_isready -h localhost -p 5432 -U acurate_user; do
+          echo "Waiting for PostgreSQL..."
+          sleep 2
+        done
+
+    - name: Run migrations
+      working-directory: ./backend
+      env:
+        DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY || 'test-secret-key-for-ci-only' }}
+        DJANGO_DEBUG: 'False'
+        POSTGRES_DB: acurate_db
+        POSTGRES_USER: acurate_user
+        POSTGRES_PASSWORD: acurate_pass_2024
+        POSTGRES_HOST: localhost
+        POSTGRES_PORT: 5432
+      run: |
+        python manage.py migrate --noinput
+
+    - name: Run Django checks
+      working-directory: ./backend
+      env:
+        DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY || 'test-secret-key-for-ci-only' }}
+        DJANGO_DEBUG: 'False'
+        POSTGRES_DB: acurate_db
+        POSTGRES_USER: acurate_user
+        POSTGRES_PASSWORD: acurate_pass_2024
+        POSTGRES_HOST: localhost
+        POSTGRES_PORT: 5432
+      run: |
+        python manage.py check
+
+    - name: Run tests with pytest
+      working-directory: ./backend
+      env:
+        DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY || 'test-secret-key-for-ci-only' }}
+        DJANGO_DEBUG: 'False'
+        POSTGRES_DB: acurate_db
+        POSTGRES_USER: acurate_user
+        POSTGRES_PASSWORD: acurate_pass_2024
+        POSTGRES_HOST: localhost
+        POSTGRES_PORT: 5432
+        PYTEST_CURRENT_TEST: 'true'
+      run: |
+        pytest api/tests/ -v --cov=api --cov-report=xml --cov-report=term --cov-report=html
+      continue-on-error: false
+
+    - name: Test Summary
+      if: always()
+      working-directory: ./backend
+      run: |
+        echo "## 🧪 Backend Test Sonuçları" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        if [ -f coverage.xml ]; then
+          echo "✅ Testler tamamlandı!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Coverage Raporu" >> $GITHUB_STEP_SUMMARY
+          echo "Coverage raporu oluşturuldu. Detaylar için Actions loglarına bakın." >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ Testler başarısız oldu!" >> $GITHUB_STEP_SUMMARY
+        fi
+
+  frontend:
+    name: Frontend Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+
+    - name: Install dependencies
+      working-directory: ./frontend
+      run: npm ci
+
+    - name: Run TypeScript type check
+      working-directory: ./frontend
+      run: |
+        npx tsc --noEmit --pretty
+
+    - name: Build Next.js application
+      working-directory: ./frontend
+      env:
+        NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL || 'http://localhost:8000' }}
+      run: |
+        npm run build
+
+    - name: Check build artifacts
+      working-directory: ./frontend
+      run: |
+        if [ ! -d ".next" ]; then
+          echo "Build failed: .next directory not found"
+          exit 1
+        fi
+        echo "Build successful!"
+
+    - name: Frontend Build Summary
+      if: always()
+      working-directory: ./frontend
+      run: |
+        echo "## 🎨 Frontend Build Sonuçları" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        if [ -d ".next" ]; then
+          echo "✅ Build başarılı!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Build Detayları" >> $GITHUB_STEP_SUMMARY
+          echo "- TypeScript type check: ✅ Geçti" >> $GITHUB_STEP_SUMMARY
+          echo "- Next.js build: ✅ Başarılı" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ Build başarısız!" >> $GITHUB_STEP_SUMMARY
+        fi
