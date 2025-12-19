@@ -1,15 +1,26 @@
 """
 Test settings for AcuRate backend.
-Uses SQLite for faster test execution.
+Uses PostgreSQL for testing (same as production).
 """
 
+import os
 from .settings import *  # noqa
 
-# Use SQLite for testing (faster, no Docker needed)
+# Use PostgreSQL for testing (same as production)
+# Database credentials from environment variables or defaults
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': ':memory:',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.environ.get('POSTGRES_DB', 'acurate_db'),
+        'USER': os.environ.get('POSTGRES_USER', 'acurate_user'),
+        'PASSWORD': os.environ.get('POSTGRES_PASSWORD', 'acurate_pass_2024'),
+        'HOST': os.environ.get('POSTGRES_HOST', 'localhost'),
+        'PORT': os.environ.get('POSTGRES_PORT', '5432'),
+        'OPTIONS': {
+            'connect_timeout': 10,
+        },
+        # Don't reuse connections in tests
+        'CONN_MAX_AGE': 0,
     }
 }
 

@@ -50,42 +50,53 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y postgresql-client
-        until pg_isready -h localhost -p 5432 -U acurate_user; do
-          echo "Waiting for PostgreSQL..."
+        timeout=60
+        counter=0
+        until pg_isready -h localhost -p 5432 -U acurate_user -d acurate_db; do
+          if [ $counter -ge $timeout ]; then
+            echo "PostgreSQL is not ready after $timeout seconds"
+            exit 1
+          fi
+          echo "Waiting for PostgreSQL... ($counter/$timeout)"
           sleep 2
+          counter=$((counter + 2))
         done
+        echo "PostgreSQL is ready!"
 
     - name: Run migrations
       working-directory: ./backend
       env:
         DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY || 'test-secret-key-for-ci-only' }}
         DJANGO_DEBUG: 'False'
+        DJANGO_SETTINGS_MODULE: backend.test_settings
         POSTGRES_DB: acurate_db
         POSTGRES_USER: acurate_user
         POSTGRES_PASSWORD: acurate_pass_2024
         POSTGRES_HOST: localhost
         POSTGRES_PORT: 5432
       run: |
-        python manage.py migrate --noinput
+        python manage.py migrate --noinput --settings=backend.test_settings
 
     - name: Run Django checks
       working-directory: ./backend
       env:
         DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY || 'test-secret-key-for-ci-only' }}
         DJANGO_DEBUG: 'False'
+        DJANGO_SETTINGS_MODULE: backend.test_settings
         POSTGRES_DB: acurate_db
         POSTGRES_USER: acurate_user
         POSTGRES_PASSWORD: acurate_pass_2024
         POSTGRES_HOST: localhost
         POSTGRES_PORT: 5432
       run: |
-        python manage.py check
+        python manage.py check --settings=backend.test_settings
 
     - name: Run tests with pytest
       working-directory: ./backend
       env:
         DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY || 'test-secret-key-for-ci-only' }}
         DJANGO_DEBUG: 'False'
+        DJANGO_SETTINGS_MODULE: backend.test_settings
         POSTGRES_DB: acurate_db
         POSTGRES_USER: acurate_user
         POSTGRES_PASSWORD: acurate_pass_2024
@@ -93,14 +104,14 @@ jobs:
         POSTGRES_PORT: 5432
         PYTEST_CURRENT_TEST: 'true'
       run: |
-        pytest api/tests/ -v --cov=api --cov-report=xml --cov-report=term --cov-report=html
+        pytest api/tests/ -v --ds=backend.test_settings --cov=api --cov-report=xml --cov-report=term --cov-report=html --tb=short
       continue-on-error: false
 
     - name: Test Summary
       if: always()
       working-directory: ./backend
       run: |
-        echo "## 🧪 Test Sonuçları" >> $GITHUB_STEP_SUMMARY
+        echo "## 🧪 Backend Test Sonuçları" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         if [ -f coverage.xml ]; then
           echo "✅ Testler tamamlandı!" >> $GITHUB_STEP_SUMMARY
@@ -108,7 +119,7 @@ jobs:
           echo "### Coverage Raporu" >> $GITHUB_STEP_SUMMARY
           echo "Coverage raporu oluşturuldu. Detaylar için Actions loglarına bakın." >> $GITHUB_STEP_SUMMARY
         else
-          echo "❌ Testler başarısız oldu!" >> $GITHUB_STEP_SUMMARY
+          echo "❌ Testler başarısız oldu veya coverage raporu oluşturulamadı!" >> $GITHUB_STEP_SUMMARY
         fi
 
     - name: Upload coverage to Codecov

@@ -39,8 +39,10 @@ jobs:
       working-directory: ./frontend
       env:
         NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL || 'http://localhost:8000' }}
+        NODE_ENV: production
       run: |
-        npm run build
+        # Try with turbopack first, fallback to regular build if it fails
+        npm run build 2>&1 || (echo "Turbopack build failed, trying regular build..." && npx next build)
 
     - name: Check build artifacts
       working-directory: ./frontend
