@@ -1,62 +1,36 @@
 """
 AcuRate - Test Suite Package
 
-This package contains all tests organized by category:
-- base: BaseTestCase for common test setup
-- models: Model validation tests
-- api: API endpoint tests
-- permissions: Role-based permission tests
-- calculations: Calculation logic tests
-- serializers: Serializer validation tests
-- integration: End-to-end workflow tests
+This package contains all tests organized by category.
+All tests use pytest format with fixtures from conftest.py.
+
+⚠️ DEPRECATED FILES (will be removed):
+- test_models.py → Use test_models_pytest.py
+- test_api.py → Use test_api_pytest.py
+- test_serializers.py → Use test_serializers_pytest.py
+- test_permissions.py → Use test_permissions_pytest.py
+- test_integration.py → Use test_integration_pytest.py
+- test_base.py → Use conftest.py fixtures
+
+✅ ACTIVE TEST FILES (pytest format):
+- test_models_pytest.py - Model tests
+- test_models_additional.py - Additional model tests
+- test_api_pytest.py - API endpoint tests
+- test_serializers_pytest.py - Serializer tests
+- test_serializers_additional.py - Additional serializer tests
+- test_permissions_pytest.py - Permission tests
+- test_integration_pytest.py - Integration tests
+- test_views_*.py - View tests
+- test_critical_security.py - Security tests
+- test_utils.py - Utility function tests
 """
 
-# Import all test classes to make them discoverable by Django test runner
-from .test_base import BaseTestCase
-from .test_models import (
-    UserModelTest,
-    ProgramOutcomeModelTest,
-    LearningOutcomeModelTest,
-    CourseModelTest,
-    AssessmentModelTest,
-    StudentGradeModelTest,
-    StudentPOAchievementModelTest,
-    StudentLOAchievementModelTest,
-)
-from .test_api import (
-    AuthenticationAPITest,
-    ProgramOutcomeAPITest,
-    LearningOutcomeAPITest,
-    CourseAPITest,
-    StudentGradeAPITest,
-)
-from .test_permissions import PermissionTest
-from .test_calculations import CalculationTest
-from .test_serializers import SerializerValidationTest
-from .test_integration import IntegrationTest
+# Note: We no longer import Django TestCase classes
+# All tests should use pytest format with fixtures from conftest.py
 
 __all__ = [
-    'BaseTestCase',
-    # Model tests
-    'UserModelTest',
-    'ProgramOutcomeModelTest',
-    'LearningOutcomeModelTest',
-    'CourseModelTest',
-    'AssessmentModelTest',
-    'StudentGradeModelTest',
-    'StudentPOAchievementModelTest',
-    'StudentLOAchievementModelTest',
-    # API tests
-    'AuthenticationAPITest',
-    'ProgramOutcomeAPITest',
-    'LearningOutcomeAPITest',
-    'CourseAPITest',
-    'StudentGradeAPITest',
-    # Other tests
-    'PermissionTest',
-    'CalculationTest',
-    'SerializerValidationTest',
-    'IntegrationTest',
+    # All tests are now in pytest format
+    # Import specific test classes if needed, but pytest auto-discovers them
 ]
 
 

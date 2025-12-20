@@ -1,72 +1,56 @@
 """
-INTEGRATION Test Module - DEPRECATED
+Integration Tests - Pytest Version
 
-⚠️ DEPRECATED: This file uses Django TestCase format.
-✅ Use test_integration_pytest.py instead (pytest format with fixtures).
-
-This file is kept for backward compatibility but will be removed in future versions.
-All tests have been migrated to pytest format in test_integration_pytest.py.
+Tests for complete workflows using pytest.
 """
 
-# DEPRECATED: Use test_integration_pytest.py instead
+import pytest
+import uuid
 from decimal import Decimal
-from rest_framework.test import APIClient
 from rest_framework import status
 
-from ..models import (
+from api.models import (
     Enrollment, Assessment, StudentGrade, StudentPOAchievement,
     LearningOutcome, AssessmentLO, LOPO
 )
 
-from .test_base import BaseTestCase
 
 # =============================================================================
-# INTEGRATION TESTS
+# INTEGRATION TESTS - Pytest Style
 # =============================================================================
 
-class IntegrationTest(BaseTestCase):
+@pytest.mark.integration
+class TestCompleteWorkflows:
     """Test complete workflows"""
     
-    def setUp(self):
-        super().setUp()
-        self.client = APIClient()
-    
-    def test_complete_workflow_po_creation_to_achievement(self):
+    def test_complete_workflow_po_creation_to_achievement(
+        self, authenticated_institution_client, authenticated_teacher_client,
+        student_user, course, enrollment, db
+    ):
         """Test complete workflow: PO creation -> Course mapping -> Assessment -> Grade -> Achievement"""
-        import uuid
         unique_code = f'PO3_{uuid.uuid4().hex[:6]}'
         
-        # 0. Ensure enrollment exists for the student
-        enrollment, _ = Enrollment.objects.get_or_create(
-            student=self.student,
-            course=self.course,
-            defaults={'final_grade': None, 'is_active': True}
-        )
-        
         # 1. Institution creates PO
-        self.client.force_authenticate(user=self.institution)
-        po_response = self.client.post('/api/program-outcomes/', {
+        po_response = authenticated_institution_client.post('/api/program-outcomes/', {
             'code': unique_code,
             'title': 'Design Solutions',
             'description': 'Design solutions for complex problems',
             'department': 'Computer Science',
             'target_percentage': '70.00'
         })
-        self.assertEqual(po_response.status_code, status.HTTP_201_CREATED)
+        assert po_response.status_code == status.HTTP_201_CREATED
         po_id = po_response.data['id']
         
         # 2. Teacher creates LO and links it to PO via LOPO
-        # Switch to teacher for LO creation (teachers can create LOs)
-        self.client.force_authenticate(user=self.teacher)
-        lo_response = self.client.post('/api/learning-outcomes/', {
-            'course': self.course.id,
+        lo_response = authenticated_teacher_client.post('/api/learning-outcomes/', {
+            'course': course.id,
             'code': 'LO3',
             'title': 'Design Solutions LO',
             'description': 'LO for design solutions',
             'target_percentage': '70.00'
         })
-        self.assertEqual(lo_response.status_code, status.HTTP_201_CREATED, 
-                        f"LO creation failed: {lo_response.data}")
+        assert lo_response.status_code == status.HTTP_201_CREATED, \
+            f"LO creation failed: {lo_response.data}"
         lo_id = lo_response.data['id']
         
         # Link LO to PO
@@ -77,16 +61,15 @@ class IntegrationTest(BaseTestCase):
         )
         
         # 3. Teacher creates assessment linked to LO
-        self.client.force_authenticate(user=self.teacher)
-        assessment_response = self.client.post('/api/assessments/', {
-            'course': self.course.id,
+        assessment_response = authenticated_teacher_client.post('/api/assessments/', {
+            'course': course.id,
             'title': 'Final Exam',
             'assessment_type': Assessment.AssessmentType.FINAL,
             'weight': '40.00',
             'max_score': '100.00',
             'is_active': True
         })
-        self.assertEqual(assessment_response.status_code, status.HTTP_201_CREATED)
+        assert assessment_response.status_code == status.HTTP_201_CREATED
         assessment_id = assessment_response.data['id']
         
         # Link assessment to LO via AssessmentLO
@@ -96,48 +79,48 @@ class IntegrationTest(BaseTestCase):
             weight=Decimal('1.0')
         )
         
-        # 4. Teacher creates grade - use direct model creation to avoid API issues
+        # 4. Teacher creates grade
         grade = StudentGrade.objects.create(
-            student=self.student,
+            student=student_user,
             assessment_id=assessment_id,
             score=Decimal('85.00'),
             feedback='Good work'
         )
         
         # 5. Verify grade was created
-        self.assertEqual(grade.score, Decimal('85.00'))
-        self.assertEqual(grade.student, self.student)
+        assert grade.score == Decimal('85.00')
+        assert grade.student == student_user
         
         # 6. Verify PO achievement exists or can be created
-        # Note: Auto-calculation may depend on signals being triggered
         po_achievement, created = StudentPOAchievement.objects.get_or_create(
-            student=self.student,
+            student=student_user,
             program_outcome_id=po_id,
             defaults={'current_percentage': Decimal('85.00')}
         )
-        self.assertIsNotNone(po_achievement, "PO achievement should exist")
+        assert po_achievement is not None, "PO achievement should exist"
     
-    def test_complete_workflow_lo_creation(self):
+    def test_complete_workflow_lo_creation(
+        self, authenticated_teacher_client, course, assessment, db
+    ):
         """Test complete workflow: LO creation -> Assessment link -> Grade"""
         # 1. Teacher creates LO
-        self.client.force_authenticate(user=self.teacher)
-        lo_response = self.client.post('/api/learning-outcomes/', {
-            'course': self.course.id,
+        lo_response = authenticated_teacher_client.post('/api/learning-outcomes/', {
+            'course': course.id,
             'code': 'LO2',
             'title': 'Implement Algorithms',
             'description': 'Students will implement algorithms',
             'target_percentage': '70.00'
         })
-        self.assertEqual(lo_response.status_code, status.HTTP_201_CREATED)
+        assert lo_response.status_code == status.HTTP_201_CREATED
         lo_id = lo_response.data['id']
         
         # 2. Teacher links LO to assessment via AssessmentLO
-        from ..models import AssessmentLO
         AssessmentLO.objects.create(
-            assessment=self.assessment,
+            assessment=assessment,
             learning_outcome_id=lo_id,
             weight=Decimal('1.0')
         )
         
         # 3. Verify LO is linked
-        self.assertIn(LearningOutcome.objects.get(id=lo_id), self.assessment.related_los.all())
+        assert LearningOutcome.objects.get(id=lo_id) in assessment.related_los.all()
+

@@ -72,3 +72,4 @@ jobs:
         else
           echo "ESLint not configured, skipping..."
         fi
+

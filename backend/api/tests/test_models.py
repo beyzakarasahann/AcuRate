@@ -1,19 +1,20 @@
-"""MODELS Test Module"""
+"""
+MODELS Test Module - DEPRECATED
 
-from django.test import TestCase
-from django.contrib.auth import get_user_model
-from django.utils import timezone
+⚠️ DEPRECATED: This file uses Django TestCase format.
+✅ Use test_models_pytest.py instead (pytest format with fixtures).
+
+This file is kept for backward compatibility but will be removed in future versions.
+All tests have been migrated to pytest format in test_models_pytest.py.
+"""
+
+# DEPRECATED: Use test_models_pytest.py instead
 from django.core.exceptions import ValidationError
 from decimal import Decimal
-from rest_framework.test import APIClient
-from rest_framework import status
-from rest_framework_simplejwt.tokens import RefreshToken
-import json
 
 from ..models import (
-    User, Department, ProgramOutcome, Course, CoursePO,
-    Enrollment, Assessment, StudentGrade, StudentPOAchievement,
-    LearningOutcome, StudentLOAchievement, ContactRequest
+    User, ProgramOutcome, Course, Assessment, StudentGrade,
+    StudentPOAchievement, LearningOutcome, StudentLOAchievement
 )
 
 from .test_base import BaseTestCase

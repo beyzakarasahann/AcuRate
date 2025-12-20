@@ -1,9 +1,14 @@
 """
-AcuRate - Base Test Case
+AcuRate - Base Test Case - DEPRECATED
 
-Base test case with common setup for all test modules.
+⚠️ DEPRECATED: This file provides Django TestCase base class.
+✅ Use conftest.py fixtures instead (pytest format).
+
+This file is kept for backward compatibility with deprecated Django TestCase tests.
+New tests should use pytest fixtures from conftest.py.
 """
 
+# DEPRECATED: Use conftest.py fixtures instead
 from django.test import TestCase
 from django.utils import timezone
 from decimal import Decimal

@@ -1,31 +1,60 @@
-# Utility Scripts
+# Test Scripts
 
-This directory contains utility scripts for development and testing purposes.
+Bu klasör, test çalıştırma ve doğrulama scriptlerini içerir.
 
-## Scripts
+## 🧪 test_before_push.sh / test_before_push.py
 
-### `check_email_config.py`
-Quick check for email configuration. Run this to verify email settings are loaded correctly.
+GitHub'a push etmeden önce testlerin geçip geçmediğini kontrol eder.
 
-**Usage:**
+### Kullanım
+
+**Bash script:**
 ```bash
-python scripts/check_email_config.py
+cd backend
+./scripts/test_before_push.sh
 ```
 
-### `test_email.py`
-Test SendGrid email configuration by sending a test email.
-
-**Usage:**
+**Python script:**
 ```bash
-python scripts/test_email.py
+cd backend
+python scripts/test_before_push.py
 ```
 
-### `create_demo_accounts.py`
-Creates demo accounts for testing (Student, Teacher, Institution roles).
+### Özellikler
 
-**Usage:**
+- ✅ Docker'ın çalışıp çalışmadığını kontrol eder
+- ✅ Docker PostgreSQL bağlantısını otomatik kontrol eder
+- ✅ PostgreSQL yoksa hata verir ve Docker'ı başlatmayı önerir
+- ✅ Deprecated test dosyalarını otomatik hariç tutar
+- ✅ Slow testleri hariç tutar (hızlı test)
+- ✅ Coverage raporu oluşturur
+- ✅ Renkli çıktı (başarı/hata durumları)
+
+### Çıktı
+
+- ✅ **Başarılı:** Tüm testler geçti, push edebilirsiniz
+- ❌ **Başarısız:** Testler başarısız, push etmeden önce düzeltin
+
+### Notlar
+
+- Script, deprecated Django TestCase dosyalarını otomatik olarak hariç tutar
+- Sadece pytest testleri çalıştırılır
+- Slow testler hariç tutulur (hızlı feedback için)
+- Coverage raporu `htmlcov/index.html` dosyasında oluşturulur
+
+## 🔄 Pre-commit Hook (Opsiyonel)
+
+Git commit öncesi otomatik test çalıştırmak için:
+
 ```bash
-python scripts/create_demo_accounts.py
+# .git/hooks/pre-commit dosyası oluştur
+cat > .git/hooks/pre-commit << 'EOF'
+#!/bin/bash
+cd backend
+python scripts/test_before_push.py
+EOF
+
+chmod +x .git/hooks/pre-commit
 ```
 
-**Note:** These scripts are for development/testing only and should not be used in production.
+**Not:** Pre-commit hook, her commit'te testleri çalıştırır. Bu biraz yavaş olabilir. Alternatif olarak sadece push öncesi manuel çalıştırabilirsiniz.
