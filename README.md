@@ -342,6 +342,14 @@ python manage.py shell
 
 # Test çalıştır
 python manage.py test
+
+# veya pytest ile (önerilen)
+pytest
+
+# GitHub'a push etmeden önce test kontrolü
+python scripts/test_before_push.py
+# veya
+./scripts/test_before_push.sh
 ```
 
 ### Frontend Geliştirme

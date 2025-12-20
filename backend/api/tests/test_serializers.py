@@ -1,19 +1,19 @@
-"""SERIALIZERS Test Module"""
+"""
+SERIALIZERS Test Module - DEPRECATED
 
+⚠️ DEPRECATED: This file uses Django TestCase format.
+✅ Use test_serializers_pytest.py instead (pytest format with fixtures).
+
+This file is kept for backward compatibility but will be removed in future versions.
+All tests have been migrated to pytest format in test_serializers_pytest.py.
+"""
+
+# DEPRECATED: Use test_serializers_pytest.py instead
 from django.test import TestCase
-from django.contrib.auth import get_user_model
-from django.utils import timezone
-from django.core.exceptions import ValidationError
-from decimal import Decimal
-from rest_framework.test import APIClient
-from rest_framework import status
-from rest_framework_simplejwt.tokens import RefreshToken
-import json
+import uuid
 
 from ..models import (
-    User, Department, ProgramOutcome, Course, CoursePO,
-    Enrollment, Assessment, StudentGrade, StudentPOAchievement,
-    LearningOutcome, StudentLOAchievement, ContactRequest
+    User, Course
 )
 
 from .test_base import BaseTestCase

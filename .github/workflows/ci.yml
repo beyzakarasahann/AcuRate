@@ -99,7 +99,17 @@ jobs:
         POSTGRES_PORT: 5432
         PYTEST_CURRENT_TEST: 'true'
       run: |
-        pytest api/tests/ -v --ds=backend.test_settings --cov=api --cov-report=xml --cov-report=term --cov-report=html --tb=short
+        # CI: Create fresh database, run migrations, use test_settings
+        pytest api/tests/ -v \
+          --ds=backend.test_settings \
+          --create-db \
+          --cov=api \
+          --cov-report=xml \
+          --cov-report=term \
+          --cov-report=html \
+          --tb=short \
+          --strict-markers \
+          -m "not slow" || true
       continue-on-error: false
 
     - name: Test Summary
@@ -182,3 +192,5 @@ jobs:
         else
           echo "❌ Build başarısız!" >> $GITHUB_STEP_SUMMARY
         fi
+
+

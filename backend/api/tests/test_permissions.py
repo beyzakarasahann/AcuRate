@@ -1,19 +1,20 @@
-"""PERMISSIONS Test Module"""
+"""
+PERMISSIONS Test Module - DEPRECATED
 
-from django.test import TestCase
-from django.contrib.auth import get_user_model
-from django.utils import timezone
-from django.core.exceptions import ValidationError
+⚠️ DEPRECATED: This file uses Django TestCase format.
+✅ Use test_permissions_pytest.py instead (pytest format with fixtures).
+
+This file is kept for backward compatibility but will be removed in future versions.
+All tests have been migrated to pytest format in test_permissions_pytest.py.
+"""
+
+# DEPRECATED: Use test_permissions_pytest.py instead
 from decimal import Decimal
 from rest_framework.test import APIClient
 from rest_framework import status
-from rest_framework_simplejwt.tokens import RefreshToken
-import json
 
 from ..models import (
-    User, Department, ProgramOutcome, Course, CoursePO,
-    Enrollment, Assessment, StudentGrade, StudentPOAchievement,
-    LearningOutcome, StudentLOAchievement, ContactRequest
+    User, Enrollment, Assessment, StudentGrade
 )
 
 from .test_base import BaseTestCase
@@ -82,7 +83,6 @@ class PermissionTest(BaseTestCase):
     def test_student_can_view_own_grades(self):
         """Test student can view their own grades"""
         # Ensure enrollment exists for the student in the course
-        from ..models import Enrollment
         enrollment, _ = Enrollment.objects.get_or_create(
             student=self.student,
             course=self.assessment.course,
@@ -95,10 +95,12 @@ class PermissionTest(BaseTestCase):
             assessment=self.assessment,
             score=Decimal('85.00')
         )
-        # Use list endpoint with filter instead of detail endpoint
-        response = self.client.get('/api/grades/', {'student': self.student.id})
-        self.assertIn(response.status_code, [status.HTTP_200_OK, status.HTTP_403_FORBIDDEN],
-                     f"Unexpected status: {response.status_code}, data: {getattr(response, 'data', 'N/A')}")
+        # Use list endpoint - students should see their own grades
+        response = self.client.get('/api/grades/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # Verify student can see their own grade
+        if isinstance(response.data, list) and len(response.data) > 0:
+            self.assertEqual(response.data[0]['student'], self.student.id)
     
     def test_student_cannot_view_other_grades(self):
         """Test student cannot view other students' grades"""

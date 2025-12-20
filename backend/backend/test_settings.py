@@ -1,6 +1,7 @@
 """
 Test settings for AcuRate backend.
 Uses PostgreSQL for testing (same as production).
+PostgreSQL must be running in Docker.
 """
 
 import os
@@ -12,6 +13,7 @@ from .settings import *  # noqa
 
 # Use PostgreSQL for testing (same as production)
 # Database credentials from environment variables or defaults
+# PostgreSQL must be running in Docker
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
