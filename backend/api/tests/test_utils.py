@@ -221,3 +221,4 @@ class TestGetInstitutionForUser:
         # Should return None if no institution found
         assert result is None or isinstance(result, User)
 
+

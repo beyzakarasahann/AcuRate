@@ -295,3 +295,4 @@ class TestLOPOSerializer:
         assert lopo.program_outcome == program_outcome_1
         assert lopo.weight == Decimal('2.5')
 
+

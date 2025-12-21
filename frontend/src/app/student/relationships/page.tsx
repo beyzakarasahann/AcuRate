@@ -264,7 +264,7 @@ export default function RelationshipsPage() {
   // Combine PO data with achievements
   const poWithScores: POWithScore[] = programOutcomes.map(po => {
     const achievement = poAchievements.find(a => a.program_outcome === po.id);
-    const score = achievement ? Math.round(achievement.current_percentage) : 0;
+    const score = achievement ? Math.round(achievement.current_percentage ?? 0) : 0;
     return { po, score, achievement };
   });
 
@@ -603,7 +603,7 @@ export default function RelationshipsPage() {
                       const poAchievement = poAchievements.find(
                         a => a.program_outcome === programOutcomes.find(p => p.code === po.poCode)?.id
                       );
-                      const poScore = poAchievement ? Math.round(poAchievement.current_percentage) : 0;
+                      const poScore = poAchievement ? Math.round(poAchievement.current_percentage ?? 0) : 0;
                       return (
                         <div
                           key={index}

@@ -291,8 +291,8 @@ export default function TeacherAnalyticsPage() {
           // Filter to only include PO achievements for students in this course
           allPOAchievements = allPOs.filter(po => {
             let poStudentId: number | undefined;
-            if (typeof po.student === 'object' && po.student !== null) {
-              poStudentId = po.student.id;
+            if (typeof po.student === 'object' && po.student !== null && 'id' in po.student) {
+              poStudentId = (po.student as { id: number }).id;
             } else if (typeof po.student === 'number') {
               poStudentId = po.student;
             }
@@ -322,7 +322,12 @@ export default function TeacherAnalyticsPage() {
         
         // Filter LO achievements for this student
         const studentLOs = courseLOAchievements.filter(lo => {
-          const loStudentId = typeof lo.student === 'object' ? lo.student?.id : lo.student;
+          let loStudentId: number | undefined;
+          if (typeof lo.student === 'object' && lo.student !== null && 'id' in lo.student) {
+            loStudentId = (lo.student as { id: number }).id;
+          } else if (typeof lo.student === 'number') {
+            loStudentId = lo.student;
+          }
           const match = Number(loStudentId) === Number(studentId);
           if (match) {
             console.log(`LO Achievement matched for student ${studentId}:`, lo);
@@ -346,10 +351,11 @@ export default function TeacherAnalyticsPage() {
           
           // PO student can be object or number
           let poStudentId: number | undefined;
-          if (typeof po.student === 'object' && po.student !== null) {
-            poStudentId = po.student.id;
+          if (typeof po.student === 'object' && po.student !== null && 'id' in po.student) {
+            const studentObj = po.student as { id: number; is_superuser?: boolean; is_staff?: boolean };
+            poStudentId = studentObj.id;
             // Also check if student object has superuser flag
-            if (po.student.is_superuser || po.student.is_staff) {
+            if (studentObj.is_superuser || studentObj.is_staff) {
               return false;
             }
           } else if (typeof po.student === 'number') {
@@ -425,7 +431,7 @@ export default function TeacherAnalyticsPage() {
         }
 
         return {
-          student: typeof student === 'object' ? student : { id: student } as User,
+          student: typeof student === 'object' && student !== null ? student as User : { id: student } as unknown as User,
           loAchievements: studentLOs,
           poAchievements: studentPOs,
           avgLO,
@@ -526,14 +532,16 @@ export default function TeacherAnalyticsPage() {
       currentAnalytics.students.forEach(s => {
         s.loAchievements.forEach(loAchievement => {
           if (typeof loAchievement.learning_outcome === 'object' && loAchievement.learning_outcome) {
-            const lo = loAchievement.learning_outcome;
-            const loId = lo.id || 0;
-            if (!allLOsMap.has(loId)) {
-              allLOsMap.set(loId, {
-                id: loId,
-                code: lo.code || `LO-${loId}`,
-                title: lo.title
-              });
+            if (typeof loAchievement.learning_outcome === 'object' && loAchievement.learning_outcome !== null && 'id' in loAchievement.learning_outcome) {
+              const lo = loAchievement.learning_outcome as { id: number; code?: string; title?: string };
+              const loId = lo.id || 0;
+              if (!allLOsMap.has(loId)) {
+                allLOsMap.set(loId, {
+                  id: loId,
+                  code: lo.code || `LO-${loId}`,
+                  title: lo.title || ''
+                });
+              }
             }
           } else if (typeof loAchievement.learning_outcome === 'number') {
             const loId = loAchievement.learning_outcome;
@@ -606,17 +614,26 @@ export default function TeacherAnalyticsPage() {
         const studentLO = s.loAchievements.find(loAchievement => {
           if (loId) {
             // Match by ID if available
-            const achievementLOId = typeof loAchievement.learning_outcome === 'object' 
-              ? loAchievement.learning_outcome?.id
-              : loAchievement.learning_outcome;
-            if (achievementLOId && Number(achievementLOId) === Number(loId)) {
-              return true;
+            if (typeof loAchievement.learning_outcome === 'object' && loAchievement.learning_outcome !== null && 'id' in loAchievement.learning_outcome) {
+              const loObj = loAchievement.learning_outcome as { id: number; code?: string; title?: string };
+              const achievementLOId = loObj.id;
+              if (achievementLOId && Number(achievementLOId) === Number(loId)) {
+                return true;
+              }
+            } else if (typeof loAchievement.learning_outcome === 'number') {
+              if (Number(loAchievement.learning_outcome) === Number(loId)) {
+                return true;
+              }
             }
           }
           // Fallback: match by code
-          const loCodeFromAchievement = typeof loAchievement.learning_outcome === 'object' 
-            ? loAchievement.learning_outcome?.code || loAchievement.lo_code
-            : loAchievement.lo_code || `LO-${loAchievement.learning_outcome || 'unknown'}`;
+          let loCodeFromAchievement: string;
+          if (typeof loAchievement.learning_outcome === 'object' && loAchievement.learning_outcome !== null && 'code' in loAchievement.learning_outcome) {
+            const loObj = loAchievement.learning_outcome as { id: number; code?: string; title?: string };
+            loCodeFromAchievement = loObj.code || loAchievement.lo_code || `LO-${loObj.id || 'unknown'}`;
+          } else {
+            loCodeFromAchievement = loAchievement.lo_code || `LO-${loAchievement.learning_outcome || 'unknown'}`;
+          }
           return loCodeFromAchievement === loCode;
         });
         return studentLO ? Number(studentLO.current_percentage || 0) : 0;
@@ -897,13 +914,23 @@ export default function TeacherAnalyticsPage() {
                                   ? learningOutcomes.filter(lo => lo.is_active !== false).sort((a, b) => a.code.localeCompare(b.code))
                                   : studentAnalytics.loAchievements.map(lo => {
                                       // Fallback: create LO-like object from achievement
-                                      const loCode = typeof lo.learning_outcome === 'object' 
-                                        ? lo.learning_outcome?.code || lo.lo_code || `LO-${lo.learning_outcome?.id || 'unknown'}`
-                                        : lo.lo_code || `LO-${lo.learning_outcome || 'unknown'}`;
+                                      let loCode: string;
+                                      let loId: number;
+                                      let loTitle: string;
+                                      if (typeof lo.learning_outcome === 'object' && lo.learning_outcome !== null && 'id' in lo.learning_outcome) {
+                                        const loObj = lo.learning_outcome as { id: number; code?: string; title?: string };
+                                        loId = loObj.id;
+                                        loCode = loObj.code || lo.lo_code || `LO-${loId || 'unknown'}`;
+                                        loTitle = loObj.title || lo.lo_title || '';
+                                      } else {
+                                        loId = typeof lo.learning_outcome === 'number' ? lo.learning_outcome : 0;
+                                        loCode = lo.lo_code || `LO-${loId || 'unknown'}`;
+                                        loTitle = lo.lo_title || '';
+                                      }
                                       return {
-                                        id: typeof lo.learning_outcome === 'object' ? lo.learning_outcome?.id : lo.learning_outcome || 0,
+                                        id: loId,
                                         code: loCode,
-                                        title: typeof lo.learning_outcome === 'object' ? lo.learning_outcome?.title : lo.lo_title || ''
+                                        title: loTitle
                                       };
                                     });
 
@@ -913,12 +940,16 @@ export default function TeacherAnalyticsPage() {
                                       {displayLOs.map((lo, loIdx) => {
                                         // Find achievement for this LO
                                         const loAchievement = studentAnalytics.loAchievements.find(loAch => {
-                                          const achLOId = typeof loAch.learning_outcome === 'object' 
-                                            ? loAch.learning_outcome?.id
-                                            : loAch.learning_outcome;
-                                          const achLOCode = typeof loAch.learning_outcome === 'object' 
-                                            ? loAch.learning_outcome?.code || loAch.lo_code
-                                            : loAch.lo_code || `LO-${loAch.learning_outcome || 'unknown'}`;
+                                          let achLOId: number | undefined;
+                                          let achLOCode: string;
+                                          if (typeof loAch.learning_outcome === 'object' && loAch.learning_outcome !== null && 'id' in loAch.learning_outcome) {
+                                            const loObj = loAch.learning_outcome as { id: number; code?: string; title?: string };
+                                            achLOId = loObj.id;
+                                            achLOCode = loObj.code || loAch.lo_code || `LO-${achLOId || 'unknown'}`;
+                                          } else {
+                                            achLOId = typeof loAch.learning_outcome === 'number' ? loAch.learning_outcome : undefined;
+                                            achLOCode = loAch.lo_code || `LO-${achLOId || 'unknown'}`;
+                                          }
                                           return (lo.id && achLOId && Number(achLOId) === Number(lo.id)) || achLOCode === lo.code;
                                         });
                                         const percentage = loAchievement ? Number(loAchievement.current_percentage || 0) : 0;

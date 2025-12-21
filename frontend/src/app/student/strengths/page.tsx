@@ -124,11 +124,15 @@ export default function StrengthsPage() {
         poAchievements.forEach(poAch => {
             const achievement = poAch.achievement_percentage || poAch.current_percentage || 0;
             if (achievement > 0) {
-                const poId = typeof poAch.program_outcome === 'string' 
-                    ? parseInt(poAch.program_outcome) 
-                    : (typeof poAch.program_outcome === 'object' && poAch.program_outcome?.id)
-                    ? (typeof poAch.program_outcome.id === 'string' ? parseInt(poAch.program_outcome.id) : poAch.program_outcome.id)
-                    : poAch.program_outcome;
+                let poId: number | undefined;
+                if (typeof poAch.program_outcome === 'number') {
+                  poId = poAch.program_outcome;
+                } else if (typeof poAch.program_outcome === 'object' && poAch.program_outcome !== null && 'id' in poAch.program_outcome) {
+                  const poObj = poAch.program_outcome as { id: number; code?: string; title?: string };
+                  poId = typeof poObj.id === 'string' ? parseInt(poObj.id) : poObj.id;
+                } else if (typeof poAch.program_outcome === 'string') {
+                  poId = parseInt(poAch.program_outcome);
+                }
                 
                 const po = poId ? poMap.get(poId) : null;
                 const code = poAch.po_code || po?.code || '';
@@ -499,4 +503,6 @@ export default function StrengthsPage() {
         </motion.div>
     );
 }
+
+
 

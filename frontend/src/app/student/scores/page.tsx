@@ -144,7 +144,13 @@ export default function ScoresPage() {
       setError(null);
 
       // Fetch all required data with proper error handling
-      let course, assessments, los, pos, grades, allAssessmentLOs, allLOPOs;
+      let course: any;
+      let assessments: any[] = [];
+      let los: any[] = [];
+      let pos: any[] = [];
+      let grades: any[] = [];
+      let allAssessmentLOs: any[] = [];
+      let allLOPOs: any[] = [];
       
       // Get current user ID for filtering grades
       if (!currentUserId) {
@@ -231,9 +237,13 @@ export default function ScoresPage() {
       const assessmentIds = assessments.map(a => Number(a.id));
       const assessmentLOs = allAssessmentLOs.filter(al => {
         // Handle both object and number formats
-        const alAssessmentId = typeof al.assessment === 'object' && al.assessment !== null
-          ? Number(al.assessment.id || al.assessment)
-          : Number(al.assessment);
+        let alAssessmentId: number;
+        if (typeof al.assessment === 'object' && al.assessment !== null && 'id' in al.assessment) {
+          const assObj = al.assessment as { id: number; title?: string };
+          alAssessmentId = Number(assObj.id);
+        } else {
+          alAssessmentId = Number(al.assessment);
+        }
         return assessmentIds.includes(alAssessmentId);
       });
 
@@ -413,14 +423,25 @@ export default function ScoresPage() {
       
       const relevantAssessmentLOs = assessmentLOs.filter(al => {
         // Handle both object and number formats for assessment
-        const alAssessmentId = typeof al.assessment === 'object' && al.assessment !== null
-          ? Number(al.assessment.id || al.assessment)
-          : Number(al.assessment);
+        let alAssessmentId: number;
+        if (typeof al.assessment === 'object' && al.assessment !== null && 'id' in al.assessment) {
+          const assObj = al.assessment as { id: number; title?: string };
+          alAssessmentId = Number(assObj.id);
+        } else {
+          alAssessmentId = Number(al.assessment);
+        }
         return alAssessmentId === assessmentId;
       });
       
       relevantAssessmentLOs.forEach(al => {
         // Handle both object and number formats for learning_outcome
+        let alLoId: number;
+        if (typeof al.learning_outcome === 'object' && al.learning_outcome !== null && 'id' in al.learning_outcome) {
+          const loObj = al.learning_outcome as { id: number; code?: string; title?: string };
+          alLoId = Number(loObj.id);
+        } else {
+          alLoId = Number(al.learning_outcome);
+        }
         const loId = typeof al.learning_outcome === 'object' && al.learning_outcome !== null
           ? Number(al.learning_outcome.id || al.learning_outcome)
           : Number(al.learning_outcome);
@@ -491,16 +512,24 @@ export default function ScoresPage() {
       assessmentLOs
         .filter(al => {
           // Handle both object and number formats for learning_outcome
-          const alLoId = typeof al.learning_outcome === 'object' && al.learning_outcome !== null
-            ? Number(al.learning_outcome.id || al.learning_outcome)
-            : Number(al.learning_outcome);
+          let alLoId: number;
+          if (typeof al.learning_outcome === 'object' && al.learning_outcome !== null && 'id' in al.learning_outcome) {
+            const loObj = al.learning_outcome as { id: number; code?: string; title?: string };
+            alLoId = Number(loObj.id);
+          } else {
+            alLoId = Number(al.learning_outcome);
+          }
           return alLoId === loId;
         })
         .forEach(al => {
           // Handle both object and number formats for assessment
-          const assessmentId = typeof al.assessment === 'object' && al.assessment !== null
-            ? Number(al.assessment.id || al.assessment)
-            : Number(al.assessment);
+          let assessmentId: number;
+          if (typeof al.assessment === 'object' && al.assessment !== null && 'id' in al.assessment) {
+            const assObj = al.assessment as { id: number; title?: string };
+            assessmentId = Number(assObj.id);
+          } else {
+            assessmentId = Number(al.assessment);
+          }
           const assessment = assessments.find(a => Number(a.id) === assessmentId);
           const grade = grades.find(g => {
             const gradeAssessmentId = typeof g.assessment === 'object' && g.assessment !== null

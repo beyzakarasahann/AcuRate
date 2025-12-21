@@ -39,7 +39,7 @@ const item = {
 };
 
 
-interface InstitutionDashboardData extends DashboardData {
+interface InstitutionDashboardData extends Omit<DashboardData, 'po_achievements'> {
   po_achievements?: Array<{
     id: number;
     code: string;
@@ -127,8 +127,8 @@ export default function InstitutionDashboard() {
         previousData.total_students || 0
       ) : '+0%',
       trend: (previousData && dashboardData.total_students && previousData.total_students) 
-        ? (dashboardData.total_students >= (previousData.total_students || 0) ? 'up' : 'down') as const
-        : 'up' as const,
+        ? (dashboardData.total_students >= (previousData.total_students || 0) ? 'up' : 'down')
+        : 'up',
       icon: Users,
       color: 'from-blue-500 to-cyan-500' 
     },
@@ -140,8 +140,8 @@ export default function InstitutionDashboard() {
         previousData.total_teachers || 0
       ) : '+0%',
       trend: (previousData && dashboardData.total_teachers && previousData.total_teachers)
-        ? (dashboardData.total_teachers >= (previousData.total_teachers || 0) ? 'up' : 'down') as const
-        : 'up' as const,
+        ? (dashboardData.total_teachers >= (previousData.total_teachers || 0) ? 'up' : 'down')
+        : 'up',
       icon: Users,
       color: 'from-purple-500 to-pink-500'
     },
@@ -153,8 +153,8 @@ export default function InstitutionDashboard() {
         previousData.total_courses || 0
       ) : '+0%',
       trend: (previousData && dashboardData.total_courses && previousData.total_courses)
-        ? (dashboardData.total_courses >= (previousData.total_courses || 0) ? 'up' : 'down') as const
-        : 'up' as const,
+        ? (dashboardData.total_courses >= (previousData.total_courses || 0) ? 'up' : 'down')
+        : 'up',
       icon: BookOpen,
       color: 'from-orange-500 to-red-500'
     },
@@ -177,7 +177,7 @@ export default function InstitutionDashboard() {
         const prevAvg = previousData.po_achievements 
           ? previousData.po_achievements.reduce((sum: number, po: any) => sum + (po.average_achievement ?? 0), 0) / previousData.po_achievements.length
           : 0;
-        return (currentAvg >= prevAvg ? 'up' : 'down') as const;
+        return (currentAvg >= prevAvg ? 'up' : 'down');
       })(),
       icon: TrendingUp,
       color: 'from-green-500 to-emerald-500'
@@ -209,7 +209,7 @@ export default function InstitutionDashboard() {
       title: po.title,
       current,
       target,
-      status: (current >= target * 1.1 ? 'excellent' : current >= target ? 'achieved' : 'not-achieved') as const
+      status: (current >= target * 1.1 ? 'excellent' : current >= target ? 'achieved' : 'not-achieved')
     };
   }) || [];
 

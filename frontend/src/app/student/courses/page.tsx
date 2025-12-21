@@ -149,7 +149,7 @@ export default function CoursesPage() {
         const coursePOIds = new Set<number>();
         courseAssessments.forEach(assessment => {
           if (assessment.related_pos) {
-            assessment.related_pos.forEach(poId => coursePOIds.add(poId));
+            assessment.related_pos.forEach((poId: number) => coursePOIds.add(poId));
           }
         });
 

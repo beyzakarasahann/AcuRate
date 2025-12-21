@@ -736,8 +736,8 @@ export default function DepartmentsPage() {
                             transition={{ duration: 1 }}
                             style={{
                               backgroundImage: `linear-gradient(to right, 
-                                ${department.avg_grade >= 85 ? '#10B981' : department.avg_grade >= 75 ? '#3B82F6' : '#F97316'}, 
-                                ${department.avg_grade >= 85 ? '#059669' : department.avg_grade >= 75 ? '#06B6D4' : '#EF4444'}
+                                ${(department.avg_grade ?? 0) >= 85 ? '#10B981' : (department.avg_grade ?? 0) >= 75 ? '#3B82F6' : '#F97316'}, 
+                                ${(department.avg_grade ?? 0) >= 85 ? '#059669' : (department.avg_grade ?? 0) >= 75 ? '#06B6D4' : '#EF4444'}
                               )` 
                             }}
                             className="h-full rounded-full"
@@ -758,8 +758,8 @@ export default function DepartmentsPage() {
                             transition={{ duration: 1, delay: 0.2 }}
                             style={{
                               backgroundImage: `linear-gradient(to right, 
-                                ${department.po_achievement >= 80 ? '#10B981' : department.po_achievement >= 70 ? '#3B82F6' : '#F97316'}, 
-                                ${department.po_achievement >= 80 ? '#059669' : department.po_achievement >= 70 ? '#06B6D4' : '#EF4444'}
+                                ${(department.po_achievement ?? 0) >= 80 ? '#10B981' : (department.po_achievement ?? 0) >= 70 ? '#3B82F6' : '#F97316'}, 
+                                ${(department.po_achievement ?? 0) >= 80 ? '#059669' : (department.po_achievement ?? 0) >= 70 ? '#06B6D4' : '#EF4444'}
                               )` 
                             }}
                             className="h-full rounded-full"

@@ -82,3 +82,4 @@ def assert_no_500_error(response):
     assert response.status_code != status.HTTP_500_INTERNAL_SERVER_ERROR, \
         f"Got 500 Internal Server Error: {response.data}"
 
+

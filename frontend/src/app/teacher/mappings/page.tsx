@@ -716,17 +716,25 @@ export default function MappingsPage() {
                   ) : (
                     filteredAssessmentLOs.map((mapping) => {
                       // Try multiple ways to get assessment ID
-                      const mappingAssessmentId = typeof mapping.assessment === 'object' && mapping.assessment !== null
-                        ? mapping.assessment.id
-                        : typeof mapping.assessment === 'number'
-                        ? mapping.assessment
-                        : Number(mapping.assessment) || mapping.assessmentId;
+                      let mappingAssessmentId: number;
+                      if (typeof mapping.assessment === 'object' && mapping.assessment !== null && 'id' in mapping.assessment) {
+                        const assObj = mapping.assessment as { id: number; title?: string };
+                        mappingAssessmentId = assObj.id;
+                      } else if (typeof mapping.assessment === 'number') {
+                        mappingAssessmentId = mapping.assessment;
+                      } else {
+                        mappingAssessmentId = Number(mapping.assessment);
+                      }
                       
-                      const mappingLoId = typeof mapping.learning_outcome === 'object' && mapping.learning_outcome !== null
-                        ? mapping.learning_outcome.id
-                        : typeof mapping.learning_outcome === 'number'
-                        ? mapping.learning_outcome
-                        : Number(mapping.learning_outcome) || mapping.learningOutcomeId;
+                      let mappingLoId: number;
+                      if (typeof mapping.learning_outcome === 'object' && mapping.learning_outcome !== null && 'id' in mapping.learning_outcome) {
+                        const loObj = mapping.learning_outcome as { id: number; code?: string; title?: string };
+                        mappingLoId = loObj.id;
+                      } else if (typeof mapping.learning_outcome === 'number') {
+                        mappingLoId = mapping.learning_outcome;
+                      } else {
+                        mappingLoId = Number(mapping.learning_outcome);
+                      }
                       
                       const assessment = assessments.find(a => a.id === mappingAssessmentId);
                       const lo = learningOutcomes.find(lo => lo.id === mappingLoId);
@@ -1041,11 +1049,23 @@ export default function MappingsPage() {
                   ) : (
                     filteredLOPOs.map((mapping) => {
                       const lo = learningOutcomes.find(lo => {
-                        const mappingLoId = typeof mapping.learning_outcome === 'object' ? mapping.learning_outcome.id : Number(mapping.learning_outcome);
+                        let mappingLoId: number;
+                        if (typeof mapping.learning_outcome === 'object' && mapping.learning_outcome !== null && 'id' in mapping.learning_outcome) {
+                          const loObj = mapping.learning_outcome as { id: number; code?: string; title?: string };
+                          mappingLoId = loObj.id;
+                        } else {
+                          mappingLoId = Number(mapping.learning_outcome);
+                        }
                         return lo.id === mappingLoId;
                       });
                       const po = programOutcomes.find(po => {
-                        const mappingPoId = typeof mapping.program_outcome === 'object' ? mapping.program_outcome.id : Number(mapping.program_outcome);
+                        let mappingPoId: number;
+                        if (typeof mapping.program_outcome === 'object' && mapping.program_outcome !== null && 'id' in mapping.program_outcome) {
+                          const poObj = mapping.program_outcome as { id: number; code?: string; title?: string };
+                          mappingPoId = poObj.id;
+                        } else {
+                          mappingPoId = Number(mapping.program_outcome);
+                        }
                         return po.id === mappingPoId;
                       });
                       const weight = typeof mapping.weight === 'string' ? parseFloat(mapping.weight) : Number(mapping.weight);

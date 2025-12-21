@@ -130,7 +130,10 @@ export default function POOutcomesPage() {
                 if (typeof po.is_active === 'string') {
                     return po.is_active.toLowerCase() === 'true';
                 }
-                return po.is_active === true;
+                if (typeof po.is_active === 'boolean') {
+                    return po.is_active === true;
+                }
+                return false;
             });
 
             const POsToShow = activePOs.length > 0 ? activePOs : programOutcomes;

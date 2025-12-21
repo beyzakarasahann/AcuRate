@@ -234,3 +234,4 @@ class TestStudentLOAchievementModel:
         # LO1 target is 75%, achievement is 80%
         assert lo_achievement.is_target_met is True
 
+

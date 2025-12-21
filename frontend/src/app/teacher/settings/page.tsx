@@ -2,7 +2,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Settings, User, Lock, Bell, Moon, Sun, Globe, Save, BookOpen, Mail, Phone, Building2 } from 'lucide-react';
+import { Settings, User as UserIcon, Lock, Bell, Moon, Sun, Globe, Save, BookOpen, Mail, Phone, Building2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useTheme } from 'next-themes';
 import { useThemeColors } from '@/hooks/useThemeColors'; 
@@ -11,7 +11,7 @@ import type { User } from '@/lib/api';
 
 // Sekme verileri
 const settingTabs = [
-    { id: 'profile', name: 'Profile Information', icon: User },
+    { id: 'profile', name: 'Profile Information', icon: UserIcon },
     { id: 'security', name: 'Security & Login', icon: Lock },
     { id: 'preferences', name: 'App Preferences', icon: Bell },
     { id: 'teaching', name: 'Teaching Preferences', icon: BookOpen },
