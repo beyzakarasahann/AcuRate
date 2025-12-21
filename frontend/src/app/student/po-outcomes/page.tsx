@@ -141,8 +141,15 @@ export default function POOutcomesPage() {
             // Build maps for O(1) lookups
             const achievementMap = new Map<number, StudentPOAchievement>();
             poAchievements.forEach(a => {
-                const poId = typeof a.program_outcome === 'string' ? parseInt(a.program_outcome) : a.program_outcome;
-                if (poId) achievementMap.set(poId, a);
+                let poId: number | undefined;
+                if (typeof a.program_outcome === 'number') {
+                    poId = a.program_outcome;
+                } else if (typeof a.program_outcome === 'object' && a.program_outcome !== null && 'id' in a.program_outcome) {
+                    poId = (a.program_outcome as { id: number }).id;
+                } else if (typeof a.program_outcome === 'string') {
+                    poId = parseInt(a.program_outcome);
+                }
+                if (poId !== undefined) achievementMap.set(poId, a);
                 if (a.po_code) {
                     const poByCode = programOutcomes.find(p => p.code === a.po_code);
                     if (poByCode) {

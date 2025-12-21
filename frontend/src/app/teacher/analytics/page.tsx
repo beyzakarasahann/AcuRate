@@ -305,8 +305,8 @@ export default function TeacherAnalyticsPage() {
         // Also filter the loaded PO achievements to ensure only course students are included
         allPOAchievements = allPOAchievements.filter(po => {
           let poStudentId: number | undefined;
-          if (typeof po.student === 'object' && po.student !== null) {
-            poStudentId = po.student.id;
+          if (typeof po.student === 'object' && po.student !== null && 'id' in po.student) {
+            poStudentId = (po.student as { id: number }).id;
           } else if (typeof po.student === 'number') {
             poStudentId = po.student;
           }

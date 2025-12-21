@@ -532,9 +532,13 @@ export default function ScoresPage() {
           }
           const assessment = assessments.find(a => Number(a.id) === assessmentId);
           const grade = grades.find(g => {
-            const gradeAssessmentId = typeof g.assessment === 'object' && g.assessment !== null
-              ? Number(g.assessment.id || g.assessment)
-              : Number(g.assessment);
+            let gradeAssessmentId: number;
+            if (typeof g.assessment === 'object' && g.assessment !== null && 'id' in g.assessment) {
+              const assObj = g.assessment as { id: number };
+              gradeAssessmentId = Number(assObj.id);
+            } else {
+              gradeAssessmentId = Number(g.assessment);
+            }
             return gradeAssessmentId === assessmentId;
           });
           if (assessment && grade) {

@@ -154,9 +154,15 @@ export default function CoursesPage() {
         });
 
         // Filter PO achievements that match this course's POs
-        const coursePOs = poAchievements.filter(po => 
-          coursePOIds.has(po.program_outcome)
-        );
+        const coursePOs = poAchievements.filter(po => {
+          let poId: number | undefined;
+          if (typeof po.program_outcome === 'number') {
+            poId = po.program_outcome;
+          } else if (typeof po.program_outcome === 'object' && po.program_outcome !== null && 'id' in po.program_outcome) {
+            poId = (po.program_outcome as { id: number }).id;
+          }
+          return poId !== undefined && coursePOIds.has(poId);
+        });
 
         const poAchievement = coursePOs.length > 0
           ? coursePOs.reduce((sum, po) => sum + (po.achievement_percentage || 0), 0) / coursePOs.length

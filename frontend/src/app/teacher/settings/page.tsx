@@ -28,7 +28,7 @@ const ProfileTab = ({ isDark, themeClasses, text, mutedText, user }: any) => (
             className={`backdrop-blur-xl ${themeClasses.card} p-6 shadow-2xl rounded-xl border ${isDark ? 'border-white/10' : 'border-gray-200'}`}
         >
             <h3 className={`text-xl font-semibold ${text} mb-4 flex items-center gap-2`}>
-                <User className="w-5 h-5 text-indigo-500" />
+                <UserIcon className="w-5 h-5 text-indigo-500" />
                 Personal Details
             </h3>
             
@@ -367,7 +367,7 @@ const TeachingPreferencesTab = ({ isDark, themeClasses, text, mutedText }: any) 
 
                     <div className="flex justify-between items-center py-3 border-b border-gray-500/10">
                         <div className="flex items-center gap-3">
-                            <User className="w-5 h-5 text-purple-500" />
+                            <UserIcon className="w-5 h-5 text-purple-500" />
                             <div>
                                 <p className={text}>Student Inquiry Alerts</p>
                                 <p className={mutedText}>Get notified when students send inquiries.</p>

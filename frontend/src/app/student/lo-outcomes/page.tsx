@@ -121,8 +121,15 @@ export default function LOOutcomesPage() {
             // Build maps for O(1) lookups
             const loAchievementMap = new Map<number, StudentLOAchievement>();
             loAchievements.forEach(a => {
-                const loId = typeof a.learning_outcome === 'string' ? parseInt(a.learning_outcome) : a.learning_outcome;
-                if (loId) loAchievementMap.set(loId, a);
+                let loId: number | undefined;
+                if (typeof a.learning_outcome === 'number') {
+                    loId = a.learning_outcome;
+                } else if (typeof a.learning_outcome === 'object' && a.learning_outcome !== null && 'id' in a.learning_outcome) {
+                    loId = (a.learning_outcome as { id: number }).id;
+                } else if (typeof a.learning_outcome === 'string') {
+                    loId = parseInt(a.learning_outcome);
+                }
+                if (loId !== undefined) loAchievementMap.set(loId, a);
             });
 
             // Build enrollment map - also handle course object format

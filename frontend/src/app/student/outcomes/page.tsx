@@ -247,8 +247,15 @@ export default function OutcomesPage() {
       // Map PO ID to achievement
       const achievementMap = new Map<number, StudentPOAchievement>();
       poAchievements.forEach(a => {
-        const poId = typeof a.program_outcome === 'string' ? parseInt(a.program_outcome) : a.program_outcome;
-        if (poId) achievementMap.set(poId, a);
+        let poId: number | undefined;
+        if (typeof a.program_outcome === 'number') {
+          poId = a.program_outcome;
+        } else if (typeof a.program_outcome === 'object' && a.program_outcome !== null && 'id' in a.program_outcome) {
+          poId = (a.program_outcome as { id: number }).id;
+        } else if (typeof a.program_outcome === 'string') {
+          poId = parseInt(a.program_outcome);
+        }
+        if (poId !== undefined) achievementMap.set(poId, a);
         // Also map by code if available
         if (a.po_code) {
           const poByCode = programOutcomes.find(p => p.code === a.po_code);
@@ -348,8 +355,15 @@ export default function OutcomesPage() {
       // OPTIMIZATION: Pre-build LO achievement map
       const loAchievementMap = new Map<number, StudentLOAchievement>();
       loAchievements.forEach(a => {
-        const loId = typeof a.learning_outcome === 'string' ? parseInt(a.learning_outcome) : a.learning_outcome;
-        if (loId) loAchievementMap.set(loId, a);
+        let loId: number | undefined;
+        if (typeof a.learning_outcome === 'number') {
+          loId = a.learning_outcome;
+        } else if (typeof a.learning_outcome === 'object' && a.learning_outcome !== null && 'id' in a.learning_outcome) {
+          loId = (a.learning_outcome as { id: number }).id;
+        } else if (typeof a.learning_outcome === 'string') {
+          loId = parseInt(a.learning_outcome);
+        }
+        if (loId !== undefined) loAchievementMap.set(loId, a);
       });
 
       // OPTIMIZATION: Pre-build enrollment map for course info
