@@ -31,6 +31,10 @@ export function useThemeColors() {
   const INPUT_BG = isDark ? "rgba(255, 255, 255, 0.05)" : "#F3F4F6"; 
   const ERROR_BORDER = isDark ? "#DC2626" : "#F87171";
 
+  // Text classes
+  const whiteTextClass = isDark ? 'text-white' : 'text-gray-900';
+  const secondaryTextClass = isDark ? 'text-gray-400' : 'text-gray-600';
+
   return {
     isDark,
     mounted, // 👈 Geri döndürülüyor
@@ -40,6 +44,9 @@ export function useThemeColors() {
     cardBg: CARD_BG,
     inputBg: INPUT_BG,
     errorBorder: ERROR_BORDER,
+    // Text Classes
+    whiteTextClass,
+    secondaryTextClass,
     // Vurgu Gradientleri
     accentStart: ACCENT_GRADIENT_START,
     accentEnd: ACCENT_GRADIENT_END,
@@ -48,7 +55,11 @@ export function useThemeColors() {
     themeClasses: {
         background: isDark ? 'from-slate-950 via-blue-950 to-slate-950' : 'from-gray-50 via-white to-gray-100',
         card: isDark ? 'bg-white/5 border border-white/10' : 'bg-white/70 border border-gray-200 shadow-xl',
-        inputFocus: isDark ? 'focus:bg-white/10' : 'focus:bg-white'
+        inputFocus: isDark ? 'focus:bg-white/10' : 'focus:bg-white',
+        text: whiteTextClass,
+        textMuted: secondaryTextClass,
+        input: isDark ? 'bg-white/5 border border-white/10 text-white' : 'bg-gray-100 border border-gray-300 text-gray-900',
+        hover: isDark ? 'hover:bg-white/10' : 'hover:bg-gray-50'
     }
   };
 }

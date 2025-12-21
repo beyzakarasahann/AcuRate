@@ -48,3 +48,4 @@ Test script'i (`test_before_push.py`) test veritabanını otomatik kontrol eder 
 
 `docker/postgres/init-test-user.sh` dosyası yeni container'larda otomatik olarak CREATEDB izni verir.
 
+

@@ -315,7 +315,7 @@ export default function TeacherGradesPage() {
 
   // Filtrelenmiş öğrenciler
   const filteredStudents = students.filter(student =>
-    student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (student.name ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     student.studentId.includes(searchTerm) ||
     student.email.toLowerCase().includes(searchTerm.toLowerCase())
   );

@@ -401,3 +401,4 @@ class TestLOPOModel:
         with pytest.raises(ValidationError):
             invalid_lopo.full_clean()
 
+

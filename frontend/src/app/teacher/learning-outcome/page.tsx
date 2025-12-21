@@ -267,7 +267,15 @@ export default function LearningOutcomePage() {
     for (const mapping of existingMappings) {
       // Convert weight (0.1-10.0) to percentage (0-100)
       const percentage = Number(mapping.weight) * 10;
-      percentages[mapping.program_outcome] = percentage;
+      let poId: number;
+      if (typeof mapping.program_outcome === 'number') {
+        poId = mapping.program_outcome;
+      } else if (typeof mapping.program_outcome === 'object' && mapping.program_outcome !== null && 'id' in mapping.program_outcome) {
+        poId = (mapping.program_outcome as { id: number }).id;
+      } else {
+        continue; // Skip if we can't get a valid ID
+      }
+      percentages[poId] = percentage;
     }
     setEditingPOPercentages(prev => ({ ...prev, [loId]: percentages }));
   };

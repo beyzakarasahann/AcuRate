@@ -284,10 +284,15 @@ export default function StudentHomePage() {
   // Build achievement map (same as PO outcomes page)
   const achievementMap = new Map<number, any>();
   poAchievements.forEach(a => {
-    const poId = typeof a.program_outcome === 'string' ? parseInt(a.program_outcome) : 
-                 (typeof a.program_outcome === 'object' && a.program_outcome?.id) ? 
-                 (typeof a.program_outcome.id === 'string' ? parseInt(a.program_outcome.id) : a.program_outcome.id) :
-                 a.program_outcome;
+    let poId: number | undefined;
+    if (typeof a.program_outcome === 'number') {
+      poId = a.program_outcome;
+    } else if (typeof a.program_outcome === 'object' && a.program_outcome !== null && 'id' in a.program_outcome) {
+      const poObj = a.program_outcome as { id: number; code?: string; title?: string };
+      poId = typeof poObj.id === 'string' ? parseInt(poObj.id) : poObj.id;
+    } else if (typeof a.program_outcome === 'string') {
+      poId = parseInt(a.program_outcome);
+    }
     if (poId) achievementMap.set(poId, a);
   });
 
@@ -335,10 +340,15 @@ export default function StudentHomePage() {
   // Calculate total LO achievement (similar to PO achievement)
   const loAchievementMap = new Map<number, StudentLOAchievement>();
   loAchievements.forEach(a => {
-    const loId = typeof a.learning_outcome === 'string' ? parseInt(a.learning_outcome) : 
-                 (typeof a.learning_outcome === 'object' && a.learning_outcome?.id) ? 
-                 (typeof a.learning_outcome.id === 'string' ? parseInt(a.learning_outcome.id) : a.learning_outcome.id) :
-                 a.learning_outcome;
+    let loId: number | undefined;
+    if (typeof a.learning_outcome === 'number') {
+      loId = a.learning_outcome;
+    } else if (typeof a.learning_outcome === 'object' && a.learning_outcome !== null && 'id' in a.learning_outcome) {
+      const loObj = a.learning_outcome as { id: number; code?: string; title?: string };
+      loId = typeof loObj.id === 'string' ? parseInt(loObj.id) : loObj.id;
+    } else if (typeof a.learning_outcome === 'string') {
+      loId = parseInt(a.learning_outcome);
+    }
     if (loId) loAchievementMap.set(loId, a);
   });
 
@@ -384,16 +394,21 @@ export default function StudentHomePage() {
   // Get PO code and title from top PO achievement
   let topPODisplay = '-';
   if (topPO) {
-    let poCode = topPO.po_code || topPO.program_outcome?.code || '';
-    let poTitle = topPO.po_title || topPO.program_outcome?.title || '';
+    const poObj = typeof topPO.program_outcome === 'object' ? topPO.program_outcome : null;
+    let poCode = topPO.po_code || poObj?.code || '';
+    let poTitle = topPO.po_title || poObj?.title || '';
     
     // If not found, try to find it from programOutcomes list
     if ((!poCode || !poTitle) && programOutcomes.length > 0) {
-      const poId = typeof topPO.program_outcome === 'string' 
-        ? parseInt(topPO.program_outcome) 
-        : (typeof topPO.program_outcome === 'object' && topPO.program_outcome?.id)
-        ? (typeof topPO.program_outcome.id === 'string' ? parseInt(topPO.program_outcome.id) : topPO.program_outcome.id)
-        : topPO.program_outcome;
+      let poId: number | undefined;
+      if (typeof topPO.program_outcome === 'number') {
+        poId = topPO.program_outcome;
+      } else if (typeof topPO.program_outcome === 'object' && topPO.program_outcome !== null && 'id' in topPO.program_outcome) {
+        const poObj = topPO.program_outcome as { id: number; code?: string; title?: string };
+        poId = typeof poObj.id === 'string' ? parseInt(poObj.id) : poObj.id;
+      } else if (typeof topPO.program_outcome === 'string') {
+        poId = parseInt(topPO.program_outcome);
+      }
       
       if (poId) {
         const po = programOutcomes.find(p => {

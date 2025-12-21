@@ -233,3 +233,4 @@ class TestStudentGradeAPI:
             for grade_data in response.data:
                 assert grade_data['student'] == student_user.id
 
+

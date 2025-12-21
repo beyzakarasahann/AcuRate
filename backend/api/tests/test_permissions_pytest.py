@@ -106,3 +106,4 @@ class TestRoleBasedPermissions:
         # Should either return 404 or 403
         assert response.status_code in [status.HTTP_404_NOT_FOUND, status.HTTP_403_FORBIDDEN]
 
+

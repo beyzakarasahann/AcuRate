@@ -65,7 +65,7 @@ export interface ProgramOutcome {
   description: string;
   department: string;
   target_percentage: number;
-  is_active: boolean;
+  is_active: boolean | string;
   created_at?: string;
   updated_at?: string;
 }
@@ -148,16 +148,19 @@ export interface Assessment {
   weight: number;
   max_score: number;
   feedback_ranges?: FeedbackRange[];
+  related_pos?: number[];
+  is_active?: boolean;
 }
 
 export interface AssessmentLO {
   id: number;
-  assessment: number;
+  assessment: number | { id: number; title?: string };
   assessment_title?: string;
   assessment_type?: string;
-  learning_outcome: number;
+  learning_outcome: number | { id: number; code?: string; title?: string };
   lo_code?: string;
   lo_title?: string;
+  lo_description?: string;
   course_code?: string;
   weight: number;
   created_at?: string;
@@ -166,10 +169,11 @@ export interface AssessmentLO {
 
 export interface LOPO {
   id: number;
-  learning_outcome: number;
+  learning_outcome: number | { id: number; code?: string; title?: string };
   lo_code?: string;
   lo_title?: string;
-  program_outcome: number;
+  lo_description?: string;
+  program_outcome: number | { id: number; code?: string; title?: string };
   po_code?: string;
   po_title?: string;
   course_code?: string;
@@ -180,8 +184,6 @@ export interface LOPO {
   is_active: boolean;
   related_pos?: number[];
   feedback_ranges?: FeedbackRange[];
-  created_at?: string;
-  updated_at?: string;
 }
 
 export interface StudentGrade {
@@ -205,7 +207,7 @@ export interface StudentPOAchievement {
   student: number;
   student_name: string;
   student_id: string;
-  program_outcome: number;
+  program_outcome: number | { id: number; code?: string; title?: string };
   po_code?: string;
   po_title?: string;
   achievement_percentage?: number; // From serializer (maps to current_percentage)
@@ -223,7 +225,7 @@ export interface StudentLOAchievement {
   student: number;
   student_name?: string;
   student_id?: string;
-  learning_outcome: number;
+  learning_outcome: number | { id: number; code?: string; title?: string };
   lo_code?: string;
   lo_title?: string;
   lo_description?: string;
@@ -232,6 +234,7 @@ export interface StudentLOAchievement {
   course_name?: string;
   current_percentage: number;
   target_percentage: number;
+  achievement_percentage?: number;
   is_target_met?: boolean;
   completed_assessments: number;
   total_assessments: number;
@@ -992,13 +995,6 @@ class ApiClient {
     return [];
   }
 
-  async getStudents(params?: { search?: string }): Promise<User[]> {
-    const queryParams = new URLSearchParams();
-    if (params?.search) queryParams.append('search', params.search);
-    const queryString = queryParams.toString();
-    const endpoint = `/users/${queryString ? `?${queryString}&role=STUDENT` : '?role=STUDENT'}`;
-    return await this.request<User[]>(endpoint);
-  }
 
   async getTeachers(params?: { search?: string }): Promise<User[]> {
     const query = new URLSearchParams({ role: 'TEACHER' });
@@ -1164,9 +1160,10 @@ class ApiClient {
         // Sometimes DRF returns objects, try to extract array
         console.warn('⚠️ Response is not an array, attempting to extract:', response);
         // Check if it's a paginated response
-        if ('results' in response && Array.isArray(response.results)) {
+        const responseObj = response as { results?: ContactRequest[] };
+        if ('results' in responseObj && Array.isArray(responseObj.results)) {
           console.log('✅ Found paginated response, returning results array');
-          return response.results;
+          return responseObj.results;
         }
         return [];
       }

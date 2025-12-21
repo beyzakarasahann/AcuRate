@@ -166,7 +166,7 @@ export default function SidebarAdmin() {
           const active = isActive(item.slug);
           const href = `/institution/${item.slug}`;
           const targetHref = item.slug ? href : '/institution';
-          const disabled = item.disabled;
+          const disabled = (item as any).disabled || false;
 
           return (
             <Link

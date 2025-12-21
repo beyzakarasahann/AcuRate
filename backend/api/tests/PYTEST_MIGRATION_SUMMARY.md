@@ -85,3 +85,4 @@ pytest api/tests/test_critical_security.py
 - `STRUCTURE.md` - Modüler yapı açıklaması
 - `CI_TEST_GUIDE.md` - CI/CD test yapılandırması
 
+

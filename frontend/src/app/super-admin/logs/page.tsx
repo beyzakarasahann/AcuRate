@@ -62,7 +62,7 @@ export default function SuperAdminActivityLogsPage() {
   const fetchInstitutions = async () => {
     try {
       const data = await api.getSuperAdminInstitutions();
-      setInstitutions(data);
+      setInstitutions(data.institutions);
     } catch (err: any) {
       console.error('Error fetching institutions:', err);
     }
