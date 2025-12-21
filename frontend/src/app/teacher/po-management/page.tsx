@@ -51,6 +51,14 @@ export default function POManagementPage() {
     fetchData();
   }, []);
 
+  // Helper function to convert is_active to boolean
+  const isActiveBoolean = (isActive: boolean | string): boolean => {
+    if (typeof isActive === 'string') {
+      return isActive.toLowerCase() === 'true';
+    }
+    return isActive ?? true;
+  };
+
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -69,7 +77,7 @@ export default function POManagementPage() {
       } else {
         // If no department, fetch all active POs
         const pos = await api.getProgramOutcomes();
-        setProgramOutcomes(Array.isArray(pos) ? pos.filter((po: ProgramOutcome) => po.is_active) : []);
+        setProgramOutcomes(Array.isArray(pos) ? pos.filter((po: ProgramOutcome) => isActiveBoolean(po.is_active)) : []);
       }
     } catch (err: any) {
       console.error('Failed to fetch data:', err);
