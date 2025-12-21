@@ -656,16 +656,26 @@ class ApiClient {
         if (error.message) {
           if (typeof error.message === 'string') {
             cleanMessage = error.message;
-          } else if (typeof error.message === 'object') {
+          } else if (typeof error.message === 'object' && error.message !== null) {
             // Try to extract meaningful error from object
             try {
               // Check if it's a structured error object
-              if ('message' in error.message && typeof error.message.message === 'string') {
-                cleanMessage = error.message.message;
-              } else if ('error' in error.message && typeof error.message.error === 'string') {
-                cleanMessage = error.message.error;
-              } else if ('detail' in error.message && typeof error.message.detail === 'string') {
-                cleanMessage = error.message.detail;
+              const messageObj = error.message as Record<string, any>;
+              if (
+                'message' in messageObj &&
+                typeof messageObj.message === 'string'
+              ) {
+                cleanMessage = messageObj.message;
+              } else if (
+                'error' in messageObj &&
+                typeof messageObj.error === 'string'
+              ) {
+                cleanMessage = messageObj.error;
+              } else if (
+                'detail' in messageObj &&
+                typeof messageObj.detail === 'string'
+              ) {
+                cleanMessage = messageObj.detail;
               } else {
                 // Try to stringify the message object
                 cleanMessage = JSON.stringify(error.message);
@@ -1988,11 +1998,11 @@ class ApiClient {
   }
 
   // Delete Institution
-  async resetInstitutionPassword(institutionId: number): Promise<{ success: boolean; message?: string; email_sent?: boolean; error?: string }> {
+  async resetInstitutionPassword(institutionId: number): Promise<{ success: boolean; message?: string; email_sent?: boolean; error?: string; credentials?: { username: string; password: string } }> {
     const response = await this.request(`/super-admin/institutions/${institutionId}/reset-password/`, {
       method: 'POST',
     });
-    return response as { success: boolean; message?: string; email_sent?: boolean; error?: string };
+    return response as { success: boolean; message?: string; email_sent?: boolean; error?: string; credentials?: { username: string; password: string } };
   }
 
   async deleteInstitution(institutionId: number): Promise<{ success: boolean; message?: string; error?: string }> {

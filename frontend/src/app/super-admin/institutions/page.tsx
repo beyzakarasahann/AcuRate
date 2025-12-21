@@ -159,7 +159,7 @@ export default function SuperAdminInstitutionsPage() {
         }, 2000);
       } else {
         // Handle validation errors
-        const errorMessages = [];
+        const errorMessages: string[] = [];
         if (response.errors) {
           Object.keys(response.errors).forEach(key => {
             const error = response.errors[key];
