@@ -65,7 +65,7 @@ export interface ProgramOutcome {
   description: string;
   department: string;
   target_percentage: number;
-  is_active: boolean;
+  is_active: boolean | string;
   created_at?: string;
   updated_at?: string;
 }
