@@ -296,3 +296,4 @@ class TestLOPOSerializer:
         assert lopo.weight == Decimal('2.5')
 
 
+

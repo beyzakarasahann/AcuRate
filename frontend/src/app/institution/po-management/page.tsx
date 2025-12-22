@@ -85,14 +85,6 @@ export default function POManagementPage() {
     }
   };
 
-  // Helper function to convert is_active to boolean
-  const isActiveBoolean = (isActive: boolean | string): boolean => {
-    if (typeof isActive === 'string') {
-      return isActive.toLowerCase() === 'true';
-    }
-    return isActive ?? true;
-  };
-
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
     
@@ -142,7 +134,7 @@ export default function POManagementPage() {
         description: po.description,
         department: po.department,
         target_percentage: po.target_percentage,
-        is_active: isActiveBoolean(po.is_active),
+        is_active: typeof po.is_active === 'string' ? po.is_active === 'true' : po.is_active,
       });
     } else {
       setEditingPO(null);
@@ -369,7 +361,7 @@ export default function POManagementPage() {
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.3 + index * 0.05 }}
                   className={`p-4 rounded-xl border ${
-                    !isActiveBoolean(po.is_active)
+                    !po.is_active
                       ? isDark ? 'bg-gray-500/10 border-gray-500/30 opacity-60' : 'bg-gray-100 border-gray-300 opacity-60'
                       : isDark ? 'bg-white/5 border-white/10' : 'bg-white border-gray-200'
                   }`}
@@ -381,7 +373,7 @@ export default function POManagementPage() {
                           {po.code}
                         </div>
                         <h3 className={`${whiteText} font-semibold`}>{po.title}</h3>
-                        {!isActiveBoolean(po.is_active) && (
+                        {!po.is_active && (
                           <span className={`px-2 py-1 rounded text-xs ${isDark ? 'bg-gray-500/20 text-gray-400' : 'bg-gray-100 text-gray-600'}`}>
                             Inactive
                           </span>
