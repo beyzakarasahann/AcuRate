@@ -340,10 +340,46 @@ class DepartmentViewSet(viewsets.ModelViewSet):
         return super().destroy(request, *args, **kwargs)
     
     def list(self, request, *args, **kwargs):
-        """Override list to ensure proper response format"""
-        queryset = self.filter_queryset(self.get_queryset())
-        serializer = self.get_serializer(queryset, many=True)
-        return Response(serializer.data)
+        """Override list to include departments from both Department table and User department fields"""
+        # Get departments from Department table
+        department_queryset = self.filter_queryset(self.get_queryset())
+        department_serializer = self.get_serializer(department_queryset, many=True)
+        department_data = department_serializer.data
+        
+        # Get unique departments from User table (students and teachers)
+        user_departments = User.objects.filter(
+            Q(role=User.Role.STUDENT) | Q(role=User.Role.TEACHER),
+            department__isnull=False
+        ).exclude(department='').values_list('department', flat=True).distinct()
+        
+        # Normalize department names (trim whitespace)
+        def normalize_dept(name):
+            return ' '.join(name.strip().split()) if name else ''
+        
+        # Create a set of existing department names (case-insensitive)
+        existing_dept_names = {dept['name'].lower().strip() for dept in department_data}
+        
+        # Add user departments that don't exist in Department table
+        for user_dept in user_departments:
+            normalized = normalize_dept(user_dept)
+            if normalized and normalized.lower() not in existing_dept_names:
+                # Create a virtual department entry
+                department_data.append({
+                    'id': None,  # No ID since it's not in Department table
+                    'name': normalized,
+                    'code': None,
+                    'description': None,
+                    'contact_email': None,
+                    'contact_phone': None,
+                    'created_at': None,
+                    'updated_at': None
+                })
+                existing_dept_names.add(normalized.lower())
+        
+        # Sort by name
+        department_data.sort(key=lambda x: x['name'].lower())
+        
+        return Response(department_data)
 
 
 # =============================================================================

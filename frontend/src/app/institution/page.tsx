@@ -131,17 +131,18 @@ export default function InstitutionDashboard() {
       href: '/institution/teachers'
     },
     {
-      title: 'Active Courses',
-      value: dashboardData.total_courses?.toLocaleString() || '0',
+      title: 'Departments',
+      value: (dashboardData.total_departments || dashboardData.department_stats?.length || 0).toLocaleString(),
       change: previousData ? calculateTrend(
-        dashboardData.total_courses || 0,
-        previousData.total_courses || 0
+        dashboardData.total_departments || dashboardData.department_stats?.length || 0,
+        previousData.total_departments || previousData.department_stats?.length || 0
       ) : '+0%',
-      trend: (previousData && dashboardData.total_courses && previousData.total_courses)
-        ? (dashboardData.total_courses >= (previousData.total_courses || 0) ? 'up' : 'down')
+      trend: (previousData && (dashboardData.total_departments || dashboardData.department_stats))
+        ? ((dashboardData.total_departments || dashboardData.department_stats?.length || 0) >= (previousData.total_departments || previousData.department_stats?.length || 0) ? 'up' : 'down')
         : 'up',
-      icon: BookOpen,
-      color: 'from-orange-500 to-red-500'
+      icon: Building2,
+      color: 'from-orange-500 to-red-500',
+      href: '/institution/departments'
     },
     {
       title: 'Avg Performance',

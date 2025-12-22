@@ -96,6 +96,7 @@ class InstitutionDashboardSerializer(serializers.Serializer):
     total_students = serializers.IntegerField()
     total_teachers = serializers.IntegerField()
     total_courses = serializers.IntegerField()
+    total_departments = serializers.IntegerField(required=False)
     active_enrollments = serializers.IntegerField()
     po_achievements = serializers.ListField()  # Will be ProgramOutcomeStatsSerializer instances
     department_stats = serializers.ListField()

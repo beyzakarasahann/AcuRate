@@ -407,6 +407,31 @@ def institution_dashboard(request):
     # Sort by student_count descending
     department_stats.sort(key=lambda x: x['student_count'], reverse=True)
     
+    # Calculate total departments (from both Department table and User department fields)
+    # Get departments from Department table
+    department_table_count = Department.objects.count()
+    
+    # Get unique departments from User table (students and teachers)
+    user_departments = User.objects.filter(
+        Q(role=User.Role.STUDENT) | Q(role=User.Role.TEACHER),
+        department__isnull=False
+    ).exclude(department='').values_list('department', flat=True).distinct()
+    
+    # Normalize and deduplicate user departments
+    user_dept_normalized = set()
+    for user_dept in user_departments:
+        normalized = normalize_dept(user_dept)
+        if normalized:
+            user_dept_normalized.add(normalized.lower())
+    
+    # Get department names from Department table
+    dept_table_names = Department.objects.values_list('name', flat=True)
+    dept_table_normalized = {normalize_dept(name).lower() for name in dept_table_names if name}
+    
+    # Count unique departments (from both sources)
+    all_dept_names = dept_table_normalized.union(user_dept_normalized)
+    total_departments = len(all_dept_names)
+    
     # Serialize PO achievements
     po_achievements_data = ProgramOutcomeStatsSerializer(po_achievements, many=True).data
     
@@ -414,6 +439,7 @@ def institution_dashboard(request):
         'total_students': total_students,
         'total_teachers': total_teachers,
         'total_courses': total_courses,
+        'total_departments': total_departments,
         'active_enrollments': active_enrollments,
         'po_achievements': po_achievements_data,
         'department_stats': department_stats

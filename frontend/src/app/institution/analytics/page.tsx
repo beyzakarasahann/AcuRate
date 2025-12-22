@@ -80,8 +80,8 @@ export default function InstitutionAnalytics() {
       setLoading(true);
       setError(null);
 
-      // Fetch all analytics data in parallel
-      const [departments, poTrends, performance, courseSuccess] = await Promise.all([
+      // Fetch all analytics data in parallel, including departments list
+      const [departments, poTrends, performance, courseSuccess, departmentsList] = await Promise.all([
         api.getAnalyticsDepartments(),
         api.getAnalyticsPOTrends({
           semester: selectedSemester || undefined,
@@ -95,6 +95,7 @@ export default function InstitutionAnalytics() {
           semester: selectedSemester || undefined,
           academic_year: selectedYear || undefined,
         }),
+        api.getDepartmentsList(), // Get all departments (from Department table and User department fields)
       ]);
 
       setDepartmentsData(departments.departments || []);
@@ -102,9 +103,18 @@ export default function InstitutionAnalytics() {
       setPerformanceData(performance);
       setCourseSuccessData(courseSuccess.courses || []);
 
-      // Extract available departments for filter (remove duplicates)
-      const deptNames = departments.departments?.map((d: any) => d.name) || [];
-      const uniqueDeptNames = Array.from(new Set(deptNames));
+      // Use departments list from getDepartmentsList (includes all departments)
+      const deptNames = departmentsList.map((d: any) => d.name.trim()).filter((name: string) => name);
+      // Remove duplicates by normalizing (case-insensitive)
+      const seen = new Set<string>();
+      const uniqueDeptNames = deptNames.filter((name: string) => {
+        const normalized = name.toLowerCase();
+        if (seen.has(normalized)) {
+          return false;
+        }
+        seen.add(normalized);
+        return true;
+      }).sort();
       setAvailableDepartments(uniqueDeptNames);
 
     } catch (err: any) {

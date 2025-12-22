@@ -257,6 +257,7 @@ export interface DashboardData {
   total_students?: number;
   total_teachers?: number;
   total_courses?: number;
+  total_departments?: number;
   active_enrollments?: number;
   pending_assessments?: number;
   gpa_ranking?: {
