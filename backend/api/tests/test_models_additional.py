@@ -402,3 +402,4 @@ class TestLOPOModel:
             invalid_lopo.full_clean()
 
 
+

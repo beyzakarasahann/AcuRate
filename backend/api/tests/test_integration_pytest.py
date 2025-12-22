@@ -125,3 +125,4 @@ class TestCompleteWorkflows:
         assert LearningOutcome.objects.get(id=lo_id) in assessment.related_los.all()
 
 
+

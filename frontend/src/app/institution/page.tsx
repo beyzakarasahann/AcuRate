@@ -1,9 +1,8 @@
 'use client';
 
-import { motion, AnimatePresence } from 'framer-motion';
-import { Building2, Users, BookOpen, TrendingUp, Filter, AlertTriangle, CheckCircle2, Trophy, ArrowUpRight, ArrowDownRight, Moon, Sun, Loader2, BarChart3, X } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Building2, Users, BookOpen, TrendingUp, AlertTriangle, CheckCircle2, Trophy, Loader2, BarChart3 } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { useTheme } from 'next-themes';
 import Link from 'next/link';
 import { api, DashboardData } from '../../lib/api';
 import toast from 'react-hot-toast';
@@ -62,20 +61,15 @@ interface InstitutionDashboardData extends Omit<DashboardData, 'po_achievements'
 }
 
 export default function InstitutionDashboard() {
-  const [selectedDepartment, setSelectedDepartment] = useState('all');
-  const [selectedSemester, setSelectedSemester] = useState('fall-2024');
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dashboardData, setDashboardData] = useState<InstitutionDashboardData | null>(null);
-  const [alerts, setAlerts] = useState<any[]>([]);
-  const [showFilterModal, setShowFilterModal] = useState(false);
   const [previousData, setPreviousData] = useState<any>(null); // For trend calculation
 
   useEffect(() => {
     setMounted(true);
     fetchDashboardData();
-    fetchAlerts();
   }, []);
 
   const fetchDashboardData = async () => {
@@ -95,17 +89,6 @@ export default function InstitutionDashboard() {
       setError(err.message || 'Failed to load dashboard data');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchAlerts = async () => {
-    try {
-      const response = await api.getAnalyticsAlerts();
-      setAlerts(response.alerts || []);
-    } catch (err: any) {
-      console.error('Error fetching alerts:', err);
-      // Don't show error for alerts, just use empty array
-      setAlerts([]);
     }
   };
 
@@ -130,10 +113,11 @@ export default function InstitutionDashboard() {
         ? (dashboardData.total_students >= (previousData.total_students || 0) ? 'up' : 'down')
         : 'up',
       icon: Users,
-      color: 'from-blue-500 to-cyan-500' 
+      color: 'from-blue-500 to-cyan-500',
+      href: '/institution/students'
     },
     {
-      title: 'Faculty Members',
+      title: 'Teachers',
       value: dashboardData.total_teachers?.toLocaleString() || '0',
       change: previousData ? calculateTrend(
         dashboardData.total_teachers || 0,
@@ -143,7 +127,8 @@ export default function InstitutionDashboard() {
         ? (dashboardData.total_teachers >= (previousData.total_teachers || 0) ? 'up' : 'down')
         : 'up',
       icon: Users,
-      color: 'from-purple-500 to-pink-500'
+      color: 'from-purple-500 to-pink-500',
+      href: '/institution/teachers'
     },
     {
       title: 'Active Courses',
@@ -213,22 +198,6 @@ export default function InstitutionDashboard() {
     };
   }) || [];
 
-  // Use real alerts from API
-  const recentAlerts = alerts.length > 0 ? alerts : [
-    {
-      type: 'info' as const,
-      title: 'Dashboard Updated',
-      description: 'Latest data loaded successfully',
-      time: 'Just now'
-    }
-  ];
-
-
-  // Get available departments for filter (remove duplicates)
-  const availableDepartments = Array.from(
-    new Set(departments.map(d => d.name.trim()))
-  ).filter(name => name).sort();
-
   // 1. Kancadan Dinamik Tema Değerlerini Alma
   const { 
     isDark, 
@@ -238,9 +207,6 @@ export default function InstitutionDashboard() {
     themeClasses, 
     mutedText, 
   } = useThemeColors();
-
-  // Temayı değiştirmek için next-themes hook'unu kullanma
-  const { setTheme } = useTheme();
 
   // Aydınlık/Karanlık moda göre metin ve ikon renkleri (hook'lardan sonra tanımlanmalı)
   const whiteTextClass = isDark ? 'text-white' : 'text-gray-900';
@@ -291,11 +257,6 @@ export default function InstitutionDashboard() {
       </div>
     );
   }
-
-  // Tema değiştirme fonksiyonu
-  const toggleTheme = () => {
-    setTheme(isDark ? 'light' : 'dark');
-  };
 
   return (
     // 2. ANA ARKA PLAN: Dinamik Sınıf Kullanımı
@@ -355,30 +316,6 @@ export default function InstitutionDashboard() {
               </div>
             </div>
             <div className="flex gap-3">
-              {/* 🌙 TEMA DEĞİŞTİRME DÜĞMESİ (Sadece Emoji) */}
-              <motion.button
-                onClick={toggleTheme}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                // Temel kart stiline uyumlu, border rengini temaya göre değiştir
-                className={`px-4 py-2 rounded-xl ${themeClasses.card.replace('shadow-2xl', '').replace('border-white/10', isDark ? 'border-white/10' : 'border-gray-300')} ${isDark ? 'text-white hover:bg-white/10' : 'text-gray-700 bg-white/70 hover:bg-gray-100'} flex items-center justify-center gap-2 transition-all backdrop-blur-xl`}
-                // Emojinin erişilebilirlik adını ekleyelim
-                aria-label={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
-              >
-                {isDark ? <Sun className="w-4 h-4 text-yellow-400" /> : <Moon className="w-4 h-4 text-gray-700" />}
-              </motion.button>
-
-              <motion.button
-                onClick={() => setShowFilterModal(true)}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                // Filtre Butonu: Dinamik Sınıf Kullanımı (Temel kart stiline uyumlu)
-                className={`px-4 py-2 rounded-xl ${themeClasses.card.replace('shadow-2xl', '').replace('rounded-2xl', 'rounded-xl')} ${isDark ? 'hover:bg-white/10 text-white' : 'hover:bg-gray-100 text-gray-700'} flex items-center gap-2 transition-all backdrop-blur-xl`}
-              >
-                <Filter className="w-4 h-4" />
-                Filters
-              </motion.button>
-              
               {/* Analytics Butonu (Dinamik Gradient) */}
               <Link href="/institution/analytics">
                 <motion.button
@@ -404,13 +341,12 @@ export default function InstitutionDashboard() {
         >
           {stats.map((stat, index) => {
             const { start, end } = getGradientColors(stat.color); // Mock veriden renkleri al
-            return (
+            const cardContent = (
               <motion.div
-                key={index}
                 variants={item}
                 whileHover={{ scale: 1.05, y: -5 }}
                 // 4. STAT KARTLARI: Dinamik Sınıf Kullanımı
-                className={`backdrop-blur-xl ${themeClasses.card} p-6 shadow-2xl hover:shadow-indigo-500/20 transition-all`}
+                className={`backdrop-blur-xl ${themeClasses.card} p-6 shadow-2xl hover:shadow-indigo-500/20 transition-all ${stat.href ? 'cursor-pointer' : ''}`}
               >
                 <div className="flex items-start justify-between mb-4">
                   {/* İkon Arka Planı (Dinamik Gradient) */}
@@ -420,10 +356,6 @@ export default function InstitutionDashboard() {
                   >
                     <stat.icon className="w-6 h-6 text-white" />
                   </div>
-                  <div className={`flex items-center gap-1 text-sm font-medium ${stat.trend === 'up' ? 'text-green-500' : 'text-red-500'}`}>
-                    {stat.trend === 'up' ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
-                    {stat.change}
-                  </div>
                 </div>
                 {/* Metin Rengi: Dinamik mutedText kullanıldı */}
                 <h3 className={`${secondaryTextClass} text-sm mb-1`}>{stat.title}</h3>
@@ -431,12 +363,22 @@ export default function InstitutionDashboard() {
                 <p className={`text-3xl font-bold ${whiteTextClass}`}>{stat.value}</p>
               </motion.div>
             );
+
+            return stat.href ? (
+              <Link key={index} href={stat.href} className="block">
+                {cardContent}
+              </Link>
+            ) : (
+              <div key={index}>
+                {cardContent}
+              </div>
+            );
           })}
         </motion.div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-6">
           {/* Department Performance */}
-          <div className="lg:col-span-2">
+          <div>
             <motion.div
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -464,11 +406,7 @@ export default function InstitutionDashboard() {
                         <div className="flex items-center gap-3 mb-2">
                           {/* Metin Rengi: Statik text-white yerine dinamik whiteTextClass kullanıldı */}
                           <h3 className={`font-semibold ${whiteTextClass}`}>{dept.name}</h3>
-                          <span className={`text-xs px-3 py-1 rounded-full font-medium ${
-                            dept.status === 'excellent' ? 'bg-green-500/20 text-green-700 border border-green-500/30 dark:text-green-300' :
-                            dept.status === 'good' ? 'bg-blue-500/20 text-blue-700 border border-blue-500/30 dark:text-blue-300' :
-                            'bg-orange-500/20 text-orange-700 border border-orange-500/30 dark:text-orange-300'
-                          }`}>
+                          <span className={`text-xs px-3 py-1 rounded-full font-medium ${dept.status === 'excellent' ? 'bg-green-500/20 text-green-700 border border-green-500/30 dark:text-green-300' : dept.status === 'good' ? 'bg-blue-500/20 text-blue-700 border border-blue-500/30 dark:text-blue-300' : 'bg-orange-500/20 text-orange-700 border border-orange-500/30 dark:text-orange-300'}`}>
                             {dept.status === 'excellent' ? '🏆 Excellent' : 
                              dept.status === 'good' ? '✓ Good' : '⚠ Needs Attention'}
                           </span>
@@ -516,10 +454,7 @@ export default function InstitutionDashboard() {
                             transition={{ duration: 1, delay: 0.5 + index * 0.1 }}
                             // Koşullu Renkler için Inline Style
                             style={{
-                              backgroundImage: `linear-gradient(to right, 
-                                ${dept.poAchievement >= 80 ? '#10B981' : dept.poAchievement >= 70 ? '#3B82F6' : '#F97316'}, 
-                                ${dept.poAchievement >= 80 ? '#059669' : dept.poAchievement >= 70 ? '#06B6D4' : '#EF4444'}
-                              )` 
+                              backgroundImage: `linear-gradient(to right, ${dept.poAchievement >= 80 ? '#10B981' : dept.poAchievement >= 70 ? '#3B82F6' : '#F97316'}, ${dept.poAchievement >= 80 ? '#059669' : dept.poAchievement >= 70 ? '#06B6D4' : '#EF4444'})`
                             }}
                             className={`h-full rounded-full`}
                           />
@@ -559,9 +494,7 @@ export default function InstitutionDashboard() {
                         <span className={`font-medium ${whiteTextClass}`}>{po.title}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className={`text-sm font-semibold ${
-                          po.status === 'excellent' ? 'text-green-500' : 'text-blue-500'
-                        }`}>
+                        <span className={`text-sm font-semibold ${po.status === 'excellent' ? 'text-green-500' : 'text-blue-500'}`}>
                           {po.current}%
                         </span>
                         {po.status === 'excellent' ? (
@@ -595,199 +528,8 @@ export default function InstitutionDashboard() {
               </div>
             </motion.div>
           </div>
-
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* Recent Alerts */}
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.3 }}
-              // 9. ALERTS KARTI: Dinamik Sınıf Kullanımı
-              className={`backdrop-blur-xl ${themeClasses.card} p-6 shadow-2xl`}
-            >
-              <h2 className={`text-xl font-bold ${whiteTextClass} mb-4 flex items-center gap-2`}>
-                <AlertTriangle className="w-5 h-5 text-orange-500" />
-                Recent Alerts
-              </h2>
-              <div className="space-y-3">
-                {recentAlerts.map((alert, index) => (
-                  <motion.div
-                    key={index}
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.4 + index * 0.1 }}
-                    whileHover={{ scale: 1.02 }}
-                    // Alert Kartları: Statik renk sınıfları korundu, karanlık moda uyumlu
-                    className={`p-4 rounded-xl border ${
-                      alert.type === 'warning' ? 'bg-orange-500/10 border-orange-500/30 text-orange-700 dark:text-orange-300' :
-                      alert.type === 'success' ? 'bg-green-500/10 border-green-500/30 text-green-700 dark:text-green-300' :
-                      'bg-blue-500/10 border-blue-500/30 text-blue-700 dark:text-blue-300'
-                    } ${isDark ? 'hover:bg-white/10' : 'hover:bg-gray-100'} transition-all cursor-pointer`}
-                  >
-                    <h3 className={`font-medium text-sm mb-1 ${whiteTextClass}`}>{alert.title}</h3>
-                    {/* Metin Rengi: Dinamik mutedText kullanıldı */}
-                    <p className={`${secondaryTextClass} text-xs mb-2`}>{alert.description}</p>
-                    {/* Metin Rengi: text-gray-500 korundu, her iki modda da uygun */}
-                    <span className="text-gray-500 text-xs">{alert.time}</span>
-                  </motion.div>
-                ))}
-              </div>
-            </motion.div>
-
-            {/* Quick Actions */}
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.5 }}
-              // 10. QUICK ACTIONS KARTI: Dinamik Sınıf Kullanımı
-              className={`backdrop-blur-xl ${themeClasses.card} p-6 shadow-2xl`}
-            >
-              <h2 className={`text-xl font-bold ${whiteTextClass} mb-4`}>Quick Actions</h2>
-              <div className="space-y-2">
-                <Link href="/institution/analytics">
-                  <motion.button
-                    whileHover={{ scale: 1.05, x: 5 }}
-                    whileTap={{ scale: 0.95 }}
-                    className={`w-full px-4 py-3 rounded-xl ${themeClasses.card.replace('shadow-2xl', '').replace('rounded-2xl', 'rounded-xl')} ${isDark ? 'hover:bg-white/10 text-white' : 'hover:bg-gray-100 text-gray-700'} text-left transition-all flex items-center gap-2`}
-                  >
-                    <BarChart3 className="w-4 h-4" />
-                    View Analytics
-                  </motion.button>
-                </Link>
-                {['Generate Report', 'Schedule Meeting'].map((action, index) => (
-                  <motion.button
-                    key={index}
-                    whileHover={{ scale: 1.05, x: 5 }}
-                    whileTap={{ scale: 0.95 }}
-                    // Quick Actions Butonları: Dinamik Sınıf Kullanımı
-                    className={`w-full px-4 py-3 rounded-xl ${themeClasses.card.replace('shadow-2xl', '').replace('rounded-2xl', 'rounded-xl')} ${isDark ? 'hover:bg-white/10 text-white' : 'hover:bg-gray-100 text-gray-700'} text-left transition-all`}
-                  >
-                    {action}
-                  </motion.button>
-                ))}
-              </div>
-            </motion.div>
-
-            {/* Accreditation Status */}
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.6 }}
-              // 11. AKREDİTASYON KARTI: Inline Style ile Dinamiklik
-              style={{
-                  // Yeşil gradientin opaklığını temaya göre ayarla
-                  backgroundImage: isDark ? 'linear-gradient(to bottom right, rgba(16, 185, 107, 0.2), rgba(5, 150, 105, 0.2))' : 'linear-gradient(to bottom right, rgba(16, 185, 107, 0.05), rgba(5, 150, 105, 0.05))',
-                  borderColor: isDark ? 'rgba(16, 185, 107, 0.3)' : 'rgba(5, 150, 105, 0.2)',
-              }}
-              className="rounded-2xl border p-6 shadow-2xl"
-            >
-              <h2 className={`text-xl font-bold ${whiteTextClass} mb-2 flex items-center gap-2`}>
-                <CheckCircle2 className="w-5 h-5 text-green-500" />
-                Accreditation Status
-              </h2>
-              <p className="text-green-500 text-sm mb-3">All criteria met for ABET 2024</p>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className={`${secondaryTextClass}`}>PO Achievement</span>
-                  <span className="text-green-500 font-semibold">✓ 95%</span>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className={`${secondaryTextClass}`}>Documentation</span>
-                  <span className="text-green-500 font-semibold">✓ Complete</span>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className={`${secondaryTextClass}`}>Student Feedback</span>
-                  <span className="text-green-500 font-semibold">✓ 4.2/5.0</span>
-                </div>
-              </div>
-            </motion.div>
-          </div>
         </div>
       </div>
-
-      {/* Filter Modal */}
-      <AnimatePresence>
-        {showFilterModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-            onClick={() => setShowFilterModal(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              onClick={(e) => e.stopPropagation()}
-              className={`${themeClasses.card} rounded-2xl p-6 max-w-md w-full shadow-2xl`}
-            >
-              <div className="flex items-center justify-between mb-4">
-                <h2 className={`text-xl font-bold ${whiteTextClass} flex items-center gap-2`}>
-                  <Filter className="w-5 h-5" style={{ color: accentStart }} />
-                  Filters
-                </h2>
-                <motion.button
-                  onClick={() => setShowFilterModal(false)}
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.9 }}
-                  className={`${secondaryTextClass} hover:${whiteTextClass} transition-colors`}
-                >
-                  <X className="w-5 h-5" />
-                </motion.button>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className={`text-sm font-medium ${secondaryTextClass} mb-2 block`}>
-                    Department
-                  </label>
-                  <select
-                    value={selectedDepartment}
-                    onChange={(e) => setSelectedDepartment(e.target.value)}
-                    className={`w-full px-4 py-2 rounded-xl ${themeClasses.card.replace('shadow-2xl', '').replace('rounded-2xl', 'rounded-xl')} ${isDark ? 'bg-white/5 text-white border border-white/10' : 'bg-white text-gray-700 border border-gray-200'} focus:outline-none focus:ring-2 focus:ring-indigo-500`}
-                  >
-                    <option value="all">All Departments</option>
-                    {availableDepartments.map((dept, index) => (
-                      <option key={`${dept}-${index}`} value={dept}>{dept}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className={`text-sm font-medium ${secondaryTextClass} mb-2 block`}>
-                    Semester
-                  </label>
-                  <select
-                    value={selectedSemester}
-                    onChange={(e) => setSelectedSemester(e.target.value)}
-                    className={`w-full px-4 py-2 rounded-xl ${themeClasses.card.replace('shadow-2xl', '').replace('rounded-2xl', 'rounded-xl')} ${isDark ? 'bg-white/5 text-white border border-white/10' : 'bg-white text-gray-700 border border-gray-200'} focus:outline-none focus:ring-2 focus:ring-indigo-500`}
-                  >
-                    <option value="all">All Semesters</option>
-                    <option value="fall-2024">Fall 2024</option>
-                    <option value="spring-2024">Spring 2024</option>
-                    <option value="summer-2024">Summer 2024</option>
-                  </select>
-                </div>
-
-                <motion.button
-                  onClick={() => {
-                    setShowFilterModal(false);
-                    fetchDashboardData();
-                  }}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  style={{ backgroundImage: `linear-gradient(to right, ${accentStart}, ${accentEnd})` }}
-                  className="w-full px-4 py-2 rounded-xl text-white font-medium"
-                >
-                  Apply Filters
-                </motion.button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

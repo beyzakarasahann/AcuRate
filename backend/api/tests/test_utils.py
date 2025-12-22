@@ -222,3 +222,4 @@ class TestGetInstitutionForUser:
         assert result is None or isinstance(result, User)
 
 
+
