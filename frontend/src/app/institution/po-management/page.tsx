@@ -134,7 +134,7 @@ export default function POManagementPage() {
         description: po.description,
         department: po.department,
         target_percentage: po.target_percentage,
-        is_active: po.is_active,
+        is_active: typeof po.is_active === 'string' ? po.is_active === 'true' : po.is_active,
       });
     } else {
       setEditingPO(null);
