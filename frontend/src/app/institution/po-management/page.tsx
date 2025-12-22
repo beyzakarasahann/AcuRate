@@ -49,7 +49,7 @@ export default function POManagementPage() {
 
   const fetchDepartments = async () => {
     try {
-      const deptData = await api.getDepartments();
+      const deptData = await api.getDepartmentsList();
       // Remove duplicates by normalizing (trim + case-insensitive), then deduplicate
       const seen = new Set<string>();
       const deptNames = deptData
