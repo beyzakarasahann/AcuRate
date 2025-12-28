@@ -86,9 +86,15 @@ class StudentImportService:
     This service provides a clean, testable interface for importing student
     data with proper validation, duplicate detection, and atomic operations.
     
+    Supports multiple file encodings automatically:
+    - UTF-8 with/without BOM (common on Mac/Linux and modern Windows)
+    - Windows-1254 (Turkish Windows encoding, common in Excel)
+    - ISO-8859-9 (Turkish Latin-5)
+    - CP1252 (Western European Windows)
+    - Latin-1 (fallback)
+    
     Attributes:
         file: The CSV file object to import.
-        encoding: File encoding (default: utf-8).
     
     Example:
         >>> service = StudentImportService(csv_file)
@@ -100,20 +106,21 @@ class StudentImportService:
     def __init__(
         self,
         file: BinaryIO,
-        encoding: str = 'utf-8',
+        encoding: str = 'utf-8',  # Kept for backward compatibility, but auto-detected
     ) -> None:
         """
         Initialize the service with a CSV file.
         
         Args:
             file: A file-like object containing CSV data.
-            encoding: Character encoding of the file. Defaults to 'utf-8'.
+            encoding: Deprecated. Encoding is now auto-detected from a list
+                     of common encodings (UTF-8, Windows-1254, ISO-8859-9, etc.).
         
         Raises:
             StudentImportServiceError: If file validation fails.
         """
         self.file = file
-        self.encoding = encoding
+        self.encoding = encoding  # Kept for backward compatibility
         self._rows: list[dict[str, str]] = []
         self._existing_emails: set[str] = set()
         self._existing_student_ids: set[str] = set()
@@ -146,33 +153,106 @@ class StudentImportService:
     
     def _read_and_validate_csv(self) -> None:
         """Read CSV file and validate its structure."""
-        try:
-            content = self.file.read()
-            if isinstance(content, bytes):
-                content = content.decode(self.encoding)
-        except UnicodeDecodeError as e:
-            raise StudentImportServiceError(
-                f"Invalid file encoding. Please use {self.encoding} encoded CSV files. "
-                f"Error: {str(e)}"
-            )
+        # =====================================================================
+        # STEP 1: Read file as raw bytes
+        # =====================================================================
+        print("DEBUG: Starting CSV file read...")
         
+        # Handle different file wrapper types
+        file_data = self.file.read()
+        
+        # Debug: Show what type we got
+        print(f"DEBUG: file.read() returned type: {type(file_data)}")
+        print(f"DEBUG: Data length: {len(file_data) if file_data else 0}")
+        
+        if not isinstance(file_data, bytes):
+            # If already a string (unlikely but possible), use it directly
+            print("DEBUG: Content is already a string, using directly")
+            content = file_data
+        else:
+            # Show first 100 bytes for debugging
+            print(f"DEBUG: First 100 bytes (raw): {file_data[:100]}")
+            
+            # =====================================================================
+            # STEP 2: Try multiple encodings
+            # =====================================================================
+            # Priority order optimized for Turkish Excel files
+            encodings_to_try = [
+                'utf-8-sig',      # UTF-8 with BOM (Excel often adds this)
+                'utf-8',          # Standard UTF-8
+                'cp1254',         # Turkish Windows code page (same as windows-1254)
+                'windows-1254',   # Turkish Windows encoding
+                'latin-1',        # Fallback - accepts ANY byte sequence
+                'iso-8859-9',     # Turkish ISO encoding (Latin-5)
+            ]
+            
+            content = None
+            successful_encoding = None
+            
+            print(f"DEBUG: Will try {len(encodings_to_try)} encodings: {encodings_to_try}")
+            
+            for encoding in encodings_to_try:
+                print(f"DEBUG: Trying encoding '{encoding}'...")
+                try:
+                    content = file_data.decode(encoding)
+                    successful_encoding = encoding
+                    print(f"DEBUG: SUCCESS! Decoded with '{encoding}'")
+                    print(f"DEBUG: Decoded content length: {len(content)} chars")
+                    print(f"DEBUG: First 200 chars: {content[:200]}")
+                    break
+                except UnicodeDecodeError as e:
+                    print(f"DEBUG: FAILED with '{encoding}' - UnicodeDecodeError: {e}")
+                    continue
+                except LookupError as e:
+                    print(f"DEBUG: FAILED with '{encoding}' - LookupError (unknown encoding): {e}")
+                    continue
+                except Exception as e:
+                    print(f"DEBUG: FAILED with '{encoding}' - Unexpected error: {type(e).__name__}: {e}")
+                    continue
+            
+            # =====================================================================
+            # STEP 3: Check if decoding was successful
+            # =====================================================================
+            if content is None:
+                print("DEBUG: ALL ENCODINGS FAILED!")
+                raise StudentImportServiceError(
+                    "Dosya formatı algılanamadı. Lütfen UTF-8 veya Excel formatında kaydedin. "
+                    f"Denenen encoding'ler: {', '.join(encodings_to_try)}"
+                )
+            
+            # Log successful encoding
+            logger.info(f"CSV decoded successfully with encoding: {successful_encoding}")
+            print(f"DEBUG: Proceeding with content decoded via '{successful_encoding}'")
+        
+        # =====================================================================
+        # STEP 4: Parse CSV
+        # =====================================================================
+        print("DEBUG: Creating CSV DictReader...")
         reader = csv.DictReader(io.StringIO(content))
         
         # Check required columns
         if reader.fieldnames is None:
+            print("DEBUG: CSV has no fieldnames/headers!")
             raise StudentImportServiceError("CSV file is empty or has no header row.")
         
+        print(f"DEBUG: CSV headers (raw): {reader.fieldnames}")
         fieldnames = {name.strip().lower() for name in reader.fieldnames if name}
+        print(f"DEBUG: CSV headers (normalized): {fieldnames}")
+        
         missing_columns = REQUIRED_COLUMNS - fieldnames
         
         if missing_columns:
+            print(f"DEBUG: Missing required columns: {missing_columns}")
             raise StudentImportServiceError(
                 f"Missing required columns: {', '.join(missing_columns)}. "
                 f"Required columns are: {', '.join(REQUIRED_COLUMNS)}"
             )
         
+        print("DEBUG: All required columns present, reading rows...")
+        
         # Read all rows
         self._rows = list(reader)
+        print(f"DEBUG: Read {len(self._rows)} data rows from CSV")
         
         if len(self._rows) > MAX_ROWS:
             raise StudentImportServiceError(

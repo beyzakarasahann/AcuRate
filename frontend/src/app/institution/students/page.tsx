@@ -2,7 +2,7 @@
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { useEffect, useState } from 'react';
-import { GraduationCap, Search, Mail, Building2, Loader2, User as UserIcon, BookOpen, Filter, RefreshCw, PlusCircle, X, Trash2, Calendar, Hash } from 'lucide-react';
+import { GraduationCap, Search, Mail, Building2, Loader2, User as UserIcon, BookOpen, Filter, RefreshCw, PlusCircle, X, Trash2, Calendar, Hash, Upload, FileSpreadsheet, Download, CheckCircle, AlertCircle } from 'lucide-react';
 import { api, type User } from '@/lib/api';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { Inter } from 'next/font/google';
@@ -384,6 +384,19 @@ export default function StudentsPage() {
                 >
                   <PlusCircle className="w-4 h-4" />
                   Add Student
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setIsBulkImportOpen(true)}
+                  className={`px-4 py-2 rounded-lg border transition-all flex items-center gap-2 text-sm font-medium ${
+                    isDark 
+                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-500' 
+                      : 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-500'
+                  }`}
+                >
+                  <Upload className="w-4 h-4" />
+                  Toplu Öğrenci Ekle (CSV)
                 </motion.button>
                 <motion.button
                   whileHover={{ scale: 1.02 }}
@@ -989,6 +1002,319 @@ export default function StudentsPage() {
         variant="danger"
         isLoading={deletingStudentId !== null}
       />
+
+      {/* Bulk Import Modal */}
+      <AnimatePresence>
+        {isBulkImportOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => {
+                if (!importing) {
+                  setIsBulkImportOpen(false);
+                  setCsvFile(null);
+                  setImportError(null);
+                  setImportSuccess(null);
+                  setImportResults(null);
+                }
+              }}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+            />
+
+            {/* Modal */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className={`fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg ${isDark ? 'bg-gray-900' : 'bg-white'} rounded-2xl shadow-2xl z-50 border ${isDark ? 'border-white/10' : 'border-gray-200'}`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className={`flex items-center justify-between p-6 border-b ${isDark ? 'border-white/10' : 'border-gray-200'}`}>
+                <div className="flex items-center gap-3">
+                  <div className={`p-2.5 rounded-xl ${isDark ? 'bg-emerald-500/10' : 'bg-emerald-50'}`}>
+                    <FileSpreadsheet className={`w-5 h-5 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`} />
+                  </div>
+                  <div>
+                    <h2 className={`text-xl font-bold ${text}`}>Toplu Öğrenci Ekle</h2>
+                    <p className={`text-sm ${mutedText}`}>CSV dosyası ile öğrenci aktarımı</p>
+                  </div>
+                </div>
+                <motion.button
+                  whileHover={{ scale: 1.1, rotate: 90 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => {
+                    if (!importing) {
+                      setIsBulkImportOpen(false);
+                      setCsvFile(null);
+                      setImportError(null);
+                      setImportSuccess(null);
+                      setImportResults(null);
+                    }
+                  }}
+                  disabled={importing}
+                  className={`p-2 rounded-xl transition-colors ${isDark ? 'hover:bg-white/10 text-white' : 'hover:bg-gray-100 text-gray-600'} ${importing ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  <X className="w-5 h-5" />
+                </motion.button>
+              </div>
+
+              {/* Content */}
+              <div className="p-6 space-y-5">
+                {/* File Drop Zone */}
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.currentTarget.classList.add('ring-2', 'ring-emerald-500');
+                  }}
+                  onDragLeave={(e) => {
+                    e.preventDefault();
+                    e.currentTarget.classList.remove('ring-2', 'ring-emerald-500');
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.currentTarget.classList.remove('ring-2', 'ring-emerald-500');
+                    const file = e.dataTransfer.files[0];
+                    // Validate by file extension (Windows may send different MIME types)
+                    if (file && file.name.toLowerCase().endsWith('.csv')) {
+                      setCsvFile(file);
+                      setImportError(null);
+                      setImportSuccess(null);
+                      setImportResults(null);
+                    } else {
+                      setImportError('Lütfen geçerli bir CSV dosyası seçin (.csv uzantılı).');
+                    }
+                  }}
+                  className={`relative border-2 border-dashed rounded-xl p-8 text-center transition-all ${
+                    isDark
+                      ? 'border-white/20 hover:border-white/40 bg-white/[0.02]'
+                      : 'border-gray-300 hover:border-gray-400 bg-gray-50'
+                  } ${csvFile ? (isDark ? 'border-emerald-500/50 bg-emerald-500/5' : 'border-emerald-500 bg-emerald-50') : ''}`}
+                >
+                  <input
+                    type="file"
+                    accept=".csv, text/csv, application/vnd.ms-excel, application/csv, text/x-csv, text/plain"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        // Validate by file extension (Windows may send different MIME types)
+                        if (file.name.toLowerCase().endsWith('.csv')) {
+                          setCsvFile(file);
+                          setImportError(null);
+                          setImportSuccess(null);
+                          setImportResults(null);
+                        } else {
+                          setImportError('Lütfen geçerli bir CSV dosyası seçin (.csv uzantılı).');
+                          e.target.value = ''; // Reset input
+                        }
+                      }
+                    }}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    disabled={importing}
+                  />
+                  
+                  {csvFile ? (
+                    <div className="space-y-2">
+                      <div className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center ${isDark ? 'bg-emerald-500/20' : 'bg-emerald-100'}`}>
+                        <CheckCircle className={`w-6 h-6 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`} />
+                      </div>
+                      <p className={`font-medium ${text}`}>{csvFile.name}</p>
+                      <p className={`text-sm ${mutedText}`}>
+                        {(csvFile.size / 1024).toFixed(1)} KB
+                      </p>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCsvFile(null);
+                        }}
+                        className={`text-sm ${isDark ? 'text-red-400 hover:text-red-300' : 'text-red-600 hover:text-red-700'} underline`}
+                      >
+                        Dosyayı Kaldır
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center ${isDark ? 'bg-white/10' : 'bg-gray-200'}`}>
+                        <Upload className={`w-6 h-6 ${mutedText}`} />
+                      </div>
+                      <div>
+                        <p className={`font-medium ${text}`}>
+                          CSV dosyasını sürükleyip bırakın
+                        </p>
+                        <p className={`text-sm ${mutedText} mt-1`}>
+                          veya dosya seçmek için tıklayın
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Download Template Link */}
+                <div className={`flex items-center justify-center gap-2 text-sm ${mutedText}`}>
+                  <Download className="w-4 h-4" />
+                  <a
+                    href="/templates/students_template.csv"
+                    download
+                    className={`underline hover:no-underline ${isDark ? 'text-indigo-400 hover:text-indigo-300' : 'text-indigo-600 hover:text-indigo-700'}`}
+                  >
+                    Örnek CSV şablonunu indir
+                  </a>
+                </div>
+
+                {/* Error Message */}
+                {importError && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={`p-4 rounded-xl flex items-start gap-3 ${
+                      isDark 
+                        ? 'bg-red-500/10 border border-red-500/30' 
+                        : 'bg-red-50 border border-red-200'
+                    }`}
+                  >
+                    <AlertCircle className={`w-5 h-5 flex-shrink-0 ${isDark ? 'text-red-400' : 'text-red-600'}`} />
+                    <div>
+                      <p className={`text-sm font-medium ${isDark ? 'text-red-400' : 'text-red-700'}`}>
+                        Hata
+                      </p>
+                      <p className={`text-sm ${isDark ? 'text-red-300' : 'text-red-600'} mt-0.5`}>
+                        {importError}
+                      </p>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* Success Message */}
+                {importSuccess && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={`p-4 rounded-xl flex items-start gap-3 ${
+                      isDark 
+                        ? 'bg-emerald-500/10 border border-emerald-500/30' 
+                        : 'bg-emerald-50 border border-emerald-200'
+                    }`}
+                  >
+                    <CheckCircle className={`w-5 h-5 flex-shrink-0 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`} />
+                    <div>
+                      <p className={`text-sm font-medium ${isDark ? 'text-emerald-400' : 'text-emerald-700'}`}>
+                        {importSuccess}
+                      </p>
+                      {importResults && (
+                        <div className={`text-sm ${isDark ? 'text-emerald-300' : 'text-emerald-600'} mt-1 space-y-0.5`}>
+                          {importResults.created > 0 && <p>✓ {importResults.created} yeni öğrenci eklendi</p>}
+                          {importResults.updated > 0 && <p>✓ {importResults.updated} öğrenci güncellendi</p>}
+                          {importResults.errors && importResults.errors.length > 0 && (
+                            <div className={`mt-2 text-xs ${isDark ? 'text-orange-400' : 'text-orange-600'}`}>
+                              <p className="font-medium">Bazı satırlarda hata oluştu:</p>
+                              <ul className="list-disc list-inside mt-1 max-h-24 overflow-y-auto">
+                                {importResults.errors.slice(0, 5).map((err, i) => (
+                                  <li key={i}>{err}</li>
+                                ))}
+                                {importResults.errors.length > 5 && (
+                                  <li>... ve {importResults.errors.length - 5} hata daha</li>
+                                )}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className={`p-6 border-t ${isDark ? 'border-white/10' : 'border-gray-200'} flex items-center justify-end gap-3`}>
+                <motion.button
+                  whileHover={{ scale: importing ? 1 : 1.02 }}
+                  whileTap={{ scale: importing ? 1 : 0.98 }}
+                  onClick={() => {
+                    if (!importing) {
+                      setIsBulkImportOpen(false);
+                      setCsvFile(null);
+                      setImportError(null);
+                      setImportSuccess(null);
+                      setImportResults(null);
+                    }
+                  }}
+                  disabled={importing}
+                  className={`px-5 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 ${
+                    isDark ? 'bg-white/5 border border-white/10 text-white hover:bg-white/10' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+                  } ${importing ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  İptal
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: importing || !csvFile ? 1 : 1.02 }}
+                  whileTap={{ scale: importing || !csvFile ? 1 : 0.98 }}
+                  onClick={async () => {
+                    if (!csvFile) return;
+                    
+                    setImporting(true);
+                    setImportError(null);
+                    setImportSuccess(null);
+                    setImportResults(null);
+                    
+                    const formData = new FormData();
+                    formData.append('file', csvFile);
+                    
+                    try {
+                      const result = await api.bulkImportStudents(formData);
+                      
+                      if (result.success) {
+                        const totalImported = (result.created || 0) + (result.updated || 0);
+                        setImportSuccess(`${totalImported} öğrenci başarıyla işlendi!`);
+                        setImportResults({
+                          created: result.created || 0,
+                          updated: result.updated || 0,
+                          errors: result.errors || [],
+                        });
+                        toast.success(`${totalImported} öğrenci başarıyla aktarıldı`);
+                        setCsvFile(null);
+                        await fetchStudents();
+                      } else {
+                        setImportError(result.error?.message || 'Aktarım sırasında bir hata oluştu.');
+                      }
+                    } catch (error: any) {
+                      console.error('Bulk import error:', error);
+                      setImportError(error.message || 'Aktarım sırasında bir hata oluştu.');
+                      toast.error('Aktarım başarısız oldu');
+                    } finally {
+                      setImporting(false);
+                    }
+                  }}
+                  disabled={importing || !csvFile}
+                  className={`px-6 py-2.5 rounded-xl font-semibold text-sm transition-all duration-200 flex items-center gap-2 ${
+                    importing || !csvFile ? 'opacity-50 cursor-not-allowed' : ''
+                  } ${
+                    isDark 
+                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-500/20' 
+                      : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md'
+                  }`}
+                >
+                  {importing ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Yükleniyor...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4" />
+                      Yükle
+                    </>
+                  )}
+                </motion.button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
