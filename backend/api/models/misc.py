@@ -14,10 +14,33 @@ from django.dispatch import receiver
 
 class ContactRequest(models.Model):
     """
-    Model for institutional contact/demo requests from the contact page.
+    Represents an institutional contact or demo request submitted from the platform's contact page.
+
+    This model records various types of inquiries or demo requests from organizations
+    such as universities, faculties, schools, companies, etc. It also tracks the
+    status of each inquiry, relevant contacts, and additional notes.
+
+    Key Fields:
+        - institution_name: The name of the institution making the request.
+        - institution_type: The type/category of the institution (e.g., University, School).
+        - contact_name: Name of the individual contact person.
+        - contact_email: Email address for follow-up.
+        - contact_phone: Optional phone number for the contact person.
+        - request_type: Nature of the request (e.g., demo, pricing, partnership).
+        - message: Optional message or details provided by the requestor.
+        - status: Progress or handling status of the request (e.g., pending, contacted).
+        - notes: Internal notes for administrative use.
+        - created_at: Timestamp when the request was created.
+        - updated_at: Timestamp when the request was last updated.
+
+    Meta:
+        The model is indexed by status, institution_type, and request_type for efficient admin filtering.
     """
     
     class InstitutionType(models.TextChoices):
+        """
+        Enumeration representing the different kinds of institutions that can submit a request.
+        """
         UNIVERSITY = 'university', 'University'
         FACULTY = 'faculty', 'Faculty / Department'
         SCHOOL = 'school', 'School / College'
@@ -26,6 +49,9 @@ class ContactRequest(models.Model):
         OTHER = 'other', 'Other'
     
     class RequestType(models.TextChoices):
+        """
+        The category or reason for the institutional request.
+        """
         DEMO = 'demo', 'Request a demo'
         PRICING = 'pricing', 'Request pricing'
         PARTNERSHIP = 'partnership', 'Partnership / Collaboration'
@@ -109,6 +135,12 @@ class ContactRequest(models.Model):
         ]
     
     def __str__(self):
+        """
+        Returns a string representation of the ContactRequest object.
+
+        Returns:
+            str: A human-readable summary that includes the institution and contact info.
+        """
         return f"{self.institution_name} - {self.contact_name} ({self.get_request_type_display()})"
 
 
@@ -118,11 +150,33 @@ class ContactRequest(models.Model):
 
 class ActivityLog(models.Model):
     """
-    System-wide activity log for tracking all important actions.
-    Used by super admin to monitor system activity.
+    Logs important actions throughout the system for monitoring and audit purposes.
+
+    Tracks user-initiated or system actions across the application. 
+    Records references to actors (users), institutions, relevant objects, and additional metadata.
+
+    Key Fields:
+        - action_type: The type of action performed (see ActionType enum).
+        - user: The user who performed the action (nullable for system events).
+        - institution: The originating institution's user object if applicable.
+        - department: Department context if relevant.
+        - description: Informational description of the action (no sensitive data).
+        - related_object_type: Optionally, the type of the object affected (as string).
+        - related_object_id: Optionally, the id of the object affected.
+        - metadata: JSON dictionary with supplemental details (no sensitive data).
+        - created_at: When this log entry was created.
+
+    Meta:
+        Includes several database indexes to support efficient search and filtering.
     """
     
     class ActionType(models.TextChoices):
+        """
+        The types of actions that can be recorded in the activity log.
+
+        Options include user management, course and assessment lifecycle events, 
+        grading actions, department and PO updates, and authentication activities.
+        """
         USER_CREATED = 'user_created', 'User Created'
         USER_UPDATED = 'user_updated', 'User Updated'
         USER_DELETED = 'user_deleted', 'User Deleted'
@@ -219,4 +273,10 @@ class ActivityLog(models.Model):
         verbose_name_plural = 'Activity Logs'
     
     def __str__(self):
+        """
+        Returns a human-readable summary of the ActivityLog entry.
+
+        Returns:
+            str: The display name of the action and a preview of the description.
+        """
         return f"{self.get_action_type_display()} - {self.description[:50]}"
