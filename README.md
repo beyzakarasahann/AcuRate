@@ -71,6 +71,18 @@ AcuRate, üniversiteler, okullar ve eğitim kurumları için kapsamlı bir akade
 - **PostgreSQL** - Veritabanı
 - **JWT Authentication** - Token-based auth
 - **Django Admin** - Yönetim paneli
+- **drf-yasg** - Swagger/OpenAPI Dokümantasyonu
+
+## 📖 API Dokümantasyonu (Swagger UI)
+
+- Projede, interaktif API testleri ve canlı endpoint incelemeleri için **Swagger UI** (drf-yasg) kullanılmaktadır.
+- Tüm ana modeller ve fonksiyonlar kapsamlı İngilizce docstring açıklamalarına sahiptir. Her endpoint, parametre, request/response body ve model alanları detaylı olarak dokümante edilmiştir.
+- Swagger arayüzüne erişim: [`http://localhost:8000/swagger/`](http://localhost:8000/swagger/)
+- Swagger ile:
+  - Her endpoint için "Try it out" özelliğiyle doğrudan frontend üzerinden API testleri yapılabilir.
+  - JWT token authentication desteği mevcuttur, kullanıcı girişi sonrası token ekleyerek protected endpoint'ler denenebilir.
+  - Model ve alan açıklamaları API şemasında ayrıntılı olarak görünür.
+- Ayrıca proje düzeyinde otomatik OpenAPI (json/yaml) şeması da indirilebilir.
 
 ## 📋 Gereksinimler
 
@@ -572,6 +584,8 @@ npm run lint
   - **Tests**: `tests.py` (901 satır) → `tests/` (8 modül dosyası)
   - **Toplam**: 5 büyük dosya modülerleştirildi, 40+ modül dosyası oluşturuldu
   - **Avantajlar**: Ölçeklenebilirlik, bakım kolaylığı, okunabilirlik, organizasyon
+- ✅ **Swagger/OpenAPI API dokümantasyonu** (Swagger UI arayüzü, OpenAPI şeması, drf-yasg)
+- ✅ **Kapsamlı İngilizce Docstrings (Kod okunabilirliği)**
 
 ### Frontend Geliştirmeleri
 - ✅ Tüm mock data'lar kaldırıldı, backend entegrasyonu tamamlandı
@@ -733,9 +747,10 @@ Proje yapısı tamamen modülerleştirildi ve ölçeklenebilir hale getirildi:
 - ✅ Super Admin ve Institution Admin ayrımı 🆕
 - ✅ Dark/Light mode
 - ✅ Responsive design
+- ✅ Swagger/OpenAPI API dokümantasyonu (Swagger UI, drf-yasg)
+- ✅ Kapsamlı İngilizce Docstrings (Kod okunabilirliği)
 
 ### Devam Eden Geliştirmeler 🔄
-- 🔄 API dokümantasyonu (Swagger)
 - 🔄 Unit testler
 - 🔄 Performance optimizasyonu
 - 🔄 Advanced analytics ve raporlama
@@ -1236,4 +1251,4 @@ Proje yapısı tamamen modülerleştirildi ve ölçeklenebilir hale getirildi:
 
 ---
 
-**AcuRate** - Academic Performance Analysis System © 2024
+**AcuRate** - Academic Performance Analysis System © 2025
