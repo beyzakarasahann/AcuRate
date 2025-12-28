@@ -2,11 +2,12 @@
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { useEffect, useState } from 'react';
-import { GraduationCap, Search, Mail, Building2, Loader2, User as UserIcon, BookOpen, Filter, RefreshCw, PlusCircle, X } from 'lucide-react';
+import { GraduationCap, Search, Mail, Building2, Loader2, User as UserIcon, BookOpen, Filter, RefreshCw, PlusCircle, X, Trash2, Calendar, Hash } from 'lucide-react';
 import { api, type User } from '@/lib/api';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { Inter } from 'next/font/google';
 import toast from 'react-hot-toast';
+import { ConfirmationModal } from '@/components/ui/ConfirmationModal';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
@@ -41,6 +42,10 @@ export default function StudentsPage() {
   const [importError, setImportError] = useState<string | null>(null);
   const [importSuccess, setImportSuccess] = useState<string | null>(null);
   const [importResults, setImportResults] = useState<{ created: number; updated: number; errors: string[] } | null>(null);
+  const [selectedStudent, setSelectedStudent] = useState<StudentWithDepartment | null>(null);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deletingStudentId, setDeletingStudentId] = useState<number | null>(null);
 
   const {
     mounted: themeMounted,
@@ -206,6 +211,45 @@ export default function StudentsPage() {
       setFormError(error.message || 'Failed to create student.');
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleStudentClick = async (student: StudentWithDepartment) => {
+    try {
+      // Fetch full student details
+      const fullStudent = await api.getUserById(student.id);
+      setSelectedStudent(fullStudent as StudentWithDepartment);
+      setIsDetailModalOpen(true);
+    } catch (error: any) {
+      console.error('Failed to fetch student details:', error);
+      toast.error('Failed to load student details');
+      // Fallback to the student data we already have
+      setSelectedStudent(student);
+      setIsDetailModalOpen(true);
+    }
+  };
+
+  const handleDeleteClick = (e: React.MouseEvent, student: StudentWithDepartment) => {
+    e.stopPropagation(); // Prevent opening detail modal
+    setSelectedStudent(student);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!selectedStudent) return;
+
+    const toastId = toast.loading('Deleting student...');
+    try {
+      setDeletingStudentId(selectedStudent.id);
+      await api.deleteUser(selectedStudent.id);
+      toast.success('Student deleted successfully', { id: toastId });
+      setIsDeleteModalOpen(false);
+      setSelectedStudent(null);
+      await fetchStudents();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to delete student', { id: toastId });
+    } finally {
+      setDeletingStudentId(null);
     }
   };
 
@@ -453,7 +497,8 @@ export default function StudentsPage() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.02 }}
-                  className={`p-4 rounded-lg border transition-all hover:shadow-sm ${
+                  onClick={() => handleStudentClick(student)}
+                  className={`p-4 rounded-lg border transition-all hover:shadow-sm cursor-pointer ${
                     isDark 
                       ? 'bg-gray-900/50 border-white/10 hover:border-white/20' 
                       : 'bg-white border-gray-200 hover:border-gray-300'
@@ -466,9 +511,24 @@ export default function StudentsPage() {
                       <UserIcon className={`w-5 h-5 ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h4 className={`font-semibold ${text} text-base mb-1 truncate`}>
-                        {student.first_name} {student.last_name}
-                      </h4>
+                      <div className="flex items-start justify-between gap-2">
+                        <h4 className={`font-semibold ${text} text-base mb-1 truncate`}>
+                          {student.first_name} {student.last_name}
+                        </h4>
+                        <motion.button
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
+                          onClick={(e) => handleDeleteClick(e, student)}
+                          className={`p-1.5 rounded-lg transition-colors flex-shrink-0 ${
+                            isDark
+                              ? 'hover:bg-red-500/20 text-red-400 hover:text-red-300'
+                              : 'hover:bg-red-50 text-red-600 hover:text-red-700'
+                          }`}
+                          title="Delete student"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </motion.button>
+                      </div>
                       
                       {student.student_id && (
                         <p className={`text-xs ${mutedText} mb-2`}>
@@ -696,6 +756,239 @@ export default function StudentsPage() {
           </>
         )}
       </AnimatePresence>
+
+      {/* Student Detail Modal */}
+      <AnimatePresence>
+        {isDetailModalOpen && selectedStudent && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => setIsDetailModalOpen(false)}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
+            />
+
+            {/* Detail Modal */}
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+              className={`fixed right-0 top-0 h-full w-full max-w-2xl ${isDark ? 'bg-gray-900' : 'bg-white'} shadow-2xl z-50 flex flex-col`}
+            >
+              {/* Header */}
+              <div className={`flex items-center justify-between p-8 border-b ${isDark ? 'border-white/10' : 'border-gray-200'}`}>
+                <div className="flex items-center gap-4">
+                  <div className={`p-2.5 rounded-xl ${isDark ? 'bg-indigo-500/10' : 'bg-indigo-50'}`}>
+                    <UserIcon className={`w-6 h-6 ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`} />
+                  </div>
+                  <div>
+                    <h2 className={`text-2xl font-bold ${text}`}>
+                      {selectedStudent.first_name} {selectedStudent.last_name}
+                    </h2>
+                    <p className={`text-sm ${mutedText} mt-1`}>Student Details</p>
+                  </div>
+                </div>
+                <motion.button
+                  whileHover={{ scale: 1.1, rotate: 90 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => setIsDetailModalOpen(false)}
+                  className={`p-2 rounded-xl transition-colors ${isDark ? 'hover:bg-white/10 text-white' : 'hover:bg-gray-100 text-gray-600'}`}
+                >
+                  <X className="w-5 h-5" />
+                </motion.button>
+              </div>
+
+              {/* Content - Scrollable */}
+              <div className="flex-1 overflow-y-auto p-8">
+                <div className="space-y-6">
+                  {/* Personal Information */}
+                  <div>
+                    <h3 className={`text-lg font-semibold ${text} mb-4`}>Personal Information</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className={`block text-xs font-semibold uppercase tracking-wider ${mutedText} mb-2`}>
+                          First Name
+                        </label>
+                        <p className={`text-sm ${text} font-medium`}>{selectedStudent.first_name || '-'}</p>
+                      </div>
+                      <div>
+                        <label className={`block text-xs font-semibold uppercase tracking-wider ${mutedText} mb-2`}>
+                          Last Name
+                        </label>
+                        <p className={`text-sm ${text} font-medium`}>{selectedStudent.last_name || '-'}</p>
+                      </div>
+                      <div>
+                        <label className={`block text-xs font-semibold uppercase tracking-wider ${mutedText} mb-2`}>
+                          Email
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <Mail className={`w-4 h-4 ${mutedText}`} />
+                          <p className={`text-sm ${text} font-medium`}>{selectedStudent.email || '-'}</p>
+                        </div>
+                      </div>
+                      <div>
+                        <label className={`block text-xs font-semibold uppercase tracking-wider ${mutedText} mb-2`}>
+                          Username
+                        </label>
+                        <p className={`text-sm ${text} font-medium font-mono`}>{selectedStudent.username || '-'}</p>
+                      </div>
+                      {selectedStudent.phone && (
+                        <div>
+                          <label className={`block text-xs font-semibold uppercase tracking-wider ${mutedText} mb-2`}>
+                            Phone
+                          </label>
+                          <p className={`text-sm ${text} font-medium`}>{selectedStudent.phone}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Academic Information */}
+                  <div>
+                    <h3 className={`text-lg font-semibold ${text} mb-4`}>Academic Information</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {selectedStudent.student_id && (
+                        <div>
+                          <label className={`block text-xs font-semibold uppercase tracking-wider ${mutedText} mb-2`}>
+                            Student ID
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <Hash className={`w-4 h-4 ${mutedText}`} />
+                            <p className={`text-sm ${text} font-medium font-mono`}>{selectedStudent.student_id}</p>
+                          </div>
+                        </div>
+                      )}
+                      {selectedStudent.department && (
+                        <div>
+                          <label className={`block text-xs font-semibold uppercase tracking-wider ${mutedText} mb-2`}>
+                            Department
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <Building2 className={`w-4 h-4 ${mutedText}`} />
+                            <p className={`text-sm ${text} font-medium`}>{selectedStudent.department}</p>
+                          </div>
+                        </div>
+                      )}
+                      {selectedStudent.year_of_study && (
+                        <div>
+                          <label className={`block text-xs font-semibold uppercase tracking-wider ${mutedText} mb-2`}>
+                            Year of Study
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <BookOpen className={`w-4 h-4 ${mutedText}`} />
+                            <p className={`text-sm ${text} font-medium`}>Year {selectedStudent.year_of_study}</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Account Information */}
+                  <div>
+                    <h3 className={`text-lg font-semibold ${text} mb-4`}>Account Information</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className={`block text-xs font-semibold uppercase tracking-wider ${mutedText} mb-2`}>
+                          Account Status
+                        </label>
+                        <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
+                          selectedStudent.is_active
+                            ? isDark ? 'bg-green-500/20 text-green-400' : 'bg-green-100 text-green-700'
+                            : isDark ? 'bg-red-500/20 text-red-400' : 'bg-red-100 text-red-700'
+                        }`}>
+                          {selectedStudent.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                      </div>
+                      {selectedStudent.is_temporary_password && (
+                        <div>
+                          <label className={`block text-xs font-semibold uppercase tracking-wider ${mutedText} mb-2`}>
+                            Password Status
+                          </label>
+                          <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
+                            isDark ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-100 text-orange-700'
+                          }`}>
+                            Temporary Password
+                          </span>
+                        </div>
+                      )}
+                      {selectedStudent.created_at && (
+                        <div>
+                          <label className={`block text-xs font-semibold uppercase tracking-wider ${mutedText} mb-2`}>
+                            Created At
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <Calendar className={`w-4 h-4 ${mutedText}`} />
+                            <p className={`text-sm ${text} font-medium`}>
+                              {new Date(selectedStudent.created_at).toLocaleDateString('en-US', {
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric'
+                              })}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className={`p-6 border-t ${isDark ? 'border-white/10' : 'border-gray-200'} flex items-center justify-end gap-3`}>
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setIsDetailModalOpen(false)}
+                  className={`px-5 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 ${
+                    isDark ? 'bg-white/5 border border-white/10 text-white hover:bg-white/10' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  Close
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={(e) => {
+                    setIsDetailModalOpen(false);
+                    handleDeleteClick(e, selectedStudent);
+                  }}
+                  className={`px-5 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 ${
+                    isDark
+                      ? 'bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-500/20'
+                      : 'bg-red-600 hover:bg-red-700 text-white shadow-md'
+                  }`}
+                >
+                  <Trash2 className="w-4 h-4 inline mr-2" />
+                  Delete Student
+                </motion.button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => {
+          setIsDeleteModalOpen(false);
+          setSelectedStudent(null);
+        }}
+        onConfirm={handleDeleteConfirm}
+        title="Delete Student"
+        message={selectedStudent 
+          ? `Are you sure you want to delete ${selectedStudent.first_name} ${selectedStudent.last_name}? This action cannot be undone and all associated data will be permanently removed.`
+          : 'Are you sure you want to delete this student?'
+        }
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={deletingStudentId !== null}
+      />
     </div>
   );
 }

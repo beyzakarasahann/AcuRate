@@ -24,24 +24,26 @@ http://localhost:3000/login
 
 ## 🔐 Demo Credentials
 
+**Not:** Login sayfasında "Auto-fill" butonuna tıklayarak bu bilgileri otomatik doldurabilirsiniz!
+
 ### 🎓 Student
 ```
-Username: student1
-Password: student123
+Username: beyza2
+Password: beyza123
 Dashboard: /student
 ```
 
 ### 👨‍🏫 Teacher
 ```
-Username: teacher1
-Password: teacher123
+Username: ahmet.bulut
+Password: ahmet123
 Dashboard: /teacher
 ```
 
 ### 🏛️ Institution Admin
 ```
-Username: admin
-Password: admin123
+Username: institution
+Password: institution123
 Dashboard: /institution
 ```
 

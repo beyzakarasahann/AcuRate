@@ -266,10 +266,10 @@ class UserViewSet(viewsets.ModelViewSet):
             metadata={'role': instance.role}
         )
         
-        # Only allow deleting teachers
-        if instance.role != User.Role.TEACHER:
+        # Allow deleting teachers and students (institution admins can delete both)
+        if instance.role not in [User.Role.TEACHER, User.Role.STUDENT]:
             return Response({
-                'error': 'Only teachers can be deleted through this endpoint'
+                'error': 'Only teachers and students can be deleted through this endpoint'
             }, status=status.HTTP_403_FORBIDDEN)
         
         # Prevent deleting yourself
@@ -281,9 +281,10 @@ class UserViewSet(viewsets.ModelViewSet):
         # Delete the user
         instance.delete()
         
+        role_display = instance.get_role_display()
         return Response({
             'success': True,
-            'message': 'Teacher deleted successfully'
+            'message': f'{role_display} deleted successfully'
         }, status=status.HTTP_200_OK)
 
 

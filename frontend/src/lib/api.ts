@@ -1095,6 +1095,16 @@ class ApiClient {
     });
   }
 
+  async deleteUser(userId: number): Promise<{ success: boolean; message?: string }> {
+    return await this.request(`/users/${userId}/`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getUserById(userId: number): Promise<User> {
+    return await this.request<User>(`/users/${userId}/`);
+  }
+
   async bulkImportStudents(file: FormData): Promise<{ success: boolean; created?: number; updated?: number; errors?: string[]; error?: { message: string } }> {
     const token = TokenManager.getAccessToken();
     const endpoint = `${API_BASE_URL}/bulk/import/students/`;
