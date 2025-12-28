@@ -2,6 +2,53 @@
 
 Bu proje pytest kullanarak Django unit testleri yapılandırılmıştır.
 
+## Teknoloji Stack
+
+### Backend
+
+- Django
+- Django Rest Framework (DRF)
+- PostgreSQL
+- Celery
+- Redis
+- drf-yasg - Swagger/OpenAPI Dokümantasyonu
+
+## API Dokümantasyonu (Swagger UI)
+
+Projenin backend API'si için Swagger UI tabanlı interaktif dokümantasyon kullanılmaktadır.
+
+- API, Swagger UI üzerinden doğrudan test edilebilir.
+- Tüm view ve serializer fonksiyon/model açıklamaları detaylı İngilizce docstringlerle yazılmıştır. Bu sayede Swagger arayüzünde her endpoint ve alan için açıklamalar otomatik görünür.
+- Dokümantasyona ulaşmak için:
+  
+  ```
+  http://localhost:8000/swagger/
+  ```
+- Özellikler:
+    - "Try it out" ile endpointleri canlı test edebilirsiniz.
+    - JWT ile authentication (Bearer Token) desteği aktiftir.
+
+## Proje Durumu
+
+### Tamamlanan Özellikler
+
+- Kullanıcı yönetimi (ogrenci, ogretmen, kurum)
+- Model, serializer ve REST endpoint altyapısı
+- Otomatik test altyapısı (pytest)
+- JWT authentication
+- PostgreSQL desteği
+- Kapsamlı İngilizce Docstrings (Kod okunabilirliği)
+- Swagger/OpenAPI dokümantasyonu
+- Statik analiz ve coverage
+- CI/CD entegrasyonu
+
+### Geliştirme Aşamasındaki Özellikler
+
+- Gelişmiş yetkilendirme
+- Raporlama ve analiz
+- Asenkron görevler (Celery)
+- Ek güvenlik önlemleri
+
 ## Test Yapısı
 
 ### Modüler Yapı
@@ -19,7 +66,7 @@ api/tests/
 └── test_*.py                # Test dosyaları
 ```
 
-### 🚀 Push Öncesi Test Kontrolü
+### Push Öncesi Test Kontrolü
 
 GitHub'a push etmeden önce testlerin geçip geçmediğini kontrol etmek için:
 
@@ -30,13 +77,13 @@ python scripts/test_before_push.py
 ./scripts/test_before_push.sh
 ```
 
-**Özellikler:**
-- ✅ PostgreSQL bağlantısını otomatik kontrol eder
-- ✅ PostgreSQL yoksa SQLite'a geçer (local test için)
-- ✅ Deprecated test dosyalarını otomatik hariç tutar
-- ✅ Slow testleri hariç tutar (hızlı test)
-- ✅ Coverage raporu oluşturur
-- ✅ Renkli çıktı (başarı/hata durumları)
+Özellikler:
+- PostgreSQL bağlantısını otomatik kontrol eder
+- PostgreSQL yoksa SQLite'a geçer (local test için)
+- Deprecated test dosyalarını otomatik hariç tutar
+- Slow testleri hariç tutar (hızlı test)
+- Coverage raporu oluşturur
+- Renkli çıktı (başarı/hata durumları)
 
 Detaylar için: `backend/scripts/README.md`
 
@@ -65,7 +112,7 @@ Detaylar için: `backend/scripts/README.md`
 - `test_permissions_pytest.py`: İzin testleri (pytest)
 - `test_integration_pytest.py`: Entegrasyon testleri (pytest)
 
-#### ⚠️ Deprecated (Kaldırılacak)
+#### Deprecated (Kaldırılacak)
 - `test_models.py` → `test_models_pytest.py` kullan
 - `test_api.py` → `test_api_pytest.py` kullan
 - `test_serializers.py` → `test_serializers_pytest.py` kullan
@@ -272,9 +319,9 @@ assert_unauthorized(response)
 9. **Use pytest.raises**: Exception testleri için `pytest.raises()` kullan
 10. **Modüler Yapı**: İlgili testler ayrı dosyalarda, utilities paylaşılan klasörde
 
-## ⚠️ Framework Seçimi
+## Framework Seçimi
 
-**✅ Pytest kullanıyoruz** - Tek framework, modüler yapı
+**Pytest kullanıyoruz** - Tek framework, modüler yapı
 
 ### Pytest (Önerilen - Tek Framework)
 ```python
@@ -286,7 +333,7 @@ def test_something(student_user):
     assert student_user.username == 'test'
 ```
 
-### ⚠️ Django TestCase (Deprecated)
+### Django TestCase (Deprecated)
 Django TestCase formatındaki testler deprecated olarak işaretlendi ve gelecekte kaldırılacak.
 Tüm yeni testler pytest formatında yazılmalıdır.
 
@@ -329,3 +376,4 @@ GitHub Actions için örnek:
     file: ./backend/coverage.xml
 ```
 
+© 2025 AcuRate Yazılım
