@@ -19,6 +19,9 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from django.http import JsonResponse
+from rest_framework import permissions
+from drf_yasg.views import get_schema_view
+from drf_yasg import openapi
 
 # Try to import drf_spectacular views (optional dependency)
 try:
@@ -48,11 +51,21 @@ def root_view(request):
         'version': '1.0.0',
         'endpoints': endpoints,
     })
-
+schema_view = get_schema_view(
+   openapi.Info(
+      title="AcuRate API",
+      default_version='v1',
+      description="AcuRate projesi API Dokümantasyonu",
+      contact=openapi.Contact(email="iletisim@acurate.com"),
+   ),
+   public=True,
+   permission_classes=(permissions.AllowAny,),
+)
 urlpatterns = [
     path('', root_view, name='root'),
     path('admin/', admin.site.urls),
     path('api/', include('api.urls')),
+    path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
 ]
 
 # API Documentation (only if drf-spectacular is available and enabled)

@@ -130,6 +130,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt.token_blacklist',  # For token blacklisting
     'corsheaders',
     'api',
+    'drf_yasg',
 ]
 
 # Add drf_spectacular only if available
