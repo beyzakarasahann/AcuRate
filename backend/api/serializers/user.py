@@ -155,6 +155,8 @@ class TeacherCreateSerializer(serializers.ModelSerializer):
 
         from django.core.mail import send_mail
         from django.conf import settings
+        import ssl
+        import os
 
         # Build a friendly display name and make username explicit in the email
         full_name = (user.get_full_name() or "").strip()
@@ -166,6 +168,10 @@ class TeacherCreateSerializer(serializers.ModelSerializer):
         # Send email with credentials (handle SSL/email errors gracefully)
         email_sent = False
         email_error_message = None
+        
+        # Ensure SSL skip is applied if needed (same as StudentCreateSerializer)
+        if os.environ.get("SENDGRID_SKIP_SSL_VERIFY", "").lower() == "true":
+            ssl._create_default_https_context = ssl._create_unverified_context
         
         # Check if SendGrid is configured
         sendgrid_api_key = getattr(settings, "SENDGRID_API_KEY", "")
@@ -183,10 +189,13 @@ class TeacherCreateSerializer(serializers.ModelSerializer):
                     message=(
                         greeting_line
                         + "Your AcuRate teacher account has been created.\n\n"
-                        + f"Username: {user.username}\n"
-                        + f"Temporary password: {temp_password}\n\n"
-                        + "Please log in and change your password immediately. "
-                        + "You will not be allowed to use the system until you update it.\n"
+                        + "LOGIN CREDENTIALS:\n"
+                        + f"Username/Email: {user.username}\n"
+                        + f"Temporary Password: {temp_password}\n\n"
+                        + "IMPORTANT: Please log in using the Username/Email and Temporary Password shown above.\n"
+                        + "After logging in, you will be REQUIRED to change your password immediately.\n"
+                        + "You will not be allowed to use the system until you update it.\n\n"
+                        + "Note: Make sure to copy the password exactly as shown (no extra spaces).\n"
                     ),
                     from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
                     recipient_list=[user.email],
@@ -305,13 +314,14 @@ class StudentCreateSerializer(serializers.ModelSerializer):
                     message=(
                         greeting_line
                         + "Your AcuRate student account has been created.\n\n"
-                        + f"Username: {user.username}\n"
-                        + f"Email: {user.email}\n"
-                        + f"Student ID: {user.student_id}\n"
-                        + f"Temporary password: {temp_password}\n\n"
-                        + "Please log in using your EMAIL ADDRESS or USERNAME and this temporary password.\n"
+                        + "LOGIN CREDENTIALS:\n"
+                        + f"Username/Email: {user.username}\n"
+                        + f"Temporary Password: {temp_password}\n"
+                        + f"Student ID: {user.student_id}\n\n"
+                        + "IMPORTANT: Please log in using the Username/Email and Temporary Password shown above.\n"
                         + "After logging in, you will be REQUIRED to change your password immediately.\n"
-                        + "You will not be able to use the system until you update your password.\n"
+                        + "You will not be able to use the system until you update your password.\n\n"
+                        + "Note: Make sure to copy the password exactly as shown (no extra spaces).\n"
                     ),
                     from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
                     recipient_list=[user.email],
@@ -509,7 +519,7 @@ class LoginSerializer(serializers.Serializer):
     
     def validate(self, data):
         username_or_email = data.get('username', '').strip()
-        password = data.get('password')
+        password = data.get('password', '').strip()  # Strip password to handle copy-paste issues
         
         if not username_or_email or not password:
             raise serializers.ValidationError("Username/email and password are required")

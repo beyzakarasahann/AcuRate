@@ -8,13 +8,16 @@ import os
 import sys
 import django
 
-# Setup Django
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Setup Django - Add backend directory to Python path
+# Script is in backend/scripts/, so we need to go up one level to backend/
+script_dir = os.path.dirname(os.path.abspath(__file__))
+backend_dir = os.path.dirname(script_dir)  # Go up one level to backend/
+sys.path.insert(0, backend_dir)
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
 
 # Load .env BEFORE Django setup
 from dotenv import load_dotenv
-load_dotenv()
+load_dotenv(os.path.join(backend_dir, '.env'))
 
 # Apply SSL skip if needed
 import ssl

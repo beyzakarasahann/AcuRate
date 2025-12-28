@@ -16,8 +16,11 @@ import sys
 import django
 from django.contrib.auth.hashers import make_password
 
-# Setup Django environment
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# Setup Django environment - Add backend directory to Python path
+# Script is in backend/scripts/, so we need to go up one level to backend/
+script_dir = os.path.dirname(os.path.abspath(__file__))
+backend_dir = os.path.dirname(script_dir)  # Go up one level to backend/
+sys.path.insert(0, backend_dir)
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
 django.setup()
 
