@@ -38,6 +38,24 @@ AcuRate, eğitim kurumlarının akademik performansı analiz etmesini, öğrenci
 - **Lucide React** - İkonlar
 - **next-themes** - Dark/Light mode
 
+### Backend
+- **Django 5** - Python web framework
+- **Django REST Framework** - RESTful API
+- **PostgreSQL** - Veritabanı
+- **JWT Authentication** - Token-based auth
+- **Django Admin** - Yönetim paneli
+- **drf-yasg** - Swagger/OpenAPI Dokümantasyonu
+
+## 📖 API Dokümantasyonu (Swagger UI)
+
+- Projede, interaktif API testleri ve canlı endpoint incelemeleri için **Swagger UI** (drf-yasg) kullanılmaktadır.
+- Tüm ana modeller ve fonksiyonlar kapsamlı İngilizce docstring açıklamalarına sahiptir. Her endpoint, parametre, request/response body ve model alanları detaylı olarak dokümante edilmiştir.
+- Swagger arayüzüne erişim: [`http://localhost:8000/swagger/`](http://localhost:8000/swagger/)
+- Swagger ile:
+  - Her endpoint için "Try it out" özelliğiyle doğrudan frontend üzerinden API testleri yapılabilir.
+  - JWT token authentication desteği mevcuttur, kullanıcı girişi sonrası token ekleyerek protected endpoint'ler denenebilir.
+  - Model ve alan açıklamaları API şemasında ayrıntılı olarak görünür.
+- Ayrıca proje düzeyinde otomatik OpenAPI (json/yaml) şeması da indirilebilir.
 ### DevOps & Infrastructure
 - **Docker & Docker Compose** - PostgreSQL containerization
 - **Gunicorn** - Production WSGI server
@@ -673,6 +691,212 @@ python manage.py migrate
 
 Detaylı model bilgileri için: `backend/api/models/` klasörü
 
+### Frontend Hataları
+- **API Connection**: Backend'in çalıştığından emin olun
+- **CORS Errors**: Backend CORS ayarlarını kontrol edin
+- **Authentication**: Token'ların geçerli olduğundan emin olun
+
+## 📝 Son Yapılan Değişiklikler
+
+### 🏗️ Backend Modülerleştirme (Aralık 2024 - v2.1.0) 🆕 YENİ
+
+#### Tamamlanan Modülerleştirmeler
+- ✅ **Models Modülerleştirme**: `models.py` (1143 satır) → `models/` klasörü (8 modül)
+  - User, Department, Course, Outcome, LearningOutcome, Assessment, Achievement, Misc modelleri ayrı dosyalara bölündü
+  - Tüm import'lar `api.models` üzerinden erişilebilir
+  - Circular import'lar önlendi, string referanslar kullanıldı
+
+- ✅ **Views Modülerleştirme**: `views.py` (3602 satır) → `views/` klasörü (8 modül)
+  - Auth, Dashboards, Super Admin, Analytics, Contact, ViewSets, Bulk Operations, File Upload ayrı dosyalara bölündü
+  - Tüm import'lar `api.views` üzerinden erişilebilir
+  - Relative import'lar düzeltildi
+
+- ✅ **Serializers Modülerleştirme**: `serializers.py` (860 satır) → `serializers/` klasörü (8 modül)
+  - User, Department, Course, Outcome, Assessment, Achievement, Dashboard, Contact serializer'ları ayrı dosyalara bölündü
+  - Tüm import'lar `api.serializers` üzerinden erişilebilir
+  - Circular import'lar önlendi, lazy import'lar kullanıldı
+
+- ✅ **Admin Modülerleştirme**: `admin.py` (893 satır) → `admin/` klasörü (8 modül)
+  - User, Outcome, Course, Assessment, Achievement, Contact, Activity admin'leri ayrı dosyalara bölündü
+  - Inline'lar doğru yerlere taşındı
+  - Site customization ve autocomplete config `__init__.py`'de
+
+- ✅ **Tests Modülerleştirme**: `tests.py` (901 satır) → `tests/` klasörü (8 modül)
+  - Base, Models, API, Permissions, Calculations, Serializers, Integration testleri ayrı dosyalara bölündü
+  - Django test runner tüm testleri otomatik buluyor
+  - BaseTestCase ortak test setup'ı sağlıyor
+
+#### Modülerleştirme İstatistikleri
+- **Toplam Modülerleştirilen Satır**: 7,399 satır
+- **Oluşturulan Modül Dosyası**: 40+ dosya
+- **Modül Kategorisi**: 5 ana kategori (Models, Views, Serializers, Admin, Tests)
+- **Geriye Dönük Uyumluluk**: %100 (mevcut kodlar değişiklik gerektirmeden çalışıyor)
+- **Test Durumu**: Tüm modüller Django check ile doğrulandı
+
+#### Avantajlar
+- ✅ Ölçeklenebilirlik: Her kategori ayrı dosyada, yeni özellikler eklemek kolay
+- ✅ Bakım Kolaylığı: İlgili kodlar bir arada, değişiklik yapmak hızlı
+- ✅ Okunabilirlik: Dosyalar daha küçük ve anlaşılır
+- ✅ Organizasyon: İşlevsel kategorilere göre düzenli yapı
+- ✅ Test Edilebilirlik: Her modül bağımsız test edilebilir
+
+### 🆕 Yeni Özellikler (Son Güncellemeler)
+
+#### Super Admin Sistemi (🆕 YENİ)
+- ✅ **Super Admin Paneli**: Program sahibi için özel yönetim paneli
+  - Sistem geneli dashboard (toplam kurum, öğrenci, öğretmen sayıları)
+  - Müşteri kurum yönetimi (ekleme, silme, görüntüleme)
+  - Activity logs görüntüleme ve filtreleme
+  - Contact form talepleri yönetimi
+- ✅ **Özel Login**: Super admin için güvenli giriş sayfası (`/super-admin-x7k9m2p4q1w8r3n6`)
+- ✅ **Role Separation**: Super admin ve kurum admini tamamen ayrı sistemler
+  - Super admin kurum listesinde görünmez
+  - Super admin normal login'den giriş yapamaz
+  - Kurum admini super admin sayfalarına erişemez
+- ✅ **Institution Management**: 
+  - Detaylı kurum oluşturma formu (institution bilgileri + admin bilgileri)
+  - SendGrid ile otomatik email gönderimi (geçici şifre)
+  - Cascade delete: Kurum silindiğinde tüm teacher ve student hesapları da silinir
+  - Super admin hesapları korunur (silinemez)
+- ✅ **Activity Logging**: Tüm sistem aktivitelerinin loglanması
+  - User creation, update, delete
+  - Login aktiviteleri
+  - Course, enrollment, assessment işlemleri
+  - Kurum bazlı filtreleme
+- ✅ **Contact Management**: İletişim formu taleplerinin yönetimi
+  - Durum güncelleme (pending, contacted, demo_scheduled, completed, archived)
+  - Arama ve filtreleme
+  - Detay görüntüleme ve not ekleme
+
+#### Institution Departments & Teacher Management (🆕 YENİ)
+- ✅ **Frontend**:
+  - `/institution/teachers` sayfası tamamen yenilendi (grid kartları, unified search, refresh + add aksiyonları, slide-over form ile öğretmen oluşturma)
+  - `/institution/departments` sayfası eklendi; departman kartları, öğrenci/fakülte/kurs istatistikleri ve departman ekleme paneli
+  - Slide-over panel tasarımı; smooth animasyon, modern form alanları, validation mesajları
+- ✅ **API Client**: Departman analytics endpoint entegrasyonu, öğretmen oluşturma/listeme fonksiyonları, unique key iyileştirmeleri
+
+#### Teacher Hesap Oluşturma & Geçici Şifre Zorunlu Değiştirme Akışı (🆕 YENİ)
+- ✅ **Backend**:
+  - `POST /api/teachers/` endpoint'i ile **Institution** rolü veya admin kullanıcılar, sadece e‑posta ve (opsiyonel) ad/soyad/departman vererek öğretmen hesabı oluşturabiliyor.
+  - Kullanıcı modeli üzerine `is_temporary_password` alanı eklendi; geçici şifre ile oluşturulan tüm öğretmenler için bu flag `True` olarak işaretleniyor.
+  - `TeacherCreateSerializer` öğretmene **SendGrid** üzerinden otomatik e‑posta gönderiyor; mail içeriğinde:
+    - Öğretmenin adı (varsa),
+    - **Kullanıcı adı (email)**,
+    - **Geçici şifre** açıkça belirtiliyor.
+  - `UserDetailSerializer` artık `is_temporary_password` bilgisini döndürüyor; `change_password` endpoint'i şifre değiştiğinde bu flag'i otomatik olarak `False` yapıyor.
+- ✅ **Frontend**:
+  - Login sonrasında, eğer giriş yapan kullanıcı **TEACHER** ve `is_temporary_password === true` ise:
+    - `must_change_password=true` cookie'si set ediliyor,
+    - Kullanıcı doğrudan `/teacher/change-password` sayfasına yönlendiriliyor (dashboard yerine).
+  - Yeni `/teacher/change-password` sayfası eklendi:
+    - Geçici şifreyi **Current Password** olarak alıyor, yeni şifreyi iki kez doğruluyor,
+    - Backend'deki `/api/users/change_password/` endpoint'ine bağlı çalışıyor,
+    - Başarılı olduğunda `must_change_password` cookie'sini siliyor ve öğretmeni `/teacher` dashboard'una yönlendiriyor.
+  - `middleware.ts` güncellendi:
+    - Cookie'de `must_change_password=true` varsa, tüm korumalı route'lar öğretmeni zorunlu olarak `/teacher/change-password` sayfasına yönlendiriyor,
+    - Böylece öğretmen **geçici şifreyi değiştirmeden sisteme devam edemiyor** (tam zorunlu şifre değişimi akışı).
+
+#### Teacher Settings & Dashboard Refresh (🆕 YENİ)
+- ✅ **Teacher Settings**:
+  - Profil bilgileri backend’den okunuyor, kurum tarafından kilitlenen alanlar read-only gösteriliyor
+  - Şifre değiştirme formu API’ye bağlı, hatalar/success mesajları ve loading state’leri eklendi
+- ✅ **Teacher Dashboard**:
+  - Hero bölümü, focus course kartı, quick actions ve quick stats panelleri ile profesyonel SaaS görünümü
+  - Backend verileriyle senkron KPI kartları, graded today metriği
+
+#### Department & Analytics Filter Fixes (🆕 YENİ)
+- ✅ Departman seçeneklerinde benzersiz key kullanımı ve duplicate filtreleme ile React uyarıları giderildi
+- ✅ Institution analytics filtrelerinde unique departman listesi kullanılıyor; dropdown’lar hatasız
+
+### Backend Geliştirmeleri
+- ✅ PostgreSQL veritabanı entegrasyonu
+- ✅ Contact Request modeli ve API endpoint'i
+- ✅ User profile update ve password change endpoint'leri
+- ✅ Student GPA ranking hesaplama
+- ✅ Field error düzeltmeleri (enrollment_date → enrolled_at)
+- ✅ PO Achievement serializer düzeltmeleri
+- ✅ Admin panel iyileştirmeleri
+- ✅ **Course Analytics API endpoints** (🆕 YENİ)
+- ✅ **Kapsamlı test verisi migration'ları** (🆕 YENİ)
+- ✅ **Learning Outcome modeli ve API** (🆕 YENİ)
+  - Teacher'lar için LO yönetimi
+  - Kurs bazlı LO tanımlama
+- ✅ **Assessment feedback_ranges JSONField** (🆕 YENİ)
+  - Otomatik feedback sistemi için score aralıkları
+  - Validation ve error handling
+- ✅ **API hata mesajları iyileştirmeleri** (🆕 YENİ)
+  - Detaylı field-specific hata mesajları
+  - 400/401 hataları için daha açıklayıcı mesajlar
+  - PATCH request desteği (partial update)
+- ✅ **Backend Modülerleştirme** (🆕 YENİ - Aralık 2024)
+  - **Models**: `models.py` (1143 satır) → `models/` (8 modül dosyası)
+  - **Views**: `views.py` (3602 satır) → `views/` (8 modül dosyası)
+  - **Serializers**: `serializers.py` (860 satır) → `serializers/` (8 modül dosyası)
+  - **Admin**: `admin.py` (893 satır) → `admin/` (8 modül dosyası)
+  - **Tests**: `tests.py` (901 satır) → `tests/` (8 modül dosyası)
+  - **Toplam**: 5 büyük dosya modülerleştirildi, 40+ modül dosyası oluşturuldu
+  - **Avantajlar**: Ölçeklenebilirlik, bakım kolaylığı, okunabilirlik, organizasyon
+- ✅ **Swagger/OpenAPI API dokümantasyonu** (Swagger UI arayüzü, OpenAPI şeması, drf-yasg)
+- ✅ **Kapsamlı İngilizce Docstrings (Kod okunabilirliği)**
+
+### Frontend Geliştirmeleri
+- ✅ Tüm mock data'lar kaldırıldı, backend entegrasyonu tamamlandı
+- ✅ Contact sayfası (B2B landing page)
+- ✅ Navbar ve Footer entegrasyonu
+- ✅ Student analytics sayfası (ranking eklendi) - **API entegre**
+- ✅ Student settings sayfası (profil ve şifre değiştirme) - **API entegre**
+- ✅ Student dashboard - **API entegre**
+- ✅ Student courses sayfası - **API entegre**
+- ✅ Student outcomes sayfası - **API entegre**
+- ✅ **Course Analytics sayfaları** (🆕 YENİ) - **API entegre**
+- ✅ Error handling iyileştirmeleri
+- ✅ Empty state'ler ve loading state'ler
+- ✅ Interface güncellemeleri (backend ile uyumlu)
+- ✅ **Teacher Learning Outcome sayfası** (🆕 YENİ)
+  - PO Management → Learning Outcome olarak değiştirildi
+  - Teacher'lar kendi kursları için LO yönetebilir
+- ✅ **Grade Management iyileştirmeleri** (🆕 YENİ)
+  - Due date kaldırıldı (assessment oluşturma ve görüntüleme)
+  - Progress kolonu kaldırıldı
+  - Percentages kolonu kaldırıldı
+  - Max score düzenlenebilir (0-100 arası)
+  - Öğrenci notları ana listede read-only
+  - Edit Grades modal'ı eklendi
+- ✅ **Feedback Ranges Management** (🆕 YENİ)
+  - "Manage Feedback Ranges" modal'ı
+  - Score aralıkları ve feedback mesajları tanımlama
+  - Otomatik feedback atama sistemi
+- ✅ **API client iyileştirmeleri** (🆕 YENİ)
+  - PATCH request desteği (partial update)
+  - Detaylı hata mesajları parsing
+  - Field-specific error handling
+
+### 📊 Entegrasyon Durumu
+
+| Sayfa/Özellik | Durum | Notlar |
+|--------------|-------|--------|
+| Login | ✅ %100 | JWT authentication çalışıyor |
+| Student Dashboard | ✅ %100 | API'den veri çekiyor |
+| Student Analytics | ✅ %100 | API'den veri çekiyor |
+| Student Courses | ✅ %100 | API'den veri çekiyor |
+| Student Outcomes | ✅ %100 | API'den veri çekiyor |
+| Student Course Analytics | ✅ %100 | 🆕 YENİ - API entegre |
+| Student Settings | ✅ %100 | Profil ve şifre güncelleme çalışıyor |
+| Teacher Dashboard | ✅ %100 | API entegre, yeni UI |
+| Teacher Grades | ✅ %100 | Assessment yönetimi, feedback ranges, not girişi |
+| Teacher Learning Outcome | ✅ %100 | 🆕 YENİ - API entegre |
+| Institution Dashboard | ✅ %100 | API entegre |
+| Institution Teachers | ✅ %100 | API entegre |
+| Institution Departments | ✅ %100 | API entegre |
+| Institution Settings | ✅ %100 | API entegre |
+| Institution Change Password | ✅ %100 | API entegre |
+| Super Admin Dashboard | ✅ %100 | 🆕 YENİ - API entegre |
+| Super Admin Institutions | ✅ %100 | 🆕 YENİ - API entegre |
+| Super Admin Activity Logs | ✅ %100 | 🆕 YENİ - API entegre |
+| Super Admin Contact | ✅ %100 | 🆕 YENİ - API entegre |
+| Contact Form | ✅ %100 | API entegre |
+
+## 🤝 Katkıda Bulunma
 ## 🚢 Production Deployment
 
 ### Backend Production Ayarları
@@ -775,6 +999,514 @@ Bu proje özel bir projedir.
 - ✅ Activity Logging
 - ✅ Password security (history, reset tokens)
 - ✅ Contact form ve yönetimi
+- ✅ Activity Logging sistemi 🆕
+- ✅ Institution Management (oluşturma, silme, cascade delete) 🆕
+- ✅ Email Integration (SendGrid) 🆕
+- ✅ Role-based routing ve middleware
+- ✅ Super Admin ve Institution Admin ayrımı 🆕
+- ✅ Dark/Light mode
+- ✅ Responsive design
+- ✅ Swagger/OpenAPI API dokümantasyonu (Swagger UI, drf-yasg)
+- ✅ Kapsamlı İngilizce Docstrings (Kod okunabilirliği)
+
+### Devam Eden Geliştirmeler 🔄
+- 🔄 Unit testler
+- 🔄 Performance optimizasyonu
+- 🔄 Advanced analytics ve raporlama
+
+## 🔍 İncelenmesi ve Geliştirilmesi Gereken Kısımlar
+
+### 🚨 Yüksek Öncelikli Eksikler
+
+#### Backend
+- [ ] **API Dokümantasyonu**: Swagger/OpenAPI entegrasyonu yok
+  - Tüm endpoint'lerin dokümantasyonu eksik
+  - Request/Response örnekleri yok
+  - Authentication gereksinimleri belirtilmemiş
+- [ ] **Unit Testler**: Test coverage %0, hiç test yazılmamış
+  - Model testleri yok
+  - View testleri yok
+  - Serializer testleri yok
+  - Integration testleri yok
+- [ ] **Production Ayarları**: `DEBUG=True` production'da açık, güvenlik riski
+  - DEBUG=False için ayarlar yapılmalı
+  - ALLOWED_HOSTS yapılandırılmalı
+  - SECRET_KEY environment variable olmalı
+  - CORS ayarları production için optimize edilmeli
+- [ ] **Error Handling**: Detaylı hata mesajları ve logging eksik
+  - Structured logging (JSON format) yok
+  - Error tracking (Sentry vb.) entegrasyonu yok
+  - Custom exception handler'lar eksik
+- [ ] **Rate Limiting**: API rate limiting yok, DDoS riski
+  - Django-ratelimit veya benzeri kütüphane eklenmeli
+  - Endpoint bazlı rate limit tanımlamaları yapılmalı
+- [ ] **Input Validation**: Bazı endpoint'lerde yeterli validasyon yok
+  - Email format validation iyileştirilmeli
+  - Phone number validation eksik
+  - File upload validation yok
+- [ ] **File Upload**: Profil resmi ve dosya yükleme endpoint'leri eksik
+  - Profile picture upload endpoint'i yok
+  - File size ve type validation yok
+  - Media file storage yapılandırması eksik
+- [ ] **Bulk Operations**: Toplu not girişi, CSV import/export yok
+  - CSV import endpoint'i yok
+  - Excel export endpoint'i yok
+  - Bulk grade entry endpoint'i yok
+- [ ] **Email Template System**: Email template'leri hardcoded
+  - Django template system kullanılmalı
+  - HTML email template'leri oluşturulmalı
+  - Email preview/test özelliği eklenmeli
+
+#### Frontend - Teacher Paneli
+- [ ] **Teacher Courses**: Detaylı kurs yönetimi sayfası eksik
+  - Kurs detay sayfası yok
+  - Öğrenci listesi görüntüleme eksik
+  - Kurs düzenleme özelliği yok
+- [ ] **Grade Export/Import**: Export ve Import butonları var ama fonksiyonel değil
+  - CSV export fonksiyonu yok
+  - Excel export fonksiyonu yok
+  - CSV import fonksiyonu yok
+  - Import validation ve error handling yok
+- [ ] **Teacher Analytics**: Gelişmiş analitik özellikleri eksik
+  - Öğrenci performans karşılaştırması yok
+  - Sınıf ortalaması trend analizi yok
+  - Assessment başarı oranları detaylı görüntülenemiyor
+
+#### Frontend - Institution Paneli
+- [ ] **Institution Reports**: Export functionality eksik
+  - PDF rapor export yok
+  - Excel rapor export yok
+  - Özelleştirilebilir rapor şablonları yok
+- [ ] **Institution Students**: Öğrenci yönetimi sayfası eksik
+  - Öğrenci listesi görüntüleme yok
+  - Öğrenci detay sayfası yok
+  - Toplu öğrenci işlemleri yok
+- [ ] **Institution Courses**: Kurs yönetimi sayfası eksik
+  - Tüm kurum kurslarını görüntüleme yok
+  - Kurs oluşturma/düzenleme yok
+  - Kurs atama yönetimi yok
+
+#### Frontend - Super Admin Paneli
+- [ ] **Super Admin Users**: Kullanıcı yönetimi sayfası eksik
+  - Tüm kullanıcıları görüntüleme yok
+  - Kullanıcı detay sayfası yok
+  - Kullanıcı arama ve filtreleme yok
+- [ ] **Super Admin Reports**: Sistem geneli raporlar eksik
+  - Sistem sağlık raporu yok
+  - Kullanım istatistikleri raporu yok
+  - Export functionality yok
+- [ ] **Super Admin Settings**: Sistem ayarları sayfası eksik
+  - Email ayarları yönetimi yok
+  - Sistem konfigürasyonu yok
+  - Backup/restore yönetimi yok
+
+### ⚠️ Orta Öncelikli İyileştirmeler
+
+#### UI/UX
+- [ ] **Toast Notifications**: Başarı/hata bildirimleri için toast sistemi yok
+  - react-hot-toast veya benzeri kütüphane eklenmeli
+  - Success, error, warning, info toast tipleri olmalı
+  - Auto-dismiss ve manual dismiss özellikleri olmalı
+- [ ] **Loading Skeletons**: Skeleton screens yerine basit spinner kullanılıyor
+  - Skeleton component'leri oluşturulmalı
+  - Her sayfa için özel skeleton tasarımları yapılmalı
+  - Shimmer effect eklenmeli
+- [ ] **Empty States**: Bazı sayfalarda empty state tasarımları eksik
+  - İllustrasyonlu empty state component'leri olmalı
+  - Action button'ları ile empty state'ler iyileştirilmeli
+  - Context-aware mesajlar eklenmeli
+- [ ] **Confirmation Modals**: Silme/önemli işlemler için onay modal'ları eksik
+  - Reusable confirmation modal component'i olmalı
+  - Farklı action tipleri için özelleştirilebilir modal'lar olmalı
+  - Keyboard shortcut desteği (Enter/Escape) eklenmeli
+- [ ] **Form Validation**: Client-side form validasyon mesajları eksik
+  - Real-time validation feedback yok
+  - Field-level error mesajları iyileştirilmeli
+  - Form submission öncesi validation kontrolü eksik
+- [ ] **Accessibility**: ARIA labels, keyboard navigation eksik
+  - Tüm interactive element'ler için ARIA labels eklenmeli
+  - Keyboard navigation (Tab, Enter, Escape) desteklenmeli
+  - Screen reader uyumluluğu test edilmeli
+  - Focus management iyileştirilmeli
+- [ ] **Mobile Responsiveness**: Bazı sayfalar mobilde test edilmemiş
+  - Tüm sayfalar mobil cihazlarda test edilmeli
+  - Touch gesture desteği eklenmeli
+  - Mobile-specific UI iyileştirmeleri yapılmalı
+- [ ] **Data Tables**: Gelişmiş tablo özellikleri eksik
+  - Sorting, filtering, pagination iyileştirilmeli
+  - Column resizing yok
+  - Column visibility toggle yok
+  - Export to CSV/Excel özelliği yok
+
+#### Backend Performance
+- [ ] **Database Query Optimization**: N+1 query problemleri olabilir
+  - `select_related` ve `prefetch_related` kullanımı artırılmalı
+  - Query profiling yapılmalı
+  - Slow query log'ları analiz edilmeli
+- [ ] **Caching**: Redis cache entegrasyonu yok
+  - Django-cacheops veya django-redis eklenmeli
+  - Dashboard verileri cache'lenmeli
+  - API response cache'leme yapılmalı
+  - Cache invalidation stratejisi oluşturulmalı
+- [ ] **Pagination**: Bazı list endpoint'lerinde pagination eksik
+  - Tüm list endpoint'leri paginate edilmeli
+  - Cursor-based pagination düşünülmeli (büyük veri setleri için)
+  - Page size limit'leri belirlenmeli
+- [ ] **Database Indexing**: Performans için index'ler optimize edilmeli
+  - Foreign key'ler için index'ler kontrol edilmeli
+  - Sık kullanılan query field'ları için index'ler eklenmeli
+  - Composite index'ler optimize edilmeli
+- [ ] **Database Connection Pooling**: Connection pool yönetimi iyileştirilmeli
+  - PgBouncer veya benzeri connection pooler kullanılmalı
+  - Connection timeout ayarları optimize edilmeli
+- [ ] **Background Tasks**: Uzun süren işlemler için async task sistemi yok
+  - Celery veya Django-Q entegrasyonu yapılmalı
+  - Email gönderimi async yapılmalı
+  - Report generation async yapılmalı
+
+#### Frontend Performance
+- [ ] **Data Caching**: React Query veya SWR kullanılmıyor
+  - API response cache'leme yok
+  - Stale-while-revalidate pattern uygulanmamış
+  - Optimistic updates yok
+  - Background refetching yok
+- [ ] **Code Splitting**: Lazy loading eksik, bundle size büyük olabilir
+  - Route-based code splitting yapılmalı
+  - Component lazy loading eklenmeli
+  - Dynamic import'lar kullanılmalı
+  - Bundle analyzer ile analiz yapılmalı
+- [ ] **Image Optimization**: Next.js Image component kullanılmıyor
+  - Tüm img tag'leri Next.js Image component'i ile değiştirilmeli
+  - Image lazy loading eklenmeli
+  - Responsive image srcset'leri kullanılmalı
+- [ ] **API Request Optimization**: Gereksiz API çağrıları olabilir
+  - Request deduplication yapılmalı
+  - Batch request'ler düşünülmeli
+  - Debouncing/throttling eklenmeli
+  - Request cancellation implementasyonu yapılmalı
+- [ ] **State Management**: Global state management eksik
+  - Zustand veya Jotai gibi hafif state management eklenmeli
+  - Context API overuse'u azaltılmalı
+  - State persistence (localStorage) eklenmeli
+
+### 📋 Düşük Öncelikli Özellikler
+
+#### Advanced Features
+- [ ] **Real-time Updates**: WebSocket entegrasyonu yok
+  - Django Channels veya Socket.io entegrasyonu yapılmalı
+  - Live grade updates
+  - Real-time notifications
+  - Collaborative features (birden fazla teacher aynı anda not girebilir)
+- [ ] **Notification System**: Bildirim sistemi eksik
+  - In-app notification center yok
+  - Push notification desteği yok
+  - Email notification preferences yok
+  - Notification history görüntüleme yok
+- [ ] **Search & Filters**: Gelişmiş arama ve filtreleme eksik
+  - Full-text search yok
+  - Advanced filter builder yok
+  - Saved filters yok
+  - Search history yok
+- [ ] **Data Export**: PDF, Excel, CSV export fonksiyonları eksik
+  - PDF report generation yok
+  - Excel export with formatting yok
+  - CSV export with custom columns yok
+  - Scheduled report export yok
+- [ ] **Multi-language Support**: i18n entegrasyonu yok
+  - next-intl veya react-i18next entegrasyonu yapılmalı
+  - Dil seçimi UI'ı eklenmeli
+  - Tüm string'ler translate edilmeli
+  - RTL dil desteği düşünülmeli
+- [ ] **Advanced Analytics**: Karşılaştırma raporları, trend analizi eksik
+  - Year-over-year karşılaştırmalar yok
+  - Cohort analysis yok
+  - Predictive analytics yok
+  - Custom metric tanımlama yok
+- [ ] **Custom Report Builder**: Özel rapor oluşturma özelliği yok
+  - Drag-and-drop report builder yok
+  - Custom chart types yok
+  - Report template library yok
+  - Scheduled report delivery yok
+- [ ] **Email Notifications**: Email bildirim sistemi yok
+  - Grade notification emails yok
+  - Assignment reminder emails yok
+  - Weekly summary emails yok
+  - Customizable email preferences yok
+- [ ] **Calendar Integration**: Takvim entegrasyonu yok
+  - Google Calendar sync yok
+  - Outlook Calendar sync yok
+  - Assignment due dates calendar view yok
+  - Event reminders yok
+- [ ] **File Management**: Dosya yönetim sistemi eksik
+  - Assignment file upload yok
+  - Student submission file upload yok
+  - File versioning yok
+  - File sharing yok
+
+#### Security & Compliance
+- [ ] **Security Audit**: Güvenlik denetimi yapılmamış
+  - Penetration testing yapılmamış
+  - Vulnerability scanning yapılmamış
+  - Security headers kontrol edilmeli (CSP, HSTS, vb.)
+  - Dependency security audit yapılmalı (npm audit, pip-audit)
+- [ ] **XSS Protection**: Input sanitization kontrol edilmeli
+  - DOMPurify veya benzeri sanitization library eklenmeli
+  - Rich text editor'ler için XSS protection yapılmalı
+  - Output encoding kontrol edilmeli
+- [ ] **SQL Injection**: ORM kullanılıyor ama ek kontroller gerekebilir
+  - Raw SQL query'ler kontrol edilmeli
+  - Parameterized query kullanımı doğrulanmalı
+  - Database user permissions minimize edilmeli
+- [ ] **CSRF Protection**: Django CSRF var ama frontend'de kontrol edilmeli
+  - CSRF token'ların tüm POST/PUT/DELETE request'lerde gönderildiği doğrulanmalı
+  - Double-submit cookie pattern düşünülmeli
+- [ ] **Password Policy**: Şifre güvenlik kuralları eksik
+  - Minimum password length enforcement yok
+  - Password complexity requirements yok
+  - Password expiration policy yok
+  - Password history (önceden kullanılan şifreler) yok
+- [ ] **Audit Logging**: Kullanıcı aktivite logları eksik
+  - Sensitive action logging eksik (şifre değiştirme, silme işlemleri)
+  - Login attempt logging yok
+  - IP address tracking yok
+  - Session management logging yok
+- [ ] **Data Encryption**: Hassas veri şifreleme eksik
+  - Database encryption at rest yok
+  - Sensitive field encryption yok
+  - Backup encryption yok
+- [ ] **GDPR Compliance**: GDPR uyumluluğu eksik
+  - Data export (user data download) yok
+  - Data deletion (right to be forgotten) yok
+  - Consent management yok
+  - Privacy policy integration yok
+
+#### DevOps & Deployment
+- [ ] **CI/CD Pipeline**: Otomatik test ve deploy pipeline yok
+  - GitHub Actions veya GitLab CI yapılandırması yok
+  - Automated testing pipeline yok
+  - Automated deployment pipeline yok
+  - Pre-deployment checks yok
+- [ ] **Docker**: Containerization yok
+  - Dockerfile'lar oluşturulmalı (backend ve frontend için)
+  - docker-compose.yml ile local development setup yapılmalı
+  - Multi-stage builds optimize edilmeli
+  - Docker image registry setup yapılmalı
+- [ ] **Environment Management**: Production/staging environment setup eksik
+  - Environment variable management yok
+  - Secrets management (Vault, AWS Secrets Manager) yok
+  - Environment-specific configuration yok
+  - Feature flags sistemi yok
+- [ ] **Monitoring**: Application monitoring (Sentry, LogRocket vb.) yok
+  - Error tracking (Sentry) entegrasyonu yok
+  - Performance monitoring (APM) yok
+  - User session replay yok
+  - Uptime monitoring yok
+- [ ] **Backup Strategy**: Veritabanı yedekleme stratejisi yok
+  - Automated database backup yok
+  - Backup retention policy yok
+  - Backup restoration testi yapılmamış
+  - Disaster recovery plan yok
+- [ ] **Logging**: Centralized logging sistemi yok
+  - ELK stack veya benzeri logging solution yok
+  - Log aggregation yok
+  - Log retention policy yok
+  - Log analysis tools yok
+- [ ] **Infrastructure as Code**: IaC yapılandırması yok
+  - Terraform veya CloudFormation yapılandırması yok
+  - Infrastructure versioning yok
+  - Automated infrastructure provisioning yok
+
+### 🐛 Bilinen Sorunlar ve TODO'lar
+
+#### Kod İçinde TODO İşaretleri
+- `backend/api/views.py` - Bazı endpoint'lerde TODO yorumları var
+- GPA hesaplama notu (4.0 scale conversion) - Farklı grading system'leri için düşünülmeli
+
+#### Eksik Sayfalar ve Özellikler
+- `/teacher/courses` - Detaylı kurs yönetimi sayfası eksik
+- `/institution/reports` - Reports sayfası eksik
+- `/institution/students` - Öğrenci yönetimi sayfası eksik
+- `/institution/courses` - Kurs yönetimi sayfası eksik
+- `/super-admin/users` - Kullanıcı yönetimi sayfası eksik
+- `/super-admin/settings` - Sistem ayarları sayfası eksik
+- `/super-admin/reports` - Sistem raporları sayfası eksik
+
+#### API Endpoint Eksikleri
+- [ ] `GET /api/institution/students/` - Kurum öğrenci listesi
+- [ ] `GET /api/institution/courses/` - Kurum kurs listesi
+- [ ] `POST /api/institution/courses/` - Kurs oluşturma
+- [ ] `GET /api/super-admin/users/` - Tüm kullanıcılar listesi
+- [ ] `GET /api/super-admin/reports/` - Sistem raporları
+- [ ] `POST /api/export/grades/` - Not export endpoint'i
+- [ ] `POST /api/import/grades/` - Not import endpoint'i
+- [ ] `POST /api/export/report/` - Rapor export endpoint'i
+- [ ] `GET /api/notifications/` - Bildirimler endpoint'i
+- [ ] `POST /api/files/upload/` - Dosya yükleme endpoint'i
+
+#### Database Schema İyileştirmeleri
+- [ ] **Soft Delete**: User ve diğer modeller için soft delete eklenmeli
+- [ ] **Versioning**: Model versioning (audit trail) eklenmeli
+- [ ] **Full-text Search**: PostgreSQL full-text search index'leri eklenmeli
+- [ ] **Partitioning**: Büyük tablolar için partitioning düşünülmeli (activity_logs, student_grades)
+- [ ] **Materialized Views**: Sık kullanılan complex query'ler için materialized view'lar oluşturulmalı
+
+#### Frontend Component Eksikleri
+- [ ] **DataTable Component**: Reusable, feature-rich data table component yok
+- [ ] **Form Builder**: Dynamic form builder component yok
+- [ ] **Chart Library Wrapper**: Chart.js wrapper component'leri eksik
+- [ ] **Date Range Picker**: Date range picker component yok
+- [ ] **File Upload Component**: Drag-and-drop file upload component yok
+- [ ] **Rich Text Editor**: Rich text editor component yok
+- [ ] **PDF Viewer**: PDF görüntüleme component'i yok
+- [ ] **Print Preview**: Print-friendly view component'leri yok
+
+### 📊 Öncelik Matrisi
+
+| Öncelik | Kategori | Özellik | Durum |
+|---------|----------|---------|-------|
+| 🔴 Yüksek | Backend | API Dokümantasyonu | ❌ Eksik |
+| 🔴 Yüksek | Backend | Unit Testler | ❌ Eksik |
+| 🔴 Yüksek | Backend | Production Security | ⚠️ DEBUG=True |
+| 🔴 Yüksek | Frontend | Institution API Entegrasyonu | ❌ Mock Data |
+| 🔴 Yüksek | Frontend | Teacher PO Management API | ❌ Mock Data |
+| 🟡 Orta | UI/UX | Toast Notifications | ❌ Eksik |
+| 🟡 Orta | UI/UX | Loading Skeletons | ⚠️ Basit Spinner |
+| 🟡 Orta | Performance | Caching (Redis) | ❌ Eksik |
+| 🟡 Orta | Performance | Database Optimization | ⚠️ İyileştirilebilir |
+| 🟢 Düşük | Advanced | Real-time Updates | ❌ Eksik |
+| 🟢 Düşük | Advanced | Email Notifications | ❌ Eksik |
+| 🟢 Düşük | DevOps | CI/CD Pipeline | ❌ Eksik |
+| 🟢 Düşük | DevOps | Docker | ❌ Eksik |
+
+### 🎯 Önerilen Geliştirme Sırası
+
+#### Phase 1 (Kritik - Hemen Yapılmalı) 🚨
+**Süre Tahmini: 2-3 hafta**
+
+1. **Production Security**
+   - [ ] DEBUG=False ayarları
+   - [ ] ALLOWED_HOSTS yapılandırması
+   - [ ] SECRET_KEY environment variable
+   - [ ] CORS production ayarları
+   - [ ] Security headers (CSP, HSTS)
+
+2. **API Dokümantasyonu**
+   - [ ] Swagger/OpenAPI entegrasyonu
+   - [ ] Tüm endpoint'lerin dokümantasyonu
+   - [ ] Request/Response örnekleri
+   - [ ] Authentication gereksinimleri
+
+3. **Temel Unit Testler**
+   - [ ] Model testleri (%80 coverage hedefi)
+   - [ ] View testleri (kritik endpoint'ler)
+   - [ ] Serializer testleri
+
+4. **Error Handling**
+   - [ ] Structured logging (JSON format)
+   - [ ] Custom exception handler'lar
+   - [ ] Error tracking (Sentry) entegrasyonu
+
+#### Phase 2 (Yüksek Öncelik - 1-2 Ay İçinde) 🔴
+**Süre Tahmini: 4-6 hafta**
+
+1. **Eksik Sayfalar**
+   - [ ] Teacher Courses sayfası
+   - [ ] Institution Students sayfası
+   - [ ] Institution Courses sayfası
+   - [ ] Super Admin Users sayfası
+   - [ ] Super Admin Reports sayfası
+
+2. **Export/Import Fonksiyonları**
+   - [ ] Grade CSV/Excel export
+   - [ ] Grade CSV import
+   - [ ] Report PDF/Excel export
+   - [ ] Bulk operations API endpoint'leri
+
+3. **Rate Limiting**
+   - [ ] Django-ratelimit entegrasyonu
+   - [ ] Endpoint bazlı rate limit tanımlamaları
+   - [ ] IP-based rate limiting
+
+4. **File Upload**
+   - [ ] Profile picture upload
+   - [ ] Assignment file upload
+   - [ ] File validation ve storage
+
+#### Phase 3 (Orta Öncelik - 2-3 Ay İçinde) 🟡
+**Süre Tahmini: 6-8 hafta**
+
+1. **UI/UX İyileştirmeleri**
+   - [ ] Toast notification sistemi (react-hot-toast)
+   - [ ] Loading skeleton component'leri
+   - [ ] Empty state component'leri
+   - [ ] Confirmation modal component'leri
+   - [ ] Real-time form validation
+
+2. **Performance Optimizasyonu**
+   - [ ] Redis cache entegrasyonu
+   - [ ] Database query optimization (N+1 fixes)
+   - [ ] Code splitting ve lazy loading
+   - [ ] Image optimization (Next.js Image)
+   - [ ] API request optimization
+
+3. **Data Caching**
+   - [ ] React Query veya SWR entegrasyonu
+   - [ ] API response caching
+   - [ ] Optimistic updates
+
+4. **Accessibility**
+   - [ ] ARIA labels ekleme
+   - [ ] Keyboard navigation
+   - [ ] Screen reader uyumluluğu
+   - [ ] Focus management
+
+#### Phase 4 (Düşük Öncelik - 3-6 Ay İçinde) 🟢
+**Süre Tahmini: 8-12 hafta**
+
+1. **Advanced Features**
+   - [ ] Real-time updates (WebSocket)
+   - [ ] Notification system
+   - [ ] Advanced search & filters
+   - [ ] Custom report builder
+   - [ ] Calendar integration
+
+2. **Multi-language Support**
+   - [ ] i18n entegrasyonu
+   - [ ] Dil seçimi UI
+   - [ ] String translation
+
+3. **Background Tasks**
+   - [ ] Celery entegrasyonu
+   - [ ] Async email sending
+   - [ ] Scheduled report generation
+
+4. **DevOps & Infrastructure**
+   - [ ] Docker containerization
+   - [ ] CI/CD pipeline
+   - [ ] Monitoring (Sentry, APM)
+   - [ ] Backup strategy
+   - [ ] Infrastructure as Code
+
+#### Phase 5 (Gelecek Özellikler - 6+ Ay) 🔮
+**Süre Tahmini: 12+ hafta**
+
+1. **Security & Compliance**
+   - [ ] Security audit
+   - [ ] GDPR compliance
+   - [ ] Data encryption
+   - [ ] Password policy enforcement
+
+2. **Advanced Analytics**
+   - [ ] Predictive analytics
+   - [ ] Machine learning integration
+   - [ ] Custom metrics
+   - [ ] Cohort analysis
+
+3. **Enterprise Features**
+   - [ ] Multi-tenant support
+   - [ ] SSO integration
+   - [ ] Advanced role management
+   - [ ] Audit trail system
 - ✅ File upload API endpoint'leri
 - ✅ Bulk operations API endpoint'leri
 
@@ -786,4 +1518,4 @@ Bu proje özel bir projedir.
 
 ---
 
-**AcuRate** - Academic Performance Analysis System © 2024
+**AcuRate** - Academic Performance Analysis System © 2025
