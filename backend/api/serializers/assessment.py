@@ -224,6 +224,24 @@ class StudentGradeSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'percentage', 'created_at', 'updated_at']
     
+    def validate_score(self, value):
+        """
+        SECURITY: Validate that score/grade is within acceptable range.
+        Score must be between 0 and 100 (inclusive).
+        """
+        if value is None:
+            return value
+        
+        # Convert to float for comparison if it's a Decimal
+        score_value = float(value)
+        
+        if score_value < 0 or score_value > 100:
+            raise serializers.ValidationError(
+                "Not değeri 0 ile 100 arasında olmalıdır."
+            )
+        
+        return value
+    
     def get_percentage(self, obj):
         """Calculate percentage score"""
         if obj.assessment.max_score > 0:
