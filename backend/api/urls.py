@@ -29,6 +29,7 @@ from .views import (
 )
 from .views.file_upload import upload_profile_picture, upload_file
 from .views.bulk_operations import bulk_import_students, bulk_export_grades, bulk_import_grades
+from .views.bulk_views import BulkStudentImportView
 from .views.health import health_check, readiness_check, liveness_check
 
 # Create router for ViewSets
@@ -103,6 +104,9 @@ urlpatterns = [
     path('bulk/import/students/', bulk_import_students, name='bulk-import-students'),
     path('bulk/import/grades/', bulk_import_grades, name='bulk-import-grades'),
     path('bulk/export/grades/', bulk_export_grades, name='bulk-export-grades'),
+    
+    # Class-based bulk import endpoint (new service layer approach)
+    path('students/import/', BulkStudentImportView.as_view(), name='student-import'),
     
     # Router URLs (CRUD endpoints)
     path('', include(router.urls)),
