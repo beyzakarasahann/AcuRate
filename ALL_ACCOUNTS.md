@@ -30,10 +30,10 @@ python reset_superadmin_password.py
 
 ## 🟡 TEACHER
 
-### 1. Teacher 1
-- **Username:** `teacher1`
-- **Email:** `teacher1@acurate.edu`
-- **Password:** `teacher123`
+### 1. Teacher 1 (Ahmet Bulut)
+- **Username:** `ahmet.bulut`
+- **Email:** `ahmet.bulut@acurate.edu`
+- **Password:** `ahmet123`
 - **Login URL:** `http://localhost:3000/login`
 
 ### 2. Teacher 2
@@ -49,7 +49,7 @@ python reset_superadmin_password.py
 ### 1. Student 1 (Beyza)
 - **Username:** `beyza2`
 - **Email:** `beyza2@student.acurate.edu`
-- **Password:** `student123`
+- **Password:** `beyza123`
 - **Student ID:** `2021001`
 - **Login URL:** `http://localhost:3000/login`
 
