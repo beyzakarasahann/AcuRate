@@ -2,7 +2,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { BookOpen, Users, Award, TrendingUp, ArrowUpRight, ArrowDownRight, AlertTriangle, FileText, BarChart3, Clock, Target, Loader2, PenSquare, MessageCircle, CalendarDays, Sparkles } from 'lucide-react';
+import { BookOpen, Users, Award, TrendingUp, ArrowUpRight, ArrowDownRight, AlertTriangle, FileText, BarChart3, Target, Loader2, PenSquare, MessageCircle, CalendarDays, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { useThemeColors } from '@/hooks/useThemeColors';
@@ -310,15 +310,6 @@ export default function TeacherHomePage() {
     { title: 'Total Students', value: totalStudents > 0 ? totalStudents.toString() : '-', change: '', trend: 'up', icon: Users, color: 'from-purple-500 to-pink-500' }
   ];
 
-  // Recent activities from recent submissions (if available)
-  const recentSubmissions = (dashboardData as any).recent_submissions || [];
-  const recentActivities = recentSubmissions.slice(0, 3).map((submission: any) => ({
-    type: 'grade' as const,
-    title: `Graded ${submission.assessment_title || 'Assessment'}`,
-    time: submission.graded_at ? new Date(submission.graded_at).toLocaleString() : '-',
-    icon: FileText,
-    color: 'blue' as const
-  }));
 
 
   // Calculate Average LO Outcomes
@@ -777,7 +768,7 @@ export default function TeacherHomePage() {
                 </motion.div>
             </div>
 
-            {/* Sağ Sütun (Average LO Outcomes ve Recent Activities) */}
+            {/* Sağ Sütun (Average LO Outcomes) */}
             <div className="space-y-6">
 
                 {/* Average LO Outcomes Doughnut Chart */}
@@ -808,52 +799,6 @@ export default function TeacherHomePage() {
                                         ? 'No LO achievement data available' 
                                         : 'Calculating LO averages...'}
                                 </p>
-                            </div>
-                        )}
-                    </div>
-                </motion.div>
-                
-                {/* Recent Activities */}
-                <motion.div
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.5 }}
-                    className={`backdrop-blur-xl ${themeClasses.card} p-6 shadow-2xl`}
-                >
-                    <h2 className={`text-xl font-bold ${whiteTextClass} mb-4 flex items-center gap-2`}>
-                        <Clock className="w-5 h-5 text-blue-500" />
-                        Recent Activities
-                    </h2>
-                    <div className="space-y-3">
-                        {recentActivities.length > 0 ? (
-                            recentActivities.map((activity: { type: string; title: string; time: string; icon: any; color: string }, index: number) => {
-                                const colorClasses = {
-                                    blue: 'bg-blue-500/10 border-blue-500/30 text-blue-700 dark:text-blue-300',
-                                    green: 'bg-green-500/10 border-green-500/30 text-green-700 dark:text-green-300',
-                                    orange: 'bg-orange-500/10 border-orange-500/30 text-orange-700 dark:text-orange-300',
-                                };
-                                return (
-                                    <motion.div
-                                        key={index}
-                                        initial={{ opacity: 0, x: 20 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        transition={{ delay: 0.6 + index * 0.1 }}
-                                        whileHover={{ scale: 1.02 }}
-                                        className={`p-3 rounded-xl border ${colorClasses[activity.color as keyof typeof colorClasses]} ${isDark ? 'hover:bg-white/10' : 'hover:bg-gray-100'} transition-all cursor-pointer`}
-                                    >
-                                        <div className="flex items-start gap-3">
-                                            <activity.icon className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                                            <div className="flex-1">
-                                                <h3 className={`font-medium text-sm mb-1 ${whiteTextClass}`}>{activity.title}</h3>
-                                                <span className="text-xs text-gray-500">{activity.time}</span>
-                                            </div>
-                                        </div>
-                                    </motion.div>
-                                );
-                            })
-                        ) : (
-                            <div className="text-center py-4">
-                                <p className={secondaryTextClass}>-</p>
                             </div>
                         )}
                     </div>
