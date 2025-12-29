@@ -57,6 +57,11 @@ from .bulk_operations import (
     bulk_import_grades,
 )
 
+# Bulk views (class-based)
+from .bulk_views import (
+    BulkStudentImportView,
+)
+
 # File upload views
 from .file_upload import (
     upload_profile_picture,
@@ -123,6 +128,8 @@ __all__ = [
     'bulk_import_students',
     'bulk_export_grades',
     'bulk_import_grades',
+    # Bulk Views (class-based)
+    'BulkStudentImportView',
     # File Upload
     'upload_profile_picture',
     'upload_file',

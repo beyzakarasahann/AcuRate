@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>Yeni Not Bildirimi - AcuRate</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7fa; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;">
+    <!-- Outer wrapper table -->
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f4f7fa;">
+        <tr>
+            <td style="padding: 40px 20px;">
+                <!-- Inner content table -->
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); overflow: hidden;">
+                    
+                    <!-- Header Section -->
+                    <tr>
+                        <td style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 30px; text-align: center;">
+                            <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 700; letter-spacing: -0.5px;">
+                                🎓 AcuRate
+                            </h1>
+                            <p style="margin: 10px 0 0 0; color: rgba(255, 255, 255, 0.9); font-size: 14px; font-weight: 400;">
+                                Academic Performance Analysis System
+                            </p>
+                        </td>
+                    </tr>
+                    
+                    <!-- Notification Banner -->
+                    <tr>
+                        <td style="padding: 40px 30px 20px 30px; text-align: center;">
+                            <div style="font-size: 64px; margin-bottom: 20px;">📝</div>
+                            <h2 style="margin: 0; color: #1a1a2e; font-size: 24px; font-weight: 600;">
+                                Yeni Not Girişi
+                            </h2>
+                            <p style="margin: 10px 0 0 0; color: #64748b; font-size: 14px;">
+                                Bir değerlendirme notunuz sisteme eklendi!
+                            </p>
+                        </td>
+                    </tr>
+                    
+                    <!-- Main Content -->
+                    <tr>
+                        <td style="padding: 0 30px 30px 30px;">
+                            
+                            <!-- Grade Card -->
+                            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 20px 0;">
+                                <tr>
+                                    <td style="padding: 25px; background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border-radius: 12px; border: 1px solid #86efac;">
+                                        
+                                        <!-- Course Name -->
+                                        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin-bottom: 20px;">
+                                            <tr>
+                                                <td>
+                                                    <p style="margin: 0 0 5px 0; color: #64748b; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">
+                                                        Ders
+                                                    </p>
+                                                    <p style="margin: 0; color: #1e293b; font-size: 18px; font-weight: 600;">
+                                                        📚 {{ course_name }}
+                                                    </p>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                        
+                                        <!-- Assessment Type -->
+                                        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin-bottom: 20px;">
+                                            <tr>
+                                                <td>
+                                                    <p style="margin: 0 0 5px 0; color: #64748b; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">
+                                                        Değerlendirme Türü
+                                                    </p>
+                                                    <p style="margin: 0; color: #1e293b; font-size: 16px; font-weight: 500;">
+                                                        📋 {{ assessment_type }}
+                                                    </p>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                        
+                                        <!-- Grade Display -->
+                                        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                                            <tr>
+                                                <td style="text-align: center; padding: 20px 0;">
+                                                    <p style="margin: 0 0 10px 0; color: #64748b; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">
+                                                        Notunuz
+                                                    </p>
+                                                    <div style="display: inline-block; padding: 20px 40px; background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); border-radius: 12px; box-shadow: 0 4px 14px rgba(34, 197, 94, 0.3);">
+                                                        <span style="color: #ffffff; font-size: 36px; font-weight: 700;">
+                                                            {{ grade }}
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                        
+                                    </td>
+                                </tr>
+                            </table>
+                            
+                            <!-- Info Box -->
+                            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 25px 0;">
+                                <tr>
+                                    <td style="padding: 20px; background-color: #f0f9ff; border-radius: 8px; border-left: 4px solid #0ea5e9;">
+                                        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                                            <tr>
+                                                <td width="30" style="vertical-align: top;">
+                                                    <span style="font-size: 20px;">💡</span>
+                                                </td>
+                                                <td style="padding-left: 10px;">
+                                                    <strong style="color: #0369a1; font-size: 14px;">Bilgi</strong>
+                                                    <p style="margin: 5px 0 0 0; color: #0c4a6e; font-size: 13px; line-height: 1.5;">
+                                                        Detaylı performans analizinizi ve diğer notlarınızı 
+                                                        görmek için AcuRate paneline giriş yapabilirsiniz.
+                                                    </p>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+                            
+                            <!-- CTA Button -->
+                            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin-top: 30px;">
+                                <tr>
+                                    <td style="text-align: center;">
+                                        <a href="#" style="display: inline-block; padding: 14px 40px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #ffffff; text-decoration: none; font-size: 16px; font-weight: 600; border-radius: 8px; box-shadow: 0 4px 14px rgba(102, 126, 234, 0.4);">
+                                            📊 Detaylı Analizi Gör
+                                        </a>
+                                    </td>
+                                </tr>
+                            </table>
+                            
+                            <!-- Performance Summary -->
+                            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin-top: 30px;">
+                                <tr>
+                                    <td style="padding: 20px; background-color: #faf5ff; border-radius: 8px;">
+                                        <h3 style="margin: 0 0 15px 0; color: #6b21a8; font-size: 14px; font-weight: 600; text-align: center;">
+                                            🎯 Öğrenme Çıktılarınızı Takip Edin
+                                        </h3>
+                                        <p style="margin: 0; color: #7c3aed; font-size: 13px; line-height: 1.6; text-align: center;">
+                                            AcuRate ile hangi öğrenme çıktılarında güçlü olduğunuzu ve 
+                                            hangi alanlarda gelişim gösterebileceğinizi keşfedin.
+                                        </p>
+                                    </td>
+                                </tr>
+                            </table>
+                            
+                        </td>
+                    </tr>
+                    
+                    <!-- Footer Section -->
+                    <tr>
+                        <td style="background-color: #f8fafc; padding: 30px; text-align: center; border-top: 1px solid #e2e8f0;">
+                            <p style="margin: 0 0 10px 0; color: #718096; font-size: 13px;">
+                                Bu bildirim, not sisteme girildiğinde otomatik olarak gönderilmiştir.
+                            </p>
+                            <p style="margin: 0; color: #a0aec0; font-size: 12px;">
+                                © 2025 AcuRate System. Tüm hakları saklıdır.
+                            </p>
+                        </td>
+                    </tr>
+                    
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
+

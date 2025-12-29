@@ -8,6 +8,8 @@ from django.db.models import Q
 import secrets
 import string
 import logging
+import re
+import socket
 from ..models import (
     User, Department, ProgramOutcome, Course, CoursePO, 
     Enrollment, Assessment, StudentGrade, StudentPOAchievement,
@@ -33,6 +35,51 @@ class UserSerializer(serializers.ModelSerializer):
             'is_active', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+    
+    def validate_phone(self, value: str) -> str:
+        """
+        SECURITY: Validate phone number format.
+        Ensures phone number contains only 10-15 digits.
+        """
+        if not value:
+            return value
+        
+        # Remove any non-digit characters for validation
+        digits_only = re.sub(r'\D', '', value)
+        
+        if len(digits_only) < 10 or len(digits_only) > 15:
+            raise serializers.ValidationError(
+                "Telefon numarası geçersiz formatta (10-15 haneli olmalı)."
+            )
+        
+        return value
+    
+    def validate_email(self, value: str) -> str:
+        """
+        SECURITY: Validate email format and domain existence.
+        Checks if email format is valid and domain has valid DNS records.
+        """
+        if not value:
+            return value
+        
+        # Basic email regex pattern
+        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        if not re.match(email_pattern, value):
+            raise serializers.ValidationError(
+                "Geçersiz e-posta formatı."
+            )
+        
+        # Extract domain and verify it exists
+        try:
+            domain = value.split('@')[1]
+            # Try to resolve the domain's MX or A record
+            socket.getaddrinfo(domain, None)
+        except (IndexError, socket.gaierror):
+            raise serializers.ValidationError(
+                "E-posta alan adı geçerli değil veya mevcut değil."
+            )
+        
+        return value
 
 
 class UserDetailSerializer(serializers.ModelSerializer):
