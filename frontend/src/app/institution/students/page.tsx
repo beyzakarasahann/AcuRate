@@ -396,7 +396,7 @@ export default function StudentsPage() {
                   }`}
                 >
                   <Upload className="w-4 h-4" />
-                  Toplu Öğrenci Ekle (CSV)
+                  Bulk Add Students (CSV)
                 </motion.button>
                 <motion.button
                   whileHover={{ scale: 1.02 }}
@@ -1041,8 +1041,8 @@ export default function StudentsPage() {
                     <FileSpreadsheet className={`w-5 h-5 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`} />
                   </div>
                   <div>
-                    <h2 className={`text-xl font-bold ${text}`}>Toplu Öğrenci Ekle</h2>
-                    <p className={`text-sm ${mutedText}`}>CSV dosyası ile öğrenci aktarımı</p>
+                    <h2 className={`text-xl font-bold ${text}`}>Bulk Add Students</h2>
+                    <p className={`text-sm ${mutedText}`}>Import students from CSV file</p>
                   </div>
                 </div>
                 <motion.button
@@ -1087,7 +1087,7 @@ export default function StudentsPage() {
                       setImportSuccess(null);
                       setImportResults(null);
                     } else {
-                      setImportError('Lütfen geçerli bir CSV dosyası seçin (.csv uzantılı).');
+                      setImportError('Please select a valid CSV file (.csv extension).');
                     }
                   }}
                   className={`relative border-2 border-dashed rounded-xl p-8 text-center transition-all ${
@@ -1109,7 +1109,7 @@ export default function StudentsPage() {
                           setImportSuccess(null);
                           setImportResults(null);
                         } else {
-                          setImportError('Lütfen geçerli bir CSV dosyası seçin (.csv uzantılı).');
+                          setImportError('Please select a valid CSV file (.csv extension).');
                           e.target.value = ''; // Reset input
                         }
                       }
@@ -1134,7 +1134,7 @@ export default function StudentsPage() {
                         }}
                         className={`text-sm ${isDark ? 'text-red-400 hover:text-red-300' : 'text-red-600 hover:text-red-700'} underline`}
                       >
-                        Dosyayı Kaldır
+                        Remove File
                       </button>
                     </div>
                   ) : (
@@ -1144,10 +1144,10 @@ export default function StudentsPage() {
                       </div>
                       <div>
                         <p className={`font-medium ${text}`}>
-                          CSV dosyasını sürükleyip bırakın
+                          Drag and drop CSV file
                         </p>
                         <p className={`text-sm ${mutedText} mt-1`}>
-                          veya dosya seçmek için tıklayın
+                          or click to select file
                         </p>
                       </div>
                     </div>
@@ -1162,7 +1162,7 @@ export default function StudentsPage() {
                     download
                     className={`underline hover:no-underline ${isDark ? 'text-indigo-400 hover:text-indigo-300' : 'text-indigo-600 hover:text-indigo-700'}`}
                   >
-                    Örnek CSV şablonunu indir
+                    Download sample CSV template
                   </a>
                 </div>
 
@@ -1180,7 +1180,7 @@ export default function StudentsPage() {
                     <AlertCircle className={`w-5 h-5 flex-shrink-0 ${isDark ? 'text-red-400' : 'text-red-600'}`} />
                     <div>
                       <p className={`text-sm font-medium ${isDark ? 'text-red-400' : 'text-red-700'}`}>
-                        Hata
+                        Error
                       </p>
                       <p className={`text-sm ${isDark ? 'text-red-300' : 'text-red-600'} mt-0.5`}>
                         {importError}
@@ -1207,17 +1207,17 @@ export default function StudentsPage() {
                       </p>
                       {importResults && (
                         <div className={`text-sm ${isDark ? 'text-emerald-300' : 'text-emerald-600'} mt-1 space-y-0.5`}>
-                          {importResults.created > 0 && <p>✓ {importResults.created} yeni öğrenci eklendi</p>}
-                          {importResults.updated > 0 && <p>✓ {importResults.updated} öğrenci güncellendi</p>}
+                          {importResults.created > 0 && <p>✓ {importResults.created} new students added</p>}
+                          {importResults.updated > 0 && <p>✓ {importResults.updated} students updated</p>}
                           {importResults.errors && importResults.errors.length > 0 && (
                             <div className={`mt-2 text-xs ${isDark ? 'text-orange-400' : 'text-orange-600'}`}>
-                              <p className="font-medium">Bazı satırlarda hata oluştu:</p>
+                              <p className="font-medium">Errors occurred in some rows:</p>
                               <ul className="list-disc list-inside mt-1 max-h-24 overflow-y-auto">
                                 {importResults.errors.slice(0, 5).map((err, i) => (
                                   <li key={i}>{err}</li>
                                 ))}
                                 {importResults.errors.length > 5 && (
-                                  <li>... ve {importResults.errors.length - 5} hata daha</li>
+                                  <li>... and {importResults.errors.length - 5} more errors</li>
                                 )}
                               </ul>
                             </div>
@@ -1248,7 +1248,7 @@ export default function StudentsPage() {
                     isDark ? 'bg-white/5 border border-white/10 text-white hover:bg-white/10' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
                   } ${importing ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
-                  İptal
+                  Cancel
                 </motion.button>
                 <motion.button
                   whileHover={{ scale: importing || !csvFile ? 1 : 1.02 }}
@@ -1269,22 +1269,22 @@ export default function StudentsPage() {
                       
                       if (result.success) {
                         const totalImported = (result.created || 0) + (result.updated || 0);
-                        setImportSuccess(`${totalImported} öğrenci başarıyla işlendi!`);
+                        setImportSuccess(`${totalImported} students processed successfully!`);
                         setImportResults({
                           created: result.created || 0,
                           updated: result.updated || 0,
                           errors: result.errors || [],
                         });
-                        toast.success(`${totalImported} öğrenci başarıyla aktarıldı`);
+                        toast.success(`${totalImported} students imported successfully`);
                         setCsvFile(null);
                         await fetchStudents();
                       } else {
-                        setImportError(result.error?.message || 'Aktarım sırasında bir hata oluştu.');
+                        setImportError(result.error?.message || 'An error occurred during import.');
                       }
                     } catch (error: any) {
                       console.error('Bulk import error:', error);
-                      setImportError(error.message || 'Aktarım sırasında bir hata oluştu.');
-                      toast.error('Aktarım başarısız oldu');
+                      setImportError(error.message || 'An error occurred during import.');
+                      toast.error('Import failed');
                     } finally {
                       setImporting(false);
                     }
@@ -1301,12 +1301,12 @@ export default function StudentsPage() {
                   {importing ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      Yükleniyor...
+                      Importing...
                     </>
                   ) : (
                     <>
                       <Upload className="w-4 h-4" />
-                      Yükle
+                      Import
                     </>
                   )}
                 </motion.button>
