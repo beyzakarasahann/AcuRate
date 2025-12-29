@@ -2,7 +2,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { BookOpen, AlertTriangle, Loader2 } from 'lucide-react';
+import { BookOpen, AlertTriangle, Loader2, X } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useThemeColors } from '@/hooks/useThemeColors'; 
 import Link from 'next/link';
@@ -34,6 +34,7 @@ interface CourseData {
   credits: number;
   feedback: string;
   courseId: number;
+  description?: string;
 }
 
 // --- ANA BİLEŞEN: COURSES PAGE ---
@@ -45,7 +46,8 @@ export default function CoursesPage() {
   const [coursesData, setCoursesData] = useState<CourseData[]>([]);
   const [filter, setFilter] = useState('all');
   const [sortKey, setSortKey] = useState('semester');
-  const [sortOrder, setSortOrder] = useState('desc'); 
+  const [sortOrder, setSortOrder] = useState('desc');
+  const [selectedCourse, setSelectedCourse] = useState<CourseData | null>(null); 
 
   useEffect(() => {
     setMounted(true);
@@ -200,7 +202,7 @@ export default function CoursesPage() {
         };
       });
 
-      // Fetch course details to get instructor and credits
+      // Fetch course details to get instructor, credits, and description
       const coursesWithDetails = await Promise.all(
         courses.map(async (course) => {
           try {
@@ -209,7 +211,8 @@ export default function CoursesPage() {
               ...course,
               instructor: courseDetail.teacher_name || '-',
               credits: courseDetail.credits || 0,
-              semester: `${courseDetail.semester || ''} ${courseDetail.academic_year || ''}`.trim() || course.semester
+              semester: `${courseDetail.semester_display || courseDetail.semester || ''} ${courseDetail.academic_year || ''}`.trim() || course.semester,
+              description: courseDetail.description || ''
             };
           } catch {
             return course;
@@ -371,7 +374,8 @@ export default function CoursesPage() {
                   key={course.id}
                   variants={item}
                   whileHover={{ scale: 1.01, backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)' }}
-                  className="transition-all duration-150"
+                  className="transition-all duration-150 cursor-pointer"
+                  onClick={() => setSelectedCourse(course)}
                 >
                   <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${whiteText}`}>
                     {course.name} <span className={mutedText}>({course.id})</span>
@@ -405,6 +409,57 @@ export default function CoursesPage() {
             </p>
           </motion.div>
         )
+      )}
+
+      {/* Course Description Modal */}
+      {selectedCourse && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+          onClick={() => setSelectedCourse(null)}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            onClick={(e) => e.stopPropagation()}
+            className={`${themeClasses.card} rounded-xl shadow-2xl border ${isDark ? 'border-white/10' : 'border-gray-200'} max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col`}
+          >
+            {/* Modal Header */}
+            <div className={`flex items-center justify-between p-6 border-b ${isDark ? 'border-white/10' : 'border-gray-200'}`}>
+              <div className="flex items-center gap-3">
+                <BookOpen className="w-6 h-6 text-indigo-500" />
+                <div>
+                  <h2 className={`text-xl font-bold ${whiteText}`}>
+                    {selectedCourse.name}
+                  </h2>
+                  <p className={`text-sm ${mutedText}`}>
+                    {selectedCourse.id} • {selectedCourse.instructor}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedCourse(null)}
+                className={`p-2 rounded-lg transition-colors ${isDark ? 'hover:bg-white/10' : 'hover:bg-gray-100'}`}
+              >
+                <X className={`w-5 h-5 ${mutedText}`} />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 overflow-y-auto flex-1">
+              {selectedCourse.description ? (
+                <div className={`${whiteText} whitespace-pre-wrap leading-relaxed`}>
+                  {selectedCourse.description}
+                </div>
+              ) : (
+                <div className={`text-center py-8 ${mutedText}`}>
+                  <BookOpen className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p>No description available for this course.</p>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        </div>
       )}
     </div>
   );
