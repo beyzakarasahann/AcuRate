@@ -6,6 +6,7 @@ import { BookOpen, Search, Building2, Loader2, Users, TrendingUp, Award, Refresh
 import { api } from '@/lib/api';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { Inter } from 'next/font/google';
+import toast from 'react-hot-toast';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
@@ -47,6 +48,10 @@ export default function LessonsPage() {
   });
   const [savingCourse, setSavingCourse] = useState(false);
   const [teachers, setTeachers] = useState<any[]>([]);
+  const [students, setStudents] = useState<any[]>([]);
+  const [selectedStudents, setSelectedStudents] = useState<number[]>([]);
+  const [currentEnrollments, setCurrentEnrollments] = useState<any[]>([]);
+  const [loadingStudents, setLoadingStudents] = useState(false);
 
   const {
     mounted: themeMounted,
@@ -175,10 +180,12 @@ export default function LessonsPage() {
       academic_year: new Date().getFullYear() + '-' + (new Date().getFullYear() + 1),
       teacher: null,
     });
+    setCurrentEnrollments([]);
+    setSelectedStudents([]);
     setCourseEditModalOpen(true);
   };
 
-  const handleEditCourse = (course: CourseWithStats) => {
+  const handleEditCourse = async (course: CourseWithStats) => {
     setEditingCourse(course);
     // Parse semester string to number
     let semesterNum = 1;
@@ -195,6 +202,18 @@ export default function LessonsPage() {
       academic_year: course.academic_year || new Date().getFullYear() + '-' + (new Date().getFullYear() + 1),
       teacher: null,
     });
+    
+    // Fetch current enrollments for this course
+    try {
+      const enrollments = await api.getEnrollments({ course: course.course_id });
+      setCurrentEnrollments(enrollments);
+      setSelectedStudents(enrollments.map((e: any) => e.student));
+    } catch (error) {
+      console.error('Failed to load enrollments', error);
+      setCurrentEnrollments([]);
+      setSelectedStudents([]);
+    }
+    
     setCourseEditModalOpen(true);
   };
 
@@ -219,19 +238,67 @@ export default function LessonsPage() {
         teacher: courseForm.teacher || null,
       };
 
+      let courseId: number;
       if (editingCourse) {
         await api.updateCourse(editingCourse.course_id, courseData);
+        courseId = editingCourse.course_id;
       } else {
-        await api.createCourse(courseData);
+        const newCourse = await api.createCourse(courseData);
+        courseId = newCourse.id;
+      }
+
+      // Handle student enrollments
+      if (courseId) {
+        // Get currently enrolled student IDs
+        const currentEnrolledStudentIds = currentEnrollments.map((e: any) => e.student);
+        
+        // Find students to add (in selectedStudents but not in currentEnrolledStudentIds)
+        const studentsToAdd = selectedStudents.filter(
+          studentId => !currentEnrolledStudentIds.includes(studentId)
+        );
+        
+        // Find students to remove (in currentEnrolledStudentIds but not in selectedStudents)
+        const studentsToRemove = currentEnrolledStudentIds.filter(
+          studentId => !selectedStudents.includes(studentId)
+        );
+        
+        // Create new enrollments
+        for (const studentId of studentsToAdd) {
+          try {
+            await api.createEnrollment({
+              student: studentId,
+              course: courseId,
+              is_active: true,
+            });
+          } catch (error: any) {
+            console.error(`Failed to enroll student ${studentId}`, error);
+            // Continue with other enrollments even if one fails
+          }
+        }
+        
+        // Delete removed enrollments
+        for (const enrollment of currentEnrollments) {
+          if (studentsToRemove.includes(enrollment.student)) {
+            try {
+              await api.deleteEnrollment(enrollment.id);
+            } catch (error: any) {
+              console.error(`Failed to remove enrollment ${enrollment.id}`, error);
+              // Continue with other removals even if one fails
+            }
+          }
+        }
       }
 
       // Reload courses
       await fetchCourses();
       setCourseEditModalOpen(false);
       setEditingCourse(null);
+      setSelectedStudents([]);
+      setCurrentEnrollments([]);
+      toast.success(editingCourse ? 'Course updated successfully' : 'Course created successfully');
     } catch (error: any) {
       console.error('Failed to save course', error);
-      alert(error.message || 'Failed to save course');
+      toast.error(error.message || 'Failed to save course');
     } finally {
       setSavingCourse(false);
     }
@@ -263,7 +330,42 @@ export default function LessonsPage() {
       academic_year: new Date().getFullYear() + '-' + (new Date().getFullYear() + 1),
       teacher: null,
     });
+    setSelectedStudents([]);
+    setCurrentEnrollments([]);
   };
+  
+  const handleStudentToggle = (studentId: number) => {
+    setSelectedStudents((prev) => {
+      if (prev.includes(studentId)) {
+        return prev.filter((id) => id !== studentId);
+      } else {
+        return [...prev, studentId];
+      }
+    });
+  };
+  
+  // Fetch students when course modal opens
+  useEffect(() => {
+    if (courseEditModalOpen && selectedDepartment) {
+      const fetchStudents = async () => {
+        try {
+          setLoadingStudents(true);
+          const studentsData = await api.getStudents({ department: selectedDepartment });
+          setStudents(studentsData || []);
+        } catch (error) {
+          console.error('Failed to load students', error);
+          setStudents([]);
+        } finally {
+          setLoadingStudents(false);
+        }
+      };
+      fetchStudents();
+    } else {
+      // Clear students when modal closes
+      setStudents([]);
+      setLoadingStudents(false);
+    }
+  }, [courseEditModalOpen, selectedDepartment]);
 
   if (!mounted || !themeMounted) {
     return null;
@@ -653,7 +755,7 @@ export default function LessonsPage() {
             >
               <div 
                 onClick={(e) => e.stopPropagation()}
-                className={`${isDark ? 'bg-gray-900' : 'bg-white'} rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col`}
+                className={`${isDark ? 'bg-gray-900' : 'bg-white'} rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col`}
               >
                 <div className={`flex items-center justify-between p-6 border-b ${isDark ? 'border-white/10' : 'border-gray-200'}`}>
                   <div className="flex items-center gap-4">
@@ -803,6 +905,66 @@ export default function LessonsPage() {
                           </option>
                         ))}
                       </select>
+                    </div>
+
+                    <div>
+                      <label className={`block text-xs font-semibold uppercase tracking-wider ${mutedText} mb-2`}>
+                        Enroll Students (Optional)
+                      </label>
+                      {loadingStudents ? (
+                        <div className={`p-8 rounded-xl border ${isDark ? 'bg-white/[0.03] border-white/10' : 'bg-white border-gray-200'} flex items-center justify-center`}>
+                          <Loader2 className="w-5 h-5 animate-spin text-indigo-500" />
+                          <span className={`ml-3 text-sm ${mutedText}`}>Loading students...</span>
+                        </div>
+                      ) : students.length === 0 ? (
+                        <div className={`p-4 rounded-xl border ${isDark ? 'bg-white/[0.03] border-white/10 text-white/60' : 'bg-gray-50 border-gray-200 text-gray-500'} text-center text-sm`}>
+                          No students found in this department
+                        </div>
+                      ) : (
+                        <div className={`max-h-60 overflow-y-auto rounded-xl border ${isDark ? 'bg-white/[0.03] border-white/10' : 'bg-white border-gray-200'} p-4 space-y-2`}>
+                          {students.map((student) => (
+                            <label
+                              key={student.id}
+                              className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all ${
+                                selectedStudents.includes(student.id)
+                                  ? isDark 
+                                    ? 'bg-indigo-500/20 border border-indigo-500/30' 
+                                    : 'bg-indigo-50 border border-indigo-200'
+                                  : isDark
+                                    ? 'hover:bg-white/5 border border-transparent'
+                                    : 'hover:bg-gray-50 border border-transparent'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selectedStudents.includes(student.id)}
+                                onChange={() => handleStudentToggle(student.id)}
+                                className={`w-4 h-4 rounded border-2 focus:ring-2 focus:ring-indigo-500/30 ${
+                                  isDark
+                                    ? 'border-white/20 bg-white/5 text-indigo-400'
+                                    : 'border-gray-300 text-indigo-600'
+                                }`}
+                              />
+                              <div className="flex-1">
+                                <div className={`text-sm font-medium ${text}`}>
+                                  {student.first_name} {student.last_name}
+                                </div>
+                                <div className={`text-xs ${mutedText}`}>
+                                  {student.student_id && `ID: ${student.student_id} • `}
+                                  {student.email}
+                                </div>
+                              </div>
+                            </label>
+                          ))}
+                          {selectedStudents.length > 0 && (
+                            <div className={`pt-2 mt-2 border-t ${isDark ? 'border-white/10' : 'border-gray-200'}`}>
+                              <p className={`text-xs font-medium ${mutedText}`}>
+                                {selectedStudents.length} student{selectedStudents.length !== 1 ? 's' : ''} selected
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-4 pt-4">

@@ -1408,6 +1408,19 @@ class ApiClient {
     return [];
   }
 
+  async createEnrollment(data: { student: number; course: number; is_active?: boolean }): Promise<Enrollment> {
+    return await this.request<Enrollment>('/enrollments/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteEnrollment(id: number): Promise<void> {
+    return await this.request<void>(`/enrollments/${id}/`, {
+      method: 'DELETE',
+    });
+  }
+
   // Grades
   async getGrades(params?: { student?: number; assessment?: number }): Promise<StudentGrade[]> {
     const queryParams = new URLSearchParams(params as any).toString();

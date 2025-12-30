@@ -561,12 +561,15 @@ def analytics_course_success(request):
     GET /api/analytics/course-success/
     Query params: ?department=Computer Science&semester=FALL
     Returns course success rates for bar chart
+    
+    For TEACHER role: Only returns courses assigned to the teacher
+    For INSTITUTION role: Returns all courses (filtered by department/semester if provided)
     """
     user = request.user
     
-    if user.role != User.Role.INSTITUTION and not user.is_staff:
+    if user.role not in [User.Role.INSTITUTION, User.Role.TEACHER] and not user.is_staff:
         return Response({
-            'error': 'This endpoint is only for institution admins'
+            'error': 'This endpoint is only for institution admins and teachers'
         }, status=status.HTTP_403_FORBIDDEN)
     
     # Get filter parameters
@@ -574,8 +577,14 @@ def analytics_course_success(request):
     semester = request.query_params.get('semester', None)
     academic_year = request.query_params.get('academic_year', None)
     
-    # Get courses based on filters
+    # Get courses based on filters and user role
     courses_query = Course.objects.all()
+    
+    # For TEACHER role: Only show courses assigned to this teacher
+    if user.role == User.Role.TEACHER:
+        courses_query = courses_query.filter(teacher=user)
+    
+    # Apply additional filters (for INSTITUTION role or if teacher wants to filter)
     if department:
         courses_query = courses_query.filter(department=department)
     if semester:
